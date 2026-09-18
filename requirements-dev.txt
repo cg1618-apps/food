@@ -1,0 +1,4 @@
+# Only what is guaranteed across this box: Python, and the tools that check it.
+# Anything framework-shaped waits for the stack decision.
+pytest==8.3.4
+ruff==0.8.4

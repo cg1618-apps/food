@@ -1,0 +1,27 @@
+name: Tests
+
+# Pull requests only, and ubuntu-latest only. The self-hosted runner is a
+# machine in a house and every repository in this organisation is public; a
+# fork's pull request running on it is the standard catastrophe. No
+# pull_request-triggered job may ever name it.
+on:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Run the tests
+        run: python -m pytest tests/ -q

@@ -1,0 +1,12 @@
+# Per-machine, never committed.
+.env
+credentials.json
+CLAUDE.local.md
+
+# Rebuilt locally on each machine.
+venv/
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
