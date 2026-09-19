@@ -288,8 +288,50 @@ Two fixes to media's client, which has both defects live:
   carrying a string, so callers that need a status re-implement `fetch`, and two
   documented contracts are dead as a result.
 
-Pages: an ingredient list with search, category-tree filter and label filter; a
-detail page; edit forms under `/edit`.
+### Pages
+
+Naming follows media's tree — `pages/library/`, `pages/detail/`, the forms
+alongside.
+
+| Page | Route | Gate |
+| --- | --- | --- |
+| Ingredient library | `/library/ingredient` | public |
+| Ingredient detail | `/ingredient/:id` | public |
+| Add an ingredient | `/edit/ingredient/new` | Access |
+| Modify an ingredient | `/edit/ingredient/:id` | Access |
+| Categories and labels | `/edit/vocabularies` | Access |
+
+Media's detail route is `/<type>/:publicId/:slug?`. The cosmetic slug and the
+second id went with the integer-primary-key decision, so ours is `/ingredient/:id`.
+
+**The detail page is the reason this app exists** and is the one read surface
+worth designing rather than generating. It is what gets opened on a phone in a
+shop, signed out: the selection notes, the preservation methods with their
+durations, where to get the thing. Everything else here is a list or sits behind
+Access.
+
+**The category tree editor cannot be deferred.** Only the fallback row is
+seeded, so without it the first ingredient has exactly one category to choose
+and no way to make another. It carries the cycle guard and surfaces the
+`RESTRICT` refusals as sentences — "this category still holds 12 ingredients" —
+rather than as a failed request. Labels are a second section on that same page
+rather than a page of their own: same shape, far less of it.
+
+**The app shell ships here too**, and is invisible until it is missing. The
+frontend today is `App.jsx` with a health check: no router, no layout, no
+navigation. Module 1 introduces all three, and every later module inherits their
+shape.
+
+Two things that are deliberately not pages:
+
+- **The `needs_detail` backlog and the uncategorised pile are filters on the
+  library**, not pages. They do need a visible entry point — a count on the
+  library page — or the backlog is invisible and stubs accumulate forever.
+- **Delete is a dialog.** It shows how many aliases, preservation rows and label
+  links go with the row, echoes that count back as a required parameter, and on
+  a 409 updates itself in place with the new numbers and re-offers the button.
+  Telling the user to reload is what a prose-only error body forces, and is the
+  reason the error carries `expected` and `actual` beside the detail.
 
 ## Tests
 
