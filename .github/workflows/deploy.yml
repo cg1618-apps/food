@@ -1,0 +1,24 @@
+name: Deploy
+
+# main only. main is production, and the box's checkout of this app tracks
+# main, so this trigger and that checkout are the same decision stated twice.
+#
+# There is deliberately no pull_request trigger here, and there must never be
+# one. The job below runs on a self-hosted runner - a machine in a house - and
+# this repository is public, so a fork's pull request reaching that runner is
+# the standard catastrophe. Nothing enforces this rule from outside the file;
+# it is the single most important line to review in this workflow.
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    # Defined once in the platform: the classify step, the two lanes, the
+    # production approval gate and the exit-2-only rollback. Everything this
+    # app needs - its port, its health path, its database, whether it has
+    # migrations - the pipeline reads from apps.yml rather than from here.
+    uses: cg1618-apps/platform/.github/workflows/deploy-app.yml@main
+    with:
+      app: food

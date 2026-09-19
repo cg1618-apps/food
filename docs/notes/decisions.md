@@ -33,6 +33,45 @@ as they bind this app:
   code is written. This requires the URL layout to separate reads from writes
   from the first route, which is cheap now and invasive later.
 
+## The skeleton
+
+Copied from `travel`, which is live, rather than designed again. The two apps
+share a stack by decision, so the parts that are not about food — the config
+object, the session factory, the SPA catch-all, the Alembic wiring, the
+dockerfile's three stages, the deploy hook — are travel's, adapted only where
+this app's registry entry differs.
+
+What differs, and why:
+
+- **Ports 8001 and 5174.** The uvicorn port is food's entry in the platform's
+  `apps.yml`; the Vite port is `5173 + (port - 8000)`, which is the box-wide
+  rule that lets all four apps run on one laptop at once. `strictPort` is set
+  so a taken port aborts rather than silently moving the dev server somewhere
+  the proxy is not pointed.
+- **The health path is `/health`, not `/api/health`.** `apps.yml` declares it,
+  and the deploy pipeline reads the declaration rather than the code. The
+  consequence reaches three files: the SPA catch-all has to refuse `/health/…`
+  as well as `/api/…`, or a typo in the probe's path answers 200 with the
+  bundle and a dead app is called healthy; Vite proxies `/health` as well as
+  `/api`; and the compose healthcheck probes `:8001/health`.
+- **Writes are not split from reads yet**, because there are no writes. The
+  URL layout above the first route is the decision already recorded here:
+  `/api/...` public, `/api/edit/...` behind Cloudflare Access.
+
+Two things the skeleton pins that cost travel a production failure each, kept
+deliberately rather than inherited by accident:
+
+- **`deploy/migrations current` answers `base` when there is no
+  `alembic_version` table.** That is not an error state; it is every app's
+  first deploy, and erroring there refuses the deploy that would create the
+  schema. Travel's first deploy died exactly there.
+- **`deploy/migrations` is mode `100755` in the commit, and `.gitattributes`
+  pins it to LF.** `core.fileMode` is false on both development machines, so
+  the bit is never picked up from disk; `git ls-files` reads the index and has
+  reported the wrong answer, so CI asserts it with `git ls-tree HEAD`. A CRLF
+  in the file fails on the box as `bad interpreter`, naming the shell rather
+  than the line endings.
+
 ## Structure
 
 The application is eight modules, built in this order. Each is a separate piece

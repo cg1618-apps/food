@@ -32,9 +32,13 @@ reference work.
 
 ## Status
 
-**Nothing is built.** There is no stack, no schema, no application code. The
-next step is design, not implementation — brainstorm into
-`docs/superpowers/specs/`, and only then plan.
+**The skeleton is built; there is no schema.** FastAPI serves `/health` and
+the React bundle, Alembic's chain holds one empty baseline revision, and
+`deploy/migrations` is in place. Nothing food-shaped exists yet: no tables, no
+endpoints beyond the health route, no pages.
+
+The next step is module 1 of the eight in `docs/notes/decisions.md` — design
+it into `docs/superpowers/specs/` immediately before building it, not now.
 
 ## The contract this app owes the platform
 
@@ -62,9 +66,11 @@ The cost is known and accepted: a build step, a second port in development, and
 a `frontend_dist/` that goes stale if you forget to rebuild. The media
 tracker's `CLAUDE.md` documents each of those.
 
-Migrations: Alembic, which means this app ships `deploy/migrations` with
-`current`, `added` and `downgrade` once it has a schema — the hook the
-platform's rollback calls. See the platform's Step 4 plan.
+Migrations: Alembic. `deploy/migrations` — the hook the platform's rollback
+calls — implements `current`, `added` and `downgrade`. Its `current` arm
+answers `base` when the database has no `alembic_version` table, which is what
+lets this app's first deploy through; it must stay executable (`100755` in the
+commit, which `git ls-tree HEAD` is the only way to check) and LF-terminated.
 
 ## Who can see it
 
@@ -91,10 +97,24 @@ why it is written down before there is a single route.
 
 ## Commands
 
-```bash
-venv/Scripts/python.exe -m pytest -q      # tests
-venv/Scripts/ruff.exe check .             # lint
+```powershell
+.\dev.ps1                                 # Postgres + uvicorn :8001 + Vite :5174
 ```
 
-That is all there is until a stack is chosen. Add commands here as they become
-real, not before.
+```bash
+venv/Scripts/python.exe -m pytest -q      # backend tests
+venv/Scripts/ruff.exe check .             # backend lint
+cd frontend && npm run lint               # oxlint
+cd frontend && npm run build              # writes frontend_dist/ for uvicorn
+```
+
+**Ports are box-wide.** uvicorn is 8001 (food's `apps.yml` entry) and Vite is
+5174 (`5173 + (port - 8000)`). Both are `strictPort`/abort-on-taken, because
+falling back to another port takes a slot another app on this laptop owns.
+
+**After any frontend change run `npm run build`**, or :8001 serves the old
+bundle while :5174 serves the new one, and the difference reads as a bug in
+whichever one you looked at second.
+
+**The health path is `/health`, not `/api/health`.** It is declared in
+`apps.yml` and the deploy pipeline reads it from there.

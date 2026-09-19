@@ -1,0 +1,23 @@
+# Lint for this application. Run: ruff check .
+#
+# This file also stops ruff walking up the tree. The checkout sits inside the
+# platform repository's, so without a config here ruff would find that one and
+# lint this app under it - while CI, which checks this repository out on its
+# own, would use ruff's bare defaults. Local and CI would disagree about what
+# passes, which is worse than either setting alone.
+#
+# The rule set matches the media tracker's, so code moved between the two apps
+# is linted the same way at both ends.
+line-length = 100
+target-version = "py313"
+extend-exclude = ["alembic/versions", "venv", "frontend", "frontend_dist", "node_modules"]
+
+[lint]
+select = ["E", "F", "I", "B"]
+ignore = [
+    "E501",  # line length is advisory
+    "B008",  # FastAPI's Depends() in a default is the framework idiom, not a bug
+]
+
+[lint.isort]
+known-first-party = ["app", "tests"]
