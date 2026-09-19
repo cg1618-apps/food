@@ -9,6 +9,6 @@ in `notes/`.
 | `notes/decisions.md` | Why things are the way they are, including rejected alternatives. The one place that is allowed to talk about the past. |
 | `superpowers/specs/` | Working scaffolding for a task in progress. **Deleted when that task ends**, with anything durable moved into a real page first. |
 
-There is nothing else yet, because nothing is built. Pages appear as the
-application does — a data model page when there is a schema, an API page when
-there are endpoints.
+There is no data model page, no API page and no frontend page yet, because
+there is no schema and there are no endpoints beyond `/health`. Pages appear as
+the application does.

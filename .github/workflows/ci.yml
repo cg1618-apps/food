@@ -10,18 +10,81 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      # tests/test_migrations_build_the_schema.py opens an administrative
+      # connection and builds a scratch database from zero. ubuntu-latest
+      # ships PostgreSQL but does not run it, so without this service the
+      # test errors rather than skipping.
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: food
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # The runner has no .env, so app/config.py would fall back to its own
+      # defaults - user `food` with an empty password - and authentication
+      # would fail even with the service healthy. Throwaway values for a
+      # throwaway database.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: food
+      APP_ENV: development
     steps:
       - uses: actions/checkout@v4
 
+      # `git ls-files` reads the index and has twice reported 100755 while the
+      # COMMIT held 100644. core.fileMode is false on both development
+      # machines, so the bit is never picked up from disk and a hook committed
+      # without it fails on the box with `Permission denied` and nowhere else.
+      # This reads the commit, which is the only thing that answers.
+      - name: The migration hook must be executable in the commit
+        run: |
+          mode=$(git ls-tree HEAD -- deploy/migrations | awk '{print $1}')
+          echo "deploy/migrations is $mode"
+          test "$mode" = "100755"
+
       - uses: actions/setup-python@v5
         with:
+          # Same interpreter as the runtime image (dockerfile: python:3.13-slim).
           python-version: "3.13"
+          cache: pip
 
-      - name: Install dependencies
+      - name: Install backend dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Lint
+      - name: Lint backend
         run: ruff check .
+
+      - name: Lint shell scripts
+        run: shellcheck deploy/migrations entrypoint.sh
 
       - name: Run the tests
         run: python -m pytest tests/ -q
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Lint frontend
+        run: npm run lint
+        working-directory: frontend
+
+      # dockerfile builds the frontend, so without this a bundle that does not
+      # compile is found by the deploy rather than by the pull request.
+      - name: Build the frontend
+        run: npm run build
+        working-directory: frontend

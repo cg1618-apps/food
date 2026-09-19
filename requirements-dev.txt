@@ -1,4 +1,8 @@
-# Only what is guaranteed across this box: Python, and the tools that check it.
-# Anything framework-shaped waits for the stack decision.
+-r requirements.txt
+
 pytest==8.3.4
 ruff==0.8.4
+httpx==0.28.1
+# tests/unit/test_prod_compose.py imports it. uvicorn[standard] happens to
+# pull it in today, which is not something this suite may depend on.
+PyYAML==6.0.3

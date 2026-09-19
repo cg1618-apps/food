@@ -1,0 +1,41 @@
+# Production, on the box. One service: PostgreSQL and the tunnel belong to
+# cg1618-apps/platform, whose project runs them on the network this one joins.
+#
+# At the repository root because compose takes its project directory from the
+# compose file's own location and loads .env from there.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: dockerfile
+    image: food-app:local
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 8001
+    networks:
+      cg1618:
+        # The generated ingress routes food.cg1618.com to
+        # http://food-app:8001. Changing this alias without changing apps.yml
+        # is a 502 with both files looking correct on their own.
+        aliases:
+          - food-app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # Generous: entrypoint.sh runs the migrations before uvicorn binds, and a
+      # short start_period would restart a container that is migrating
+      # correctly.
+      start_period: 120s
+    # No depends_on: PostgreSQL is in another compose project and compose
+    # cannot order across them. restart: unless-stopped is what covers a cold
+    # boot - the container exits when it cannot reach the database, and docker
+    # restarts it until it can.
+
+networks:
+  cg1618:
+    external: true

@@ -7,6 +7,8 @@ CLAUDE.local.md
 venv/
 .venv/
 node_modules/
+frontend_dist/
 __pycache__/
 *.pyc
 .pytest_cache/
+.ruff_cache/

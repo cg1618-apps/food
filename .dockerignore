@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Environment & Secrets (CRITICAL SECURITY)
+.env
+credentials.json
+
+# Git
+.git/
+.gitignore
+
+# Not needed at runtime
+tests/
+docs/
+scripts/
+.github/
+.superpowers/
+*.md
+.pytest_cache/
+.ruff_cache/
+
+# Docker
+dockerfile
+Dockerfile
+docker-compose.yml
+
+# Node & Frontend
+**/node_modules
+npm-debug.log
+frontend_dist/
+
+# Exclude Claude's working directory
+.claude/
+CLAUDE.md
