@@ -32,13 +32,16 @@ reference work.
 
 ## Status
 
-**The skeleton is built; there is no schema.** FastAPI serves `/health` and
-the React bundle, Alembic's chain holds one empty baseline revision, and
-`deploy/migrations` is in place. Nothing food-shaped exists yet: no tables, no
-endpoints beyond the health route, no pages.
+**Module 1's schema is built; there are no routes over it yet.** Six tables —
+`ingredient`, `ingredient_category`, `ingredient_alias`,
+`ingredient_preservation`, `label`, `ingredient_label` — at revision
+`i1ngredients`, described in `docs/data-model.md`. FastAPI still serves only
+`/health` and the React bundle.
 
-The next step is module 1 of the eight in `docs/notes/decisions.md` — design
-it into `docs/superpowers/specs/` immediately before building it, not now.
+The rest of module 1 is the routes, the pages and the app-wide foundations
+that come with the first of them: the single definition of the write prefix,
+the error handling, the API client and logging. The spec is in
+`docs/superpowers/specs/`, and it is deleted when the work lands.
 
 ## The contract this app owes the platform
 

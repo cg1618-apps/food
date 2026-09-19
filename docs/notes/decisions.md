@@ -91,8 +91,9 @@ than now — a spec written months ahead describes a system that was imagined.
 
 ### Entities
 
-- **Ingredient** — names, aliases, selection notes, preservation notes, and a
-  `needs_detail` flag set when the row is created as a stub.
+- **Ingredient** — built. `docs/data-model.md` is the description, and this
+  list does not repeat it: a second copy of a settled claim is the one that
+  goes stale, because nobody is looking at it.
 - **Recipe** — names, aliases, steps, notes, and a `kind` separating a dish from
   a general base. Also a personal status: want to try, can cook, regular.
 - **RecipeLine** — ordered, belongs to a recipe, points at **either an
@@ -156,9 +157,22 @@ than now — a spec written months ahead describes a system that was imagined.
 
 ### Naming, across every entity here
 
-`name_cn`, `name_en`, `aliases[]`, with `name_cn` as the display default, and
-search matching all three. This is a platform-wide convention rather than a
-food one — `travel` and `art` use it too.
+`name_cn`, `name_en` and — where a formal alternative is worth showing —
+`name_alt`, with `name_cn` as the display default and search matching all of
+them. `name_cn` leading is a platform-wide convention rather than a food one;
+`travel` and `art` use it too.
+
+**Aliases are a child table, not an array column.** This line previously said
+`aliases[]`, which was never buildable as written: media carries no
+`postgresql.ARRAY` anywhere and records replacing list-in-a-column with a real
+table twice as a regret, because such a column cannot be indexed, joined or
+constrained. `ingredient_alias` is all three. The *concept* is unchanged — an
+unlimited list of things you might type — only its storage.
+
+**`name_alt` and an alias are different things**, and without a rule they end
+up holding the same strings. `name_alt` is a formal name in another script or
+romanisation, and is shown; an alias is anything you might type to find the
+row, and is never shown.
 
 ### Out of scope, deliberately
 
@@ -176,3 +190,47 @@ own answer.
 
 The constraint worth carrying: a photograph of a dish you cooked cannot be
 re-fetched from anywhere, unlike a cover image an API can supply again.
+
+## Where food diverges from `media`, and why
+
+The platform's house-style section makes `media` the reference implementation
+for conventions, and says a deliberate divergence belongs here with its reason
+so a later reader can tell a decision from an accident. These are food's.
+
+- **An integer primary key**, where media has a `system_id` UUID join key plus
+  a short `public_id` from a per-table sequence under a deferrable unique
+  constraint. That machinery exists to let media's Google Sheets restore
+  permute ids inside one transaction. food has no such channel, so it would be
+  two ids and a sequence serving nothing.
+- **Reads and writes split by path prefix**, where media splits them by a
+  comment banner and an auth dependency inside one router file. food has no
+  auth code at all: the gate is Cloudflare Access, which is all-or-nothing per
+  path, so the split has to be in the URL or there is no gate.
+- **Three name slots plus an alias table**, where media has four fixed slots
+  (`en`/`cn`/`jp`/`alt`) and uses a child table only for external-source names.
+  food's aliases are user-typed and unbounded, which fixed slots cannot hold.
+- **`name_cn` leads display, with no per-row override column.** Media's
+  catalogue entities lead with English and carry a `display_name_field` naming
+  the winner. One user reading Chinese first, and a rule statable in a sentence
+  beats a column every row has to fill in.
+- **`PATCH` takes an all-optional Pydantic model with `exclude_unset` and
+  `extra="forbid"`**, where media takes a raw `dict` through a shared helper
+  that ignores unknown keys. Media's shape is load-bearing there for reasons
+  that do not exist here — association proxies onto a parent row, and 17
+  heterogeneous endpoints — and `extra="forbid"` additionally rejects
+  server-owned columns loudly rather than dropping them silently. "Conventional
+  beats clever" is the tiebreak.
+
+### The one that is not a divergence but reads like one
+
+**Single-column unique name indexes use Postgres's DEFAULT null handling, not
+`NULLS NOT DISTINCT`.** Media's scar is real — `uq_person_name` spans several
+name columns, and there a NULL in any of them makes the whole constraint inert,
+which shipped duplicates three times. Carrying that fix to a *single-column*
+index inverts it: `NULLS NOT DISTINCT` makes NULL equal NULL, so the table may
+hold exactly one row with that slot empty. Most ingredients here have only a
+Chinese name, so the second one inserted would be refused.
+
+It was written that way first and the model tests caught it immediately.
+`test_any_number_of_ingredients_may_leave_a_name_slot_empty` is what refuses
+the change if someone applies the lesson again.
