@@ -125,3 +125,15 @@ food one — `travel` and `art` use it too.
 
 Nutrition on cooked recipes. Cooking history and analytics. Anything
 multi-user.
+
+### Image storage
+
+Dishes, ingredients and snack packages all want photographs, and `art` needs
+uploads too. That makes it a platform question rather than a food one: a
+bind-mounted directory outside the container image, and backup coverage, are
+both things the media tracker already has and the platform has not yet
+generalised. Recorded in the platform's Step 4 plan; nothing here invents its
+own answer.
+
+The constraint worth carrying: a photograph of a dish you cooked cannot be
+re-fetched from anywhere, unlike a cover image an API can supply again.
