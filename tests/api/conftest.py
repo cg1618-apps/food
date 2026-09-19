@@ -91,3 +91,36 @@ def fallback_category(db):
     db.add(category)
     db.flush()
     return category
+
+
+@pytest.fixture
+def client(db):
+    """A TestClient whose requests use the test's own rolled-back session.
+
+    `raise_server_exceptions=False` matters: without it Starlette re-raises
+    inside the test instead of letting the registered handlers turn an
+    exception into a response, so every test of the IntegrityError backstop
+    would assert against a traceback rather than a status code - which is the
+    layer media never tested and the reason its discipline drifted.
+    """
+    from fastapi.testclient import TestClient
+
+    from app.database import get_db
+    from app.main import create_app
+
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def ingredient(db, fallback_category):
+    """One saved ingredient, filed in the fallback category."""
+    from app.models import Ingredient
+
+    row = Ingredient(name_cn="生薑", name_en="ginger", category_id=fallback_category.id)
+    db.add(row)
+    db.flush()
+    return row
