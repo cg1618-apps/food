@@ -1,0 +1,9 @@
+# Shell scripts are LF everywhere, whatever core.autocrlf says locally.
+#
+# Two things run them and both break on a CR: the box, where a shebang
+# ending "bash\r" fails with "bad interpreter", and the Windows test suite,
+# which executes deploy/migrations through Git Bash. Without this a fresh
+# clone on a machine with autocrlf=true checks them out with CRLF and the
+# failure names the interpreter rather than the line endings.
+*.sh text eol=lf
+deploy/migrations text eol=lf

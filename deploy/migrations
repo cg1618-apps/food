@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# The migration hook the platform's deploy pipeline calls.
+#
+#   ./deploy/migrations current              the revision the DATABASE is at
+#   ./deploy/migrations added <from> <to>    revision files a deploy would add
+#   ./deploy/migrations downgrade <target>   reverse to that revision
+#
+# This exists because a rollback cannot be generic: reading a version table,
+# deciding what a deploy adds, and reversing a migration are all specific to
+# the tool an app uses. The platform asks these three questions; the answers
+# are Alembic's here and something else in an app that uses something else.
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+# POSTGRES_USER and POSTGRES_DB are expanded under `set -u`, so a hand run
+# outside the deploy pipeline dies on the first unset one. .env is where they
+# live on the box, so load it rather than requiring the caller to have
+# exported them. It also makes the downgrade arm's comment true by
+# construction: the COMPOSE_PROJECT_NAME it relies on definitely exists.
+#
+# Guarded because the repository is checked out without a .env in CI, where
+# the test suite runs this script's usage path.
+if [ -f .env ]; then
+    set -a
+    # shellcheck disable=SC1091  # .env is per-machine and never committed.
+    . ./.env
+    set +a
+fi
+
+COMPOSE=(env -u COMPOSE_PROJECT_NAME docker compose -f "${PLATFORM_DIR:-${HOME}/cg1618}/docker-compose.prod.yml")
+
+case "${1:-}" in
+    current)
+        # From alembic_version and nowhere else. Asking the image answers what
+        # that image knows, which is exactly what changes during a rollback.
+        #
+        # Two queries rather than one because a database that has never been
+        # migrated has no alembic_version table at all, and a statement naming
+        # a table that does not exist fails to PARSE - so no coalesce or CASE
+        # can rescue it from inside a single query.
+        #
+        # That state is not an error. It is every app's FIRST deploy, and its
+        # correct answer is `base`: Alembic's own name for the point before
+        # the first revision, and a real target for `downgrade`. A rollback
+        # recorded against it reverses the whole schema and then restores a
+        # dump that was taken from an empty database, which is right. Erroring
+        # here instead refuses the very deploy that would create the schema -
+        # travel's first deploy died exactly there.
+        ask() {
+            "${COMPOSE[@]}" exec -T db \
+                psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -tA -c "$1" \
+                | tr -d '[:space:]'
+        }
+        if [ "$(ask "SELECT to_regclass('public.alembic_version') IS NOT NULL")" != "t" ]; then
+            echo base
+        else
+            # The table outlives its rows: `downgrade base` empties it rather
+            # than dropping it, so "exists" and "has a revision" are different
+            # questions and both mean `base`.
+            revision="$(ask 'SELECT version_num FROM alembic_version')"
+            echo "${revision:-base}"
+        fi
+        ;;
+    added)
+        from="${2:?added needs a from-revision}"
+        to="${3:?added needs a to-revision}"
+        git diff --name-only "${from}" "${to}" -- alembic/versions/
+        ;;
+    downgrade)
+        target="${2:?downgrade needs a target}"
+        # Deliberately does NOT clear COMPOSE_PROJECT_NAME: this runs this app's
+        # own image (run --entrypoint alembic app), which belongs to this app's
+        # compose project. The exported name is correct here. Unlike 'current',
+        # which must reach the shared PostgreSQL in the platform's project, we
+        # want docker compose to find this app's project. Also uses a relative
+        # path because we cd'd to the app root above.
+        #
+        # From the NEW image: it is the only one holding the revision files
+        # being reversed. --entrypoint alembic is not optional - without it the
+        # image's entrypoint discards the command and re-runs the upgrade that
+        # just failed.
+        docker compose -f docker-compose.prod.yml \
+            run --rm --entrypoint alembic app downgrade "${target}"
+        ;;
+    *)
+        echo "usage: migrations current | added <from> <to> | downgrade <target>" >&2
+        exit 1
+        ;;
+esac
