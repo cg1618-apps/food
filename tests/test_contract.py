@@ -53,3 +53,38 @@ def test_the_secrets_are_ignored():
     ignored = (ROOT / ".gitignore").read_text(encoding="utf-8")
     for name in (".env", "credentials.json", "CLAUDE.local.md"):
         assert name in ignored, name
+
+
+def test_the_dev_launcher_has_a_cmd_wrapper():
+    """`dev.cmd` exists so the dev server starts from a double-click or from
+    cmd.exe, without anyone having to know the PowerShell execution-policy
+    incantation. media and travel both ship one; this is the same file."""
+    assert (ROOT / "dev.cmd").is_file()
+    assert (ROOT / "dev.ps1").is_file()
+
+
+def test_batch_files_are_pinned_to_crlf():
+    """The non-obvious half of shipping a .cmd, and the reason this test
+    exists rather than the file being enough on its own.
+
+    Git stores the blob with LF whatever the working tree holds, so the
+    checkout is governed entirely by .gitattributes. Without a rule, a machine
+    with core.autocrlf=false gets an LF batch file. cmd.exe survives that in a
+    two-line wrapper and misparses it once the file grows a label or an
+    if-block, which makes it a defect that appears long after the change that
+    caused it.
+
+    media ships dev.cmd and has NO such rule; travel added one. Copying the
+    pair that works is the point - the two apps look identical at the file
+    level and differ in the attribute that decides what lands on disk.
+    """
+    import subprocess
+
+    result = subprocess.run(
+        ["git", "check-attr", "eol", "--", "dev.cmd"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.strip().endswith(": eol: crlf"), result.stdout
