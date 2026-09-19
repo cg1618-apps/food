@@ -51,6 +51,18 @@ jobs:
           echo "deploy/migrations is $mode"
           test "$mode" = "100755"
 
+      # The mirror of the assertion above, and the reason both exist: same
+      # mechanism, different expected value. deploy/gated-paths is DATA - the
+      # write prefixes the platform's Access policy covers - and nothing execs
+      # it, so none of the executable-bit machinery applies. A copy-paste that
+      # gave it 100755 would look consistent with its neighbour and be wrong.
+      - name: The gated-paths file must be committed as data
+        run: |
+          mode=$(git ls-tree HEAD -- deploy/gated-paths | awk '{print $1}')
+          echo "deploy/gated-paths is $mode"
+          test "$mode" = "100644"
+          ! grep -qP '\r' deploy/gated-paths
+
       - uses: actions/setup-python@v5
         with:
           # Same interpreter as the runtime image (dockerfile: python:3.13-slim).
@@ -81,6 +93,10 @@ jobs:
 
       - name: Lint frontend
         run: npm run lint
+        working-directory: frontend
+
+      - name: Run the frontend tests
+        run: npm test
         working-directory: frontend
 
       # dockerfile builds the frontend, so without this a bundle that does not

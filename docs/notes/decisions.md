@@ -54,9 +54,11 @@ What differs, and why:
   as well as `/api/…`, or a typo in the probe's path answers 200 with the
   bundle and a dead app is called healthy; Vite proxies `/health` as well as
   `/api`; and the compose healthcheck probes `:8001/health`.
-- **Writes are not split from reads yet**, because there are no writes. The
-  URL layout above the first route is the decision already recorded here:
-  `/api/...` public, `/api/edit/...` behind Cloudflare Access.
+- **Writes are split from reads by path**, as this file required before the
+  first route existed: `/api/...` public, `/api/edit/...` behind Cloudflare
+  Access. `WRITE_PREFIX` in `app/routing.py` is the single definition,
+  `deploy/gated-paths` is generated from it, and the platform's `apps.yml`
+  carries `gated_paths` checked against that file in both directions.
 
 Two things the skeleton pins that cost travel a production failure each, kept
 deliberately rather than inherited by accident:
@@ -91,8 +93,9 @@ than now — a spec written months ahead describes a system that was imagined.
 
 ### Entities
 
-- **Ingredient** — names, aliases, selection notes, preservation notes, and a
-  `needs_detail` flag set when the row is created as a stub.
+- **Ingredient** — built. `docs/data-model.md` is the description, and this
+  list does not repeat it: a second copy of a settled claim is the one that
+  goes stale, because nobody is looking at it.
 - **Recipe** — names, aliases, steps, notes, and a `kind` separating a dish from
   a general base. Also a personal status: want to try, can cook, regular.
 - **RecipeLine** — ordered, belongs to a recipe, points at **either an
@@ -156,9 +159,22 @@ than now — a spec written months ahead describes a system that was imagined.
 
 ### Naming, across every entity here
 
-`name_cn`, `name_en`, `aliases[]`, with `name_cn` as the display default, and
-search matching all three. This is a platform-wide convention rather than a
-food one — `travel` and `art` use it too.
+`name_cn`, `name_en` and — where a formal alternative is worth showing —
+`name_alt`, with `name_cn` as the display default and search matching all of
+them. `name_cn` leading is a platform-wide convention rather than a food one;
+`travel` and `art` use it too.
+
+**Aliases are a child table, not an array column.** This line previously said
+`aliases[]`, which was never buildable as written: media carries no
+`postgresql.ARRAY` anywhere and records replacing list-in-a-column with a real
+table twice as a regret, because such a column cannot be indexed, joined or
+constrained. `ingredient_alias` is all three. The *concept* is unchanged — an
+unlimited list of things you might type — only its storage.
+
+**`name_alt` and an alias are different things**, and without a rule they end
+up holding the same strings. `name_alt` is a formal name in another script or
+romanisation, and is shown; an alias is anything you might type to find the
+row, and is never shown.
 
 ### Out of scope, deliberately
 
@@ -176,3 +192,90 @@ own answer.
 
 The constraint worth carrying: a photograph of a dish you cooked cannot be
 re-fetched from anywhere, unlike a cover image an API can supply again.
+
+## Where food diverges from `media`, and why
+
+The platform's house-style section makes `media` the reference implementation
+for conventions, and says a deliberate divergence belongs here with its reason
+so a later reader can tell a decision from an accident. These are food's.
+
+- **An integer primary key**, where media has a `system_id` UUID join key plus
+  a short `public_id` from a per-table sequence under a deferrable unique
+  constraint. That machinery exists to let media's Google Sheets restore
+  permute ids inside one transaction. food has no such channel, so it would be
+  two ids and a sequence serving nothing.
+- **Reads and writes split by path prefix**, where media splits them by a
+  comment banner and an auth dependency inside one router file. food has no
+  auth code at all: the gate is Cloudflare Access, which is all-or-nothing per
+  path, so the split has to be in the URL or there is no gate.
+- **Three name slots plus an alias table**, where media has four fixed slots
+  (`en`/`cn`/`jp`/`alt`) and uses a child table only for external-source names.
+  food's aliases are user-typed and unbounded, which fixed slots cannot hold.
+- **`name_cn` leads display, with no per-row override column.** Media's
+  catalogue entities lead with English and carry a `display_name_field` naming
+  the winner. One user reading Chinese first, and a rule statable in a sentence
+  beats a column every row has to fill in.
+- **`PATCH` takes an all-optional Pydantic model with `exclude_unset` and
+  `extra="forbid"`**, where media takes a raw `dict` through a shared helper
+  that ignores unknown keys. Media's shape is load-bearing there for reasons
+  that do not exist here — association proxies onto a parent row, and 17
+  heterogeneous endpoints — and `extra="forbid"` additionally rejects
+  server-owned columns loudly rather than dropping them silently. "Conventional
+  beats clever" is the tiebreak.
+
+### The one that is not a divergence but reads like one
+
+**Single-column unique name indexes use Postgres's DEFAULT null handling, not
+`NULLS NOT DISTINCT`.** Media's scar is real — `uq_person_name` spans several
+name columns, and there a NULL in any of them makes the whole constraint inert,
+which shipped duplicates three times. Carrying that fix to a *single-column*
+index inverts it: `NULLS NOT DISTINCT` makes NULL equal NULL, so the table may
+hold exactly one row with that slot empty. Most ingredients here have only a
+Chinese name, so the second one inserted would be refused.
+
+It was written that way first and the model tests caught it immediately.
+`test_any_number_of_ingredients_may_leave_a_name_slot_empty` is what refuses
+the change if someone applies the lesson again.
+
+## Rules with no referent yet
+
+Written down where the next person will look rather than where they were
+learned. Each is dormant today and goes live the moment food grows the feature
+it is about — which is exactly when nobody will remember it.
+
+- **A row-hiding filter belongs in SQL, not in Python after the page was
+  cut.** food hides nothing today. The moment it has a discontinued ingredient
+  or an archived recipe, filtering after `limit`/`offset` silently shortens
+  pages and starts the next one in the wrong place. Media's version of this
+  rule lives inside the function that implements it, so only someone already
+  reading the visibility code can find it.
+- **Hidden must be indistinguishable from missing** — 404 rather than 403 —
+  so the status cannot be used to work out which ids name real rows. There is
+  nothing to hide today and the rule would have no referent; it goes in with
+  the first hiding flag, not before.
+- **Whatever parameter drives filtering gets no default.** Media's own
+  documentation says so and its entity routers gave one anyway, producing
+  write responses whose counts disagree with a GET of the same object. A
+  required parameter fails loudly; an optional one fails as a wrong number
+  nobody notices.
+
+## What module 1 hands module 2
+
+- **A recipe line's discriminator resolves three ways** — ingredient, recipe,
+  or neither — and "neither" is a 404, not a 422. The stored type comes from
+  the row, never from the payload. Media shipped that corruption three times,
+  and there an authorization helper was incidentally the only thing resolving
+  a type from an id. food has no such helper, so nothing would catch it.
+- **"What uses this ingredient" counts distinct recipes, not lines**, and must
+  state its recursion depth explicitly. 生抽 in one line and 老抽 in another is
+  one recipe using 醬油; a one-level join and a recursive CTE look equally
+  correct in review, and the wrong one under-counts silently.
+- **Stub creation files the new row in the fallback category** and sets
+  `needs_detail`. Both already exist; module 2 only has to use them.
+- **Merge is the fix for a duplicate, not delete.** Every catalogue entity in
+  media has one, and deleting a duplicate instead is on its own list of
+  mistakes. Module 1 adds nothing that makes merging hard: no name is copied
+  into another table.
+- **Whether a bought-and-makeable thing is one row or two** — caramel is an
+  ingredient you can buy and a general recipe you can make. Module 1 adds no
+  link column and assumes nothing either way.

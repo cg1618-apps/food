@@ -1,5 +1,6 @@
-import { defineConfig } from 'vite'
+import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite'
 
 // outDir is outside frontend/ because uvicorn serves the built bundle from the
 // repository root. port 5174 and the 8001 proxy are this app's slots in the
@@ -11,7 +12,7 @@ import react from '@vitejs/plugin-react'
 // it with index.html - the SPA then reports the API healthy while nothing is
 // running behind it.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   build: { outDir: '../frontend_dist', emptyOutDir: true },
   server: {
     port: 5174,
@@ -20,5 +21,10 @@ export default defineConfig({
       '/api': 'http://localhost:8001',
       '/health': 'http://localhost:8001',
     },
+  },
+  test: {
+    environment: 'jsdom',
+    globals: false,
+    include: ['src/**/*.test.{js,jsx}'],
   },
 })

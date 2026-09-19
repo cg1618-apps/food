@@ -6,7 +6,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.routers import health
+from app import errors, logging_config
+from app.routers import health, ingredient, ingredient_category, label
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 DIST = BASE_DIR / "frontend_dist"
@@ -18,8 +19,21 @@ def create_app(dist: Path = DIST) -> FastAPI:
     frontend_dist/ when the suite runs, so a test that depends on it existing
     silently tests nothing.
     """
+    logging_config.configure()
+
     app = FastAPI(title="food")
+    errors.install(app)
+
     app.include_router(health.router)
+    # Read routers and their write counterparts are registered together, so
+    # that adding a resource without its gate is visible here rather than
+    # discovered by the prefix test.
+    app.include_router(ingredient.router)
+    app.include_router(ingredient.edit)
+    app.include_router(ingredient_category.router)
+    app.include_router(ingredient_category.edit)
+    app.include_router(label.router)
+    app.include_router(label.edit)
 
     if dist.is_dir():
         # Conditional: a bundle small enough for Vite to inline every asset

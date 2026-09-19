@@ -7,3 +7,4 @@
 # failure names the interpreter rather than the line endings.
 *.sh text eol=lf
 deploy/migrations text eol=lf
+deploy/gated-paths text eol=lf
