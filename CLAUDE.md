@@ -32,16 +32,17 @@ reference work.
 
 ## Status
 
-**Module 1's schema is built; there are no routes over it yet.** Six tables —
-`ingredient`, `ingredient_category`, `ingredient_alias`,
-`ingredient_preservation`, `label`, `ingredient_label` — at revision
-`i1ngredients`, described in `docs/data-model.md`. FastAPI still serves only
-`/health` and the React bundle.
+**Module 1 is built.** The ingredient library — six tables at revision
+`i1ngredients`, the read and write API over them, and the pages: a library
+with search and filters, a detail page, add and edit forms, and a categories
+and labels editor.
 
-The rest of module 1 is the routes, the pages and the app-wide foundations
-that come with the first of them: the single definition of the write prefix,
-the error handling, the API client and logging. The spec is in
-`docs/superpowers/specs/`, and it is deleted when the work lands.
+`docs/data-model.md` describes the schema, `docs/api.md` the routes and the
+error shape, `docs/testing.md` how the suite is arranged and which tests are
+load-bearing.
+
+Module 2, recipes, is next. `docs/notes/decisions.md` records what module 1
+hands it.
 
 ## The contract this app owes the platform
 
@@ -108,8 +109,12 @@ why it is written down before there is a single route.
 venv/Scripts/python.exe -m pytest -q      # backend tests
 venv/Scripts/ruff.exe check .             # backend lint
 cd frontend && npm run lint               # oxlint
+cd frontend && npm test                   # vitest, colocated with the source
 cd frontend && npm run build              # writes frontend_dist/ for uvicorn
 ```
+
+**Take the machine-wide pytest lock around every backend run** — all four apps
+share one PostgreSQL. The lock is in the platform's `CLAUDE.md`.
 
 **Ports are box-wide.** uvicorn is 8001 (food's `apps.yml` entry) and Vite is
 5174 (`5173 + (port - 8000)`). Both are `strictPort`/abort-on-taken, because

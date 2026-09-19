@@ -54,9 +54,11 @@ What differs, and why:
   as well as `/api/…`, or a typo in the probe's path answers 200 with the
   bundle and a dead app is called healthy; Vite proxies `/health` as well as
   `/api`; and the compose healthcheck probes `:8001/health`.
-- **Writes are not split from reads yet**, because there are no writes. The
-  URL layout above the first route is the decision already recorded here:
-  `/api/...` public, `/api/edit/...` behind Cloudflare Access.
+- **Writes are split from reads by path**, as this file required before the
+  first route existed: `/api/...` public, `/api/edit/...` behind Cloudflare
+  Access. `WRITE_PREFIX` in `app/routing.py` is the single definition,
+  `deploy/gated-paths` is generated from it, and the platform's `apps.yml`
+  carries `gated_paths` checked against that file in both directions.
 
 Two things the skeleton pins that cost travel a production failure each, kept
 deliberately rather than inherited by accident:
@@ -234,3 +236,46 @@ Chinese name, so the second one inserted would be refused.
 It was written that way first and the model tests caught it immediately.
 `test_any_number_of_ingredients_may_leave_a_name_slot_empty` is what refuses
 the change if someone applies the lesson again.
+
+## Rules with no referent yet
+
+Written down where the next person will look rather than where they were
+learned. Each is dormant today and goes live the moment food grows the feature
+it is about — which is exactly when nobody will remember it.
+
+- **A row-hiding filter belongs in SQL, not in Python after the page was
+  cut.** food hides nothing today. The moment it has a discontinued ingredient
+  or an archived recipe, filtering after `limit`/`offset` silently shortens
+  pages and starts the next one in the wrong place. Media's version of this
+  rule lives inside the function that implements it, so only someone already
+  reading the visibility code can find it.
+- **Hidden must be indistinguishable from missing** — 404 rather than 403 —
+  so the status cannot be used to work out which ids name real rows. There is
+  nothing to hide today and the rule would have no referent; it goes in with
+  the first hiding flag, not before.
+- **Whatever parameter drives filtering gets no default.** Media's own
+  documentation says so and its entity routers gave one anyway, producing
+  write responses whose counts disagree with a GET of the same object. A
+  required parameter fails loudly; an optional one fails as a wrong number
+  nobody notices.
+
+## What module 1 hands module 2
+
+- **A recipe line's discriminator resolves three ways** — ingredient, recipe,
+  or neither — and "neither" is a 404, not a 422. The stored type comes from
+  the row, never from the payload. Media shipped that corruption three times,
+  and there an authorization helper was incidentally the only thing resolving
+  a type from an id. food has no such helper, so nothing would catch it.
+- **"What uses this ingredient" counts distinct recipes, not lines**, and must
+  state its recursion depth explicitly. 生抽 in one line and 老抽 in another is
+  one recipe using 醬油; a one-level join and a recursive CTE look equally
+  correct in review, and the wrong one under-counts silently.
+- **Stub creation files the new row in the fallback category** and sets
+  `needs_detail`. Both already exist; module 2 only has to use them.
+- **Merge is the fix for a duplicate, not delete.** Every catalogue entity in
+  media has one, and deleting a duplicate instead is on its own list of
+  mistakes. Module 1 adds nothing that makes merging hard: no name is copied
+  into another table.
+- **Whether a bought-and-makeable thing is one row or two** — caramel is an
+  ingredient you can buy and a general recipe you can make. Module 1 adds no
+  link column and assumes nothing either way.
