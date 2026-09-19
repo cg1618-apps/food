@@ -53,13 +53,41 @@ including the network alias (`food-app`) the tunnel routes to.
 
 ## Stack
 
-**Undecided, and deliberately so.** Python and PostgreSQL are the only things
-guaranteed across this box; the web framework, whether there is a frontend at
-all, and the migration tool belong to this application.
+**FastAPI + PostgreSQL on the backend, React + Vite on the frontend** — the
+same shape as the media tracker, deliberately. Four months of patterns exist to
+copy from, and the platform's app contract is enforced by `apps.yml` and the
+deploy pipeline rather than by every app being different.
 
-Record the decision in `docs/notes/decisions.md` when it is made, with what was
-rejected and why — and update this section, the CI workflow and
-`requirements-dev.txt` in the same change.
+The cost is known and accepted: a build step, a second port in development, and
+a `frontend_dist/` that goes stale if you forget to rebuild. The media
+tracker's `CLAUDE.md` documents each of those.
+
+Migrations: Alembic, which means this app ships `deploy/migrations` with
+`current`, `added` and `downgrade` once it has a schema — the hook the
+platform's rollback calls. See the platform's Step 4 plan.
+
+## Who can see it
+
+**Public to read. No accounts, no login, one user's data — yours.**
+
+Anyone may read the ingredient library, the recipes and the rest. That is the
+point: it is a reference you can open on a phone in a shop without signing in.
+
+**Writes are a different question, and the answer is not "nothing".** A public
+hostname with unprotected write endpoints is a public editor. So the write
+surface lives under its own path prefix and Cloudflare Access protects that
+prefix — the same mechanism `travel` and `art` use for their whole hostname,
+applied to one part of this one. No auth code in the app, and no password to
+store.
+
+What that requires of the URL layout, from the first route:
+
+- **`/api/...` and the pages that read** — public, no gate.
+- **`/edit/...` and `/api/edit/...`** (or whatever prefix is chosen, chosen
+  once) — everything that creates, updates or deletes, behind Access.
+
+Splitting reads from writes by path is cheap now and invasive later, which is
+why it is written down before there is a single route.
 
 ## Commands
 

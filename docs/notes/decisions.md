@@ -18,4 +18,17 @@ as they bind this app:
 
 ## Decisions for this application
 
-None yet. The first will be the stack.
+- **FastAPI, PostgreSQL, React + Vite, Alembic** — the media tracker's stack.
+  Rejected: Django, which would have suited a library-of-entities app well and
+  cost far less code per app, but adds a second framework to hold in mind and a
+  different deploy shape. Rejected: a server-rendered frontend with htmx, which
+  would have removed the build step, the second dev port and the stale-bundle
+  failure mode entirely — worth revisiting if the frontend turns out to be
+  thin, and the reason it was not chosen is consistency with an app that
+  already works rather than a technical defect.
+- **Public to read, with writes behind Cloudflare Access on their own path
+  prefix.** No accounts and no login: one user, and the reading half is meant to
+  be openable on a phone without signing in. The write surface needs a gate
+  regardless, and doing it at the edge means no password is stored and no auth
+  code is written. This requires the URL layout to separate reads from writes
+  from the first route, which is cheap now and invasive later.
