@@ -66,7 +66,22 @@ case "${1:-}" in
     added)
         from="${2:?added needs a from-revision}"
         to="${3:?added needs a to-revision}"
-        git diff --name-only "${from}" "${to}" -- alembic/versions/
+        # --diff-filter=AM: an ADDED or MODIFIED revision file counts; a
+        # DELETED one does not. Plain --name-only reports a deletion exactly
+        # like an addition, so the release that REMOVED a revision was
+        # classified as adding one and took the approval gate - observed on
+        # art, after the rollback rehearsal was cleaned up.
+        #
+        # The gate is the mild half. bin/rollback reads a non-empty answer as
+        # "this deploy changed the schema" and tries to downgrade, so a
+        # release that only deletes an old revision file - squashing a chain -
+        # would attempt a reversal toward a revision the new code may no
+        # longer contain. That freezes rather than damages, but it freezes for
+        # nothing.
+        #
+        # M stays deliberately: editing an already-applied revision is exactly
+        # the kind of change that should demand an approval.
+        git diff --name-only --diff-filter=AM "${from}" "${to}" -- alembic/versions/
         ;;
     downgrade)
         target="${2:?downgrade needs a target}"

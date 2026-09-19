@@ -137,3 +137,22 @@ def test_current_answers_the_revision_when_one_is_applied(tmp_path):
     result = run_current(tmp_path, version_table="0001_baseline")
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "0001_baseline", result.stdout
+
+
+def test_added_ignores_a_deleted_revision_file():
+    """`added` means added, not "changed".
+
+    Plain `git diff --name-only` reports a deletion exactly like an addition,
+    so the release that REMOVED the rollback-rehearsal revision was classified
+    as adding one and took the approval gate.
+
+    The gate is the mild half: bin/rollback reads a non-empty answer as "this
+    deploy changed the schema" and attempts a downgrade, so a release that
+    only deletes an old revision file would try to reverse toward a revision
+    the new code may no longer contain.
+
+    M stays on purpose - editing an already-applied revision should demand an
+    approval.
+    """
+    body = code()
+    assert "--diff-filter=AM" in body
