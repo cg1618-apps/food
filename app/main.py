@@ -68,11 +68,34 @@ def create_app(dist: Path = DIST) -> FastAPI:
             it is a path the catch-all would otherwise answer with the SPA,
             and a deploy probe reading a 200 from the wrong route is the one
             lie this file must not tell.
+
+            Past those two guards, a path that names a REAL FILE in the
+            bundle is served as that file. Vite copies frontend/public/ to
+            the root of the bundle rather than into assets/, and only
+            /assets is mounted as StaticFiles - so without this, /favicon.svg
+            came back as index.html under text/html and the browser discarded
+            it. Nothing sits in front of this app to cover the gap:
+            cloudflared connects straight to uvicorn.
+
+            `full_path` is user-controlled, so the candidate is resolved and
+            confined to the dist directory before it is served - otherwise
+            `..%2F.env` reads any file beside the bundle, the app's own
+            credentials included. This is media's resolve-and-confine block,
+            adopted rather than redesigned; docs/notes/decisions.md records
+            why it is that rather than a list of special-cased icon paths.
             """
             if full_path == "api" or full_path.startswith("api/"):
                 raise HTTPException(status_code=404)
             if full_path == "health" or full_path.startswith("health/"):
                 raise HTTPException(status_code=404)
+            dist_root = dist.resolve()
+            candidate = (dist_root / full_path).resolve()
+            if (
+                candidate != dist_root
+                and candidate.is_relative_to(dist_root)
+                and candidate.is_file()
+            ):
+                return FileResponse(candidate)
             return FileResponse(dist / "index.html")
 
     return app
