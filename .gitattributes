@@ -7,3 +7,10 @@
 # failure names the interpreter rather than the line endings.
 *.sh text eol=lf
 deploy/migrations text eol=lf
+deploy/gated-paths text eol=lf
+
+# Batch files are CRLF everywhere, for the mirror of the reason above. cmd.exe
+# tolerates LF in a file this small, but misparses labels and multi-line blocks
+# in one that grows - and the committed blob is LF whatever the working tree
+# looks like, so a machine with core.autocrlf=false checks it out that way.
+*.cmd text eol=crlf

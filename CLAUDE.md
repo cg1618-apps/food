@@ -32,13 +32,17 @@ reference work.
 
 ## Status
 
-**The skeleton is built; there is no schema.** FastAPI serves `/health` and
-the React bundle, Alembic's chain holds one empty baseline revision, and
-`deploy/migrations` is in place. Nothing food-shaped exists yet: no tables, no
-endpoints beyond the health route, no pages.
+**Module 1 is built.** The ingredient library — six tables at revision
+`i1ngredients`, the read and write API over them, and the pages: a library
+with search and filters, a detail page, add and edit forms, and a categories
+and labels editor.
 
-The next step is module 1 of the eight in `docs/notes/decisions.md` — design
-it into `docs/superpowers/specs/` immediately before building it, not now.
+`docs/data-model.md` describes the schema, `docs/api.md` the routes and the
+error shape, `docs/testing.md` how the suite is arranged and which tests are
+load-bearing.
+
+Module 2, recipes, is next. `docs/notes/decisions.md` records what module 1
+hands it.
 
 ## The contract this app owes the platform
 
@@ -105,8 +109,12 @@ why it is written down before there is a single route.
 venv/Scripts/python.exe -m pytest -q      # backend tests
 venv/Scripts/ruff.exe check .             # backend lint
 cd frontend && npm run lint               # oxlint
+cd frontend && npm test                   # vitest, colocated with the source
 cd frontend && npm run build              # writes frontend_dist/ for uvicorn
 ```
+
+**Take the machine-wide pytest lock around every backend run** — all four apps
+share one PostgreSQL. The lock is in the platform's `CLAUDE.md`.
 
 **Ports are box-wide.** uvicorn is 8001 (food's `apps.yml` entry) and Vite is
 5174 (`5173 + (port - 8000)`). Both are `strictPort`/abort-on-taken, because
