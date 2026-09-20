@@ -63,3 +63,42 @@ def test_a_bundle_with_no_assets_directory_still_starts(tmp_path):
     response = TestClient(create_app(dist=tmp_path)).get("/recipes/42")
     assert response.status_code == 200
     assert "spa" in response.text
+
+
+def test_a_real_file_in_the_bundle_is_served_as_itself(tmp_path):
+    # The catch-all used to answer EVERY non-API path with index.html, so a
+    # file that genuinely sits in the bundle - favicon.svg is the one that
+    # exposed this - came back as the SPA's HTML under text/html and the
+    # browser discarded it. Nothing sits in front of this app in production
+    # (cloudflared connects straight to uvicorn) and only /assets is mounted
+    # as StaticFiles, so this handler is the only thing that can serve it.
+    (tmp_path / "favicon.svg").write_text("<svg>the-real-icon</svg>")
+    response = TestClient(_app_with_dist(tmp_path)).get("/favicon.svg")
+    assert response.status_code == 200
+    assert "the-real-icon" in response.text
+    assert "spa" not in response.text
+
+
+def test_a_traversal_path_cannot_escape_the_bundle(tmp_path):
+    # The mirror of the test above, and the reason serving real files is not
+    # simply "return whatever the path names". `full_path` is user-controlled,
+    # so without the resolve-and-confine guard `/..%2F.env` reads any file
+    # beside the bundle - here the app's own credentials.
+    #
+    # The .env file written below is LOAD-BEARING, not scenery: `is_file()`
+    # is False for a path that does not exist, so without a real secret to
+    # leak this test would pass on an unguarded handler and prove nothing.
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "assets").mkdir()
+    (dist / "index.html").write_text("<html><body>spa</body></html>")
+    secret = tmp_path / ".env"
+    secret.write_text("DATABASE_URL=postgresql://never-serve-this")
+
+    client = TestClient(create_app(dist=dist))
+    for path in ("/..%2F.env", "/../.env", "/%2e%2e%2f.env"):
+        response = client.get(path)
+        assert "never-serve-this" not in response.text, path
+        # Falling back to the SPA is the intended answer: the guard rejects
+        # the candidate and the request becomes an ordinary client route.
+        assert response.status_code in (200, 404), path
