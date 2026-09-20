@@ -11,6 +11,22 @@ services:
       dockerfile: dockerfile
     image: food-app:local
     restart: unless-stopped
+    logging:
+      # Docker's default json-file driver has NO max-size: the file grows until
+      # the disk is full, and on this box that is the shared PostgreSQL and
+      # every hostname going down together. Every service in the platform's
+      # compose project declares the same three values; see the platform's
+      # docs/logging.md.
+      #
+      # This bounds a buffer, not retention. A compose up that recreates this
+      # container discards its log whatever the size - what is meant to survive
+      # goes to the collector.
+      #
+      # Quoted, both: max-file as a YAML integer is rejected at start.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     env_file:
       - .env
     environment:

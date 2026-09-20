@@ -65,6 +65,22 @@ is load-bearing and says so. Some examples worth knowing about:
   work".
 - `test_the_app_actually_has_write_routes_to_check` asserts there is something
   to be wrong about, so the prefix assertion cannot pass vacuously.
+- `test_the_f_string_guard_can_actually_fail` proves the AST scan in
+  `test_no_log_call_formats_its_own_message` fires. That scan walks `app/` and
+  asserts it found nothing; a detector that matches nothing at all passes it
+  identically, and would keep passing through the change that fills this app
+  with f-string log calls.
+- `test_an_id_of_exactly_sixty_four_characters_is_honoured` is the mirror for
+  the request-id validator. Every rejection case asserts "a fresh id was
+  generated instead" — which a validator that refused *everything* would also
+  satisfy. It sits on the boundary rather than safely inside it, so an
+  off-by-one in the pattern is caught too.
+
+One more that is weaker than it looks unless read carefully:
+`test_uvicorns_own_loggers_are_taken_over` asserts the handler **by identity**
+against the root console handler. Asserting merely that a handler exists passes
+while the bug is present, because uvicorn installs one of its own — which is
+the entire failure.
 
 ## Constraint violations are tested through HTTP
 

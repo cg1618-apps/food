@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import errors, logging_config
+from app.request_context import RequestIdMiddleware
 from app.routers import health, ingredient, ingredient_category, label
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -22,6 +23,10 @@ def create_app(dist: Path = DIST) -> FastAPI:
     logging_config.configure()
 
     app = FastAPI(title="food")
+    # Added first, so it is the OUTERMOST middleware and the id is set before
+    # anything below it can log - including the error handlers installed next,
+    # which are the code most likely to be logging when this matters.
+    app.add_middleware(RequestIdMiddleware)
     errors.install(app)
 
     app.include_router(health.router)
