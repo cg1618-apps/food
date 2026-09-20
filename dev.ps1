@@ -3,13 +3,13 @@
 #
 # Ported from travel/dev.ps1, changed only where food's arrangement differs:
 # this app has no docker-compose.yml of its own - the container is
-# anime_site_postgres_db, owned by media's compose project, with a `food`
+# cg1618-dev-db, owned by the PLATFORM's compose project, with a `food`
 # database created inside it by the platform's provisioning (see
-# .env.example). So this script starts that container if it is stopped rather
-# than running `docker-compose up`, and never touches its volume or project.
+# .env.example). So this script brings that project up rather than owning a
+# compose file of its own, and never touches its volume.
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$dbContainer = 'anime_site_postgres_db'
+$dbContainer = 'cg1618-dev-db'
 $backendPort = 8001
 $frontendUrl = 'http://localhost:5174/'
 
@@ -50,10 +50,26 @@ if ($nativeSvc -or $nativeProc) {
     throw 'A native PostgreSQL server would shadow the container - aborting.'
 }
 
+# --- The development database belongs to the PLATFORM, not to any app. One
+# --- server holds one database per app, and it lives in the platform's own
+# --- compose project so that `docker compose down` in an app's tree cannot
+# --- remove the server every other app is using. It used to be
+# --- anime_site_postgres_db inside media's project, which is exactly how that
+# --- happened. See the platform's docs/registry.md.
+$platformDir = Split-Path $root -Parent
+$dbCompose = Join-Path $platformDir 'docker-compose.dev-db.yml'
+if (-not (Test-Path $dbCompose)) {
+    throw "Not found: $dbCompose. This checkout is expected to sit inside the platform checkout as cg1618\<app>. If it does not, start the database yourself with the platform's .\dev-db.cmd and re-run this."
+}
+
 Write-Host "==> Starting PostgreSQL ($dbContainer)" -ForegroundColor Cyan
-docker start $dbContainer | Out-Null
+# --- `up -d`, not `docker start`: it CREATES the container when it is absent,
+# --- which is the state on a fresh machine and after the platform's
+# --- dev-db.cmd -Down. `docker start` fails there with "no such container",
+# --- which reads as a broken script rather than an absent container.
+docker compose -f $dbCompose up -d | Out-Null
 if ($LASTEXITCODE -ne 0) {
-    throw "Could not start $dbContainer - is Docker Desktop running, and has media's docker-compose created it yet?"
+    throw "Could not start $dbContainer - is Docker Desktop running, and are POSTGRES_USER, POSTGRES_PASSWORD and POSTGRES_DB set in the platform's .env?"
 }
 
 # --- Wait for Postgres to accept connections. create_engine is lazy, so nothing
