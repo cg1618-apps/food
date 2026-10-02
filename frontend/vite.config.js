@@ -20,8 +20,15 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:8001',
       '/health': 'http://localhost:8001',
+      '/images': 'http://localhost:8001',
     },
   },
+  // The automatic JSX runtime under vitest. Vite 8 compiles the app with oxc,
+  // which plugin-react configures; vitest 3 still transforms with esbuild,
+  // whose default is the classic runtime, so without this every .test.jsx
+  // fails with "React is not defined". Set only under vitest, because vite
+  // warns when a build sees both options.
+  ...(process.env.VITEST ? { esbuild: { jsx: 'automatic' } } : {}),
   test: {
     environment: 'jsdom',
     globals: false,

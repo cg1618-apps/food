@@ -1,12 +1,28 @@
 """Every schema, re-exported so call sites write `schemas.IngredientResponse`."""
 
+from app.schemas.image import (
+    AttachedImage,
+    CoverRef,
+    ImageAttachmentIn,
+    ImageDetail,
+    ImageOwner,
+    ImageSummary,
+)
 from app.schemas.ingredient import (
+    HeatingIn,
+    HeatingResponse,
     IngredientCreate,
     IngredientResponse,
     IngredientSummary,
     IngredientUpdate,
+    LinkIn,
+    LinkResponse,
+    MergeIn,
+    MergePreview,
     PreservationIn,
     PreservationResponse,
+    RelatedIngredient,
+    StorageRange,
 )
 from app.schemas.ingredient_category import (
     CategoryCreate,
@@ -14,20 +30,86 @@ from app.schemas.ingredient_category import (
     CategoryResponse,
     CategoryUpdate,
 )
+from app.schemas.kitchen_note import (
+    KitchenNoteCreate,
+    KitchenNoteResponse,
+    KitchenNoteSummary,
+    KitchenNoteUpdate,
+)
 from app.schemas.label import LabelCreate, LabelResponse, LabelUpdate
+from app.schemas.recipe import (
+    IngredientRef,
+    LineIn,
+    LineResponse,
+    NewIngredientIn,
+    RecipeCreate,
+    RecipeRef,
+    RecipeResponse,
+    RecipeSummary,
+    RecipeUpdate,
+    SourceIn,
+    SourceResponse,
+    StepIn,
+    StepResponse,
+)
+from app.schemas.vocabulary import (
+    VocabRef,
+    VocabularyCreate,
+    VocabularyResponse,
+    VocabularyUpdate,
+)
+
+# IngredientResponse names RecipeRef by a forward reference, because
+# recipe.py imports ingredient.py; resolved here, once both are loaded.
+IngredientResponse.model_rebuild(_types_namespace={"RecipeRef": RecipeRef})
 
 __all__ = [
+    "AttachedImage",
+    "CoverRef",
+    "ImageAttachmentIn",
+    "ImageDetail",
+    "ImageOwner",
+    "ImageSummary",
+    "HeatingIn",
+    "HeatingResponse",
     "CategoryCreate",
     "CategoryNode",
     "CategoryResponse",
     "CategoryUpdate",
     "IngredientCreate",
+    "IngredientRef",
     "IngredientResponse",
     "IngredientSummary",
     "IngredientUpdate",
+    "KitchenNoteCreate",
+    "KitchenNoteResponse",
+    "KitchenNoteSummary",
+    "KitchenNoteUpdate",
     "LabelCreate",
     "LabelResponse",
     "LabelUpdate",
+    "LineIn",
+    "LineResponse",
+    "LinkIn",
+    "LinkResponse",
+    "MergeIn",
+    "MergePreview",
+    "NewIngredientIn",
     "PreservationIn",
     "PreservationResponse",
+    "RecipeCreate",
+    "RecipeRef",
+    "RecipeResponse",
+    "RecipeSummary",
+    "RecipeUpdate",
+    "RelatedIngredient",
+    "SourceIn",
+    "SourceResponse",
+    "StepIn",
+    "StepResponse",
+    "StorageRange",
+    "VocabRef",
+    "VocabularyCreate",
+    "VocabularyResponse",
+    "VocabularyUpdate",
 ]

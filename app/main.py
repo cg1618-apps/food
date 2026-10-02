@@ -8,7 +8,16 @@ from fastapi.staticfiles import StaticFiles
 
 from app import errors, logging_config
 from app.request_context import RequestIdMiddleware
-from app.routers import health, ingredient, ingredient_category, label
+from app.routers import (
+    health,
+    image,
+    ingredient,
+    ingredient_category,
+    kitchen_note,
+    label,
+    recipe,
+    vocabulary,
+)
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 DIST = BASE_DIR / "frontend_dist"
@@ -39,6 +48,28 @@ def create_app(dist: Path = DIST) -> FastAPI:
     app.include_router(ingredient_category.edit)
     app.include_router(label.router)
     app.include_router(label.edit)
+    app.include_router(recipe.router)
+    app.include_router(recipe.edit)
+    app.include_router(recipe.creators)
+    app.include_router(kitchen_note.router)
+    app.include_router(kitchen_note.edit)
+    app.include_router(image.router)
+    app.include_router(image.edit)
+    for vocabulary_router in vocabulary.ROUTERS:
+        app.include_router(vocabulary_router)
+
+    # Uploaded images. Public, like every read here, and safe to cache
+    # forever: names are content hashes, so a replaced picture is a new URL.
+    # The directory is created here, at start, so a fresh machine without
+    # data/images still starts and the mount has something to serve. Uploads
+    # create their own subdirectories (library/, library/thumbs/) as needed.
+    # check_dir=False is kept so a directory removed while the app runs is a
+    # 404 for the file rather than an error from the mount.
+    from app import config as app_config
+
+    image_root = Path(app_config.settings.image_dir)
+    image_root.mkdir(parents=True, exist_ok=True)
+    app.mount("/images", StaticFiles(directory=image_root, check_dir=False), name="images")
 
     if dist.is_dir():
         # Conditional: a bundle small enough for Vite to inline every asset
@@ -68,11 +99,42 @@ def create_app(dist: Path = DIST) -> FastAPI:
             it is a path the catch-all would otherwise answer with the SPA,
             and a deploy probe reading a 200 from the wrong route is the one
             lie this file must not tell.
+
+            `/images` is refused for the same reason: a picture that is not
+            there must be a 404, not index.html under a 200 that the browser
+            then fails to decode. The StaticFiles mount answers real files;
+            this guard is what a path under it that the mount did not claim
+            falls into.
+
+            Past those guards, a path that names a REAL FILE in the
+            bundle is served as that file. Vite copies frontend/public/ to
+            the root of the bundle rather than into assets/, and only
+            /assets is mounted as StaticFiles - so without this, /favicon.svg
+            came back as index.html under text/html and the browser discarded
+            it. Nothing sits in front of this app to cover the gap:
+            cloudflared connects straight to uvicorn.
+
+            `full_path` is user-controlled, so the candidate is resolved and
+            confined to the dist directory before it is served - otherwise
+            `..%2F.env` reads any file beside the bundle, the app's own
+            credentials included. This is media's resolve-and-confine block,
+            adopted rather than redesigned; docs/notes/decisions.md records
+            why it is that rather than a list of special-cased icon paths.
             """
             if full_path == "api" or full_path.startswith("api/"):
                 raise HTTPException(status_code=404)
             if full_path == "health" or full_path.startswith("health/"):
                 raise HTTPException(status_code=404)
+            if full_path == "images" or full_path.startswith("images/"):
+                raise HTTPException(status_code=404)
+            dist_root = dist.resolve()
+            candidate = (dist_root / full_path).resolve()
+            if (
+                candidate != dist_root
+                and candidate.is_relative_to(dist_root)
+                and candidate.is_file()
+            ):
+                return FileResponse(candidate)
             return FileResponse(dist / "index.html")
 
     return app

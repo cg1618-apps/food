@@ -15,10 +15,19 @@ from.
 """
 
 from datetime import datetime
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-from app.constants import PRESERVATION_METHODS
+from app.constants import PRESERVATION_METHODS, PRESERVATION_STATES, RATINGS
+from app.schemas.image import AttachedImage, CoverRef
+from app.schemas.vocabulary import VocabRef
+
+if TYPE_CHECKING:
+    # recipe.py imports this module, so RecipeRef cannot be imported here at
+    # runtime; `app/schemas/__init__.py` resolves the forward reference once
+    # both modules exist.
+    from app.schemas.recipe import RecipeRef
 
 
 def _clean_aliases(values: list[str]) -> list[str]:
@@ -34,12 +43,23 @@ def _clean_aliases(values: list[str]) -> list[str]:
     return cleaned
 
 
-def _one_note_per_method(values: list["PreservationIn"]) -> list["PreservationIn"]:
-    """Mirrors uq_ingredient_preservation_method."""
-    methods = [v.method for v in values]
-    if len(set(methods)) != len(methods):
-        raise ValueError("The same preservation method is listed twice")
+def _one_note_per_state_and_method(values: list["PreservationIn"]) -> list["PreservationIn"]:
+    """Mirrors uq_ingredient_preservation_state_method."""
+    keys = [(v.state, v.method) for v in values]
+    if len(set(keys)) != len(keys):
+        raise ValueError("The same storage method is listed twice for one state")
     return values
+
+
+def _check_url(value: str) -> str:
+    """http and https only. A javascript: URL rendered as a link is an XSS."""
+    from urllib.parse import urlparse
+
+    value = value.strip()
+    parsed = urlparse(value)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError("A link must be an http or https URL")
+    return value
 
 
 def _blank_to_none(value: str | None) -> str | None:
@@ -58,10 +78,19 @@ def _blank_to_none(value: str | None) -> str | None:
 class PreservationIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    state: str = "unused"
     method: str
-    duration_days: int | None = None
+    duration_min_days: int | None = None
+    duration_max_days: int | None = None
     notes: str | None = None
     sort_order: int = 0
+
+    @field_validator("state")
+    @classmethod
+    def state_is_known(cls, value: str) -> str:
+        if value not in PRESERVATION_STATES:
+            raise ValueError(f"Unknown storage state: {value}")
+        return value
 
     @field_validator("method")
     @classmethod
@@ -70,19 +99,94 @@ class PreservationIn(BaseModel):
             raise ValueError(f"Unknown preservation method: {value}")
         return value
 
-    @field_validator("duration_days")
+    @field_validator("duration_min_days", "duration_max_days")
     @classmethod
     def duration_is_positive(cls, value: int | None) -> int | None:
         # Mirrors ck_ingredient_preservation_duration_positive.
         if value is not None and value <= 0:
-            raise ValueError("A preservation time must be a positive number of days")
+            raise ValueError("A storage time must be a positive number of days")
         return value
+
+    @model_validator(mode="after")
+    def range_is_ordered(self):
+        # Mirrors ck_ingredient_preservation_duration_order.
+        if (
+            self.duration_min_days is not None
+            and self.duration_max_days is not None
+            and self.duration_min_days > self.duration_max_days
+        ):
+            raise ValueError("The shortest time cannot be longer than the longest")
+        return self
 
 
 class PreservationResponse(PreservationIn):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+
+
+class HeatingIn(BaseModel):
+    """No `sort_order`: a heating row's order is its position in the list."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    method_id: int
+    temperature_c: int | None = None
+    duration: str | None = None
+    preheat: bool = False
+    flip: bool = False
+    notes: str | None = None
+
+    @field_validator("temperature_c")
+    @classmethod
+    def temperature_is_positive(cls, value: int | None) -> int | None:
+        if value is not None and value <= 0:
+            raise ValueError("A temperature must be positive")
+        return value
+
+
+class HeatingResponse(BaseModel):
+    id: int
+    method: VocabRef
+    temperature_c: int | None = None
+    temperature_f: int | None = None
+    duration: str | None = None
+    preheat: bool
+    flip: bool
+    notes: str | None = None
+    sort_order: int
+
+
+class LinkIn(BaseModel):
+    """No `sort_order`: a link's order is its position in the list."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    url: str
+    title: str | None = None
+
+    @field_validator("url")
+    @classmethod
+    def url_is_http(cls, value: str) -> str:
+        return _check_url(value)
+
+
+class LinkResponse(LinkIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    sort_order: int
+
+
+class StorageRange(BaseModel):
+    min: int | None = None
+    max: int | None = None
+
+
+def _check_rating(value: str | None) -> str | None:
+    if value is not None and value not in RATINGS:
+        raise ValueError(f"A rating is one of {', '.join(RATINGS)}")
+    return value
 
 
 class LabelRef(BaseModel):
@@ -117,6 +221,23 @@ class IngredientSummary(BaseModel):
     category_id: int
     parent_id: int | None = None
     needs_detail: bool
+    rating: str | None = None
+    fridge: StorageRange | None = None
+    cover: CoverRef | None = None
+    # Distinct recipes using this or anything below it. Computed for a whole
+    # list at once by the router; never read off the row.
+    used_in_count: int = 0
+
+
+class RelatedIngredient(IngredientSummary):
+    """A parent or a child on the full row: a summary plus where to get it.
+
+    The ingredient page lists its varieties with their rating and where each
+    is bought, so a child carries its `sourcing_notes`; a list row does not
+    need them and does not pay for them.
+    """
+
+    sourcing_notes: str | None = None
 
 
 class IngredientBase(BaseModel):
@@ -132,14 +253,22 @@ class IngredientBase(BaseModel):
     sourcing_notes: str | None = None
     preservation_notes: str | None = None
     needs_detail: bool = False
+    rating: str | None = None
     aliases: list[str] = []
     preservation: list[PreservationIn] = []
+    heating: list[HeatingIn] = []
+    links: list[LinkIn] = []
     label_ids: list[int] = []
 
     @field_validator("name_cn", "name_en", "name_alt", mode="before")
     @classmethod
     def normalise_names(cls, value):
         return _blank_to_none(value) if value is None or isinstance(value, str) else value
+
+    @field_validator("rating")
+    @classmethod
+    def rating_is_known(cls, value: str | None) -> str | None:
+        return _check_rating(value)
 
     @model_validator(mode="after")
     def at_least_one_name(self):
@@ -156,7 +285,7 @@ class IngredientBase(BaseModel):
     @field_validator("preservation")
     @classmethod
     def one_method_each(cls, values: list[PreservationIn]) -> list[PreservationIn]:
-        return _one_note_per_method(values)
+        return _one_note_per_state_and_method(values)
 
 
 class IngredientCreate(IngredientBase):
@@ -190,14 +319,22 @@ class IngredientUpdate(BaseModel):
     sourcing_notes: str | None = None
     preservation_notes: str | None = None
     needs_detail: bool | None = None
+    rating: str | None = None
     aliases: list[str] | None = None
     preservation: list[PreservationIn] | None = None
+    heating: list[HeatingIn] | None = None
+    links: list[LinkIn] | None = None
     label_ids: list[int] | None = None
 
     @field_validator("name_cn", "name_en", "name_alt", mode="before")
     @classmethod
     def normalise_names(cls, value):
         return _blank_to_none(value) if value is None or isinstance(value, str) else value
+
+    @field_validator("rating")
+    @classmethod
+    def rating_is_known(cls, value: str | None) -> str | None:
+        return _check_rating(value)
 
     @field_validator("aliases")
     @classmethod
@@ -207,7 +344,7 @@ class IngredientUpdate(BaseModel):
     @field_validator("preservation")
     @classmethod
     def one_method_each(cls, values):
-        return None if values is None else _one_note_per_method(values)
+        return None if values is None else _one_note_per_state_and_method(values)
 
 
 class IngredientResponse(BaseModel):
@@ -220,18 +357,68 @@ class IngredientResponse(BaseModel):
     name_alt: str | None = None
 
     category: CategoryRef | None = None
-    parent: IngredientSummary | None = None
-    children: list[IngredientSummary] = []
+    parent: RelatedIngredient | None = None
+    children: list[RelatedIngredient] = []
 
     description: str | None = None
     selection_notes: str | None = None
     sourcing_notes: str | None = None
     preservation_notes: str | None = None
     needs_detail: bool
+    rating: str | None = None
 
     aliases: list[str] = []
     preservation: list[PreservationResponse] = []
+    heating: list[HeatingResponse] = []
+    links: list[LinkResponse] = []
     labels: list[LabelRef] = []
+    images: list[AttachedImage] = []
+    used_in: list["RecipeRef"] = []
 
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class MergeIn(BaseModel):
+    """The target, and the fingerprint of the preview the user confirmed.
+
+    The fingerprint is required: a merge sent without one has not been
+    previewed, and a merge deletes a row and drops whatever collides.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    into: int
+    fingerprint: str
+
+
+class MergeMoves(BaseModel):
+    """How many rows of each kind move to the target."""
+
+    lines: int
+    children: int
+    links: int
+    labels: int
+    images: int
+    heating: int
+    preservation: int
+
+
+class PreservationKey(BaseModel):
+    state: str
+    method: str
+
+
+class MergePreview(BaseModel):
+    """What a merge will do, computed by the same function the merge runs."""
+
+    source: IngredientSummary
+    target: IngredientSummary
+    moves: MergeMoves
+    new_aliases: list[str]
+    dropped_preservation: list[PreservationKey]
+    # Only the prose fields the source has: "moved" when the target's is
+    # empty, "dropped" when the target already has its own.
+    prose: dict[str, Literal["moved", "dropped"]]
+    # Echoed back on the merge; a different plan by then is a 409.
+    fingerprint: str

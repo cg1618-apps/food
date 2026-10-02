@@ -1,45 +1,118 @@
 @import 'tailwindcss';
 
 /* Semantic tokens only. A component names `bg-surface`, never `bg-white` or a
-   numbered grey - so dark mode is this block and nothing else, and a colour
-   decision lives in one place rather than in ninety class attributes.
-   frontend/src/theme-tokens.test.js is what keeps that true. */
+   numbered grey - so dark mode is the palette blocks below and nothing else,
+   and a colour decision lives in one place rather than in ninety class
+   attributes. frontend/src/theme-tokens.test.js is what keeps that true.
+
+   The shape is media's: each Tailwind token is a reference to a runtime
+   variable (`--c-*`), and the light and dark palettes redefine only those. The
+   utility class never changes; the value under it does.
+
+   The direction is a kitchen notebook: warm paper, brown-black ink, one
+   terracotta accent for the thing the page points at. Dark mode is the same
+   notebook under a lamp - warm brown, never a neutral grey. */
 @theme {
-  --color-canvas: #faf8f5;
-  --color-surface: #ffffff;
-  --color-border: #e6e0d8;
-  --color-text: #221e1a;
-  --color-text-muted: #6d645b;
-  --color-brand: #8a5a2b;
-  --color-brand-soft: #f3e8dc;
-  --color-danger: #a33227;
-  --color-warn-soft: #fdf3d8;
+  --color-canvas: var(--c-canvas); /* the page: paper */
+  --color-surface: var(--c-surface); /* cards, panels, inputs */
+  --color-surface-2: var(--c-surface-2); /* inset, hover, table stripes */
+  --color-border: var(--c-border); /* hairlines */
+  --color-border-strong: var(--c-border-strong); /* control outlines, rules */
+  --color-text: var(--c-text); /* ink */
+  --color-text-muted: var(--c-text-muted); /* metadata */
+  --color-text-faint: var(--c-text-faint); /* placeholders, empty notes */
+  --color-brand: var(--c-brand); /* terracotta: the one accent */
+  --color-brand-hover: var(--c-brand-hover);
+  --color-brand-soft: var(--c-brand-soft); /* active nav, selected chip */
+  --color-on-brand: var(--c-on-brand); /* text on a brand fill */
+  --color-danger: var(--c-danger);
+  --color-ok: var(--c-ok); /* saved, done */
+  --color-warn: var(--c-warn); /* 待補: a stub that needs writing up */
+  --color-warn-soft: var(--c-warn-soft);
+  --color-scrim: var(--c-scrim); /* behind a dialog */
+
+  /* Serif for what is read - titles, section headings, a recipe's name. Sans
+     for what is scanned or operated - metadata, controls, tables. Noto Serif
+     TC is loaded in index.html with display=swap; the system serifs behind it
+     are what a slow phone shows first, so the fallback is chosen, not left to
+     Tailwind's default stack. */
+  --font-display: 'Noto Serif TC', 'Songti TC', 'PMingLiU', ui-serif, Georgia, serif;
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', 'Noto Sans TC',
+    sans-serif;
+
+  /* Paper, not glass: barely eased corners, no resting shadow. */
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
 }
 
+/* Light palette (default). Contrast is measured on --c-surface: text and
+   brand clear WCAG AA for body text; faint is for placeholders only. */
+:root {
+  color-scheme: light;
+  --c-canvas: #f2ece1;
+  --c-surface: #fbf8f2;
+  --c-surface-2: #ebe3d5;
+  --c-border: #ddd2bf;
+  --c-border-strong: #b5a48a;
+  --c-text: #2b2119;
+  --c-text-muted: #6b5a49;
+  --c-text-faint: #958470;
+  --c-brand: #a3441d;
+  --c-brand-hover: #873614;
+  --c-brand-soft: rgb(163 68 29 / 0.1);
+  --c-on-brand: #fbf8f2;
+  --c-danger: #a12a2a;
+  --c-ok: #4c7535;
+  --c-warn: #8a5a0e;
+  --c-warn-soft: #f5e7c4;
+  --c-scrim: rgb(43 33 25 / 0.5);
+}
+
+/* Dark palette: the OS preference, unless a page stamps data-theme="light". */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --color-canvas: #16130f;
-    --color-surface: #1f1b16;
-    --color-border: #3a332b;
-    --color-text: #f0ebe4;
-    --color-text-muted: #a89e92;
-    --color-brand: #d8a166;
-    --color-brand-soft: #33291f;
-    --color-danger: #e0796c;
-    --color-warn-soft: #332c18;
+    color-scheme: dark;
+    --c-canvas: #1f1813;
+    --c-surface: #281f18;
+    --c-surface-2: #33281f;
+    --c-border: #43362a;
+    --c-border-strong: #65513f;
+    --c-text: #efe4d3;
+    --c-text-muted: #bba88f;
+    --c-text-faint: #8a7762;
+    --c-brand: #e2895a;
+    --c-brand-hover: #eca076;
+    --c-brand-soft: rgb(226 137 90 / 0.15);
+    --c-on-brand: #1f1813;
+    --c-danger: #e57a6c;
+    --c-ok: #95bf7b;
+    --c-warn: #e2b462;
+    --c-warn-soft: #3a2d16;
+    --c-scrim: rgb(10 7 5 / 0.65);
   }
 }
 
 :root[data-theme='dark'] {
-  --color-canvas: #16130f;
-  --color-surface: #1f1b16;
-  --color-border: #3a332b;
-  --color-text: #f0ebe4;
-  --color-text-muted: #a89e92;
-  --color-brand: #d8a166;
-  --color-brand-soft: #33291f;
-  --color-danger: #e0796c;
-  --color-warn-soft: #332c18;
+  color-scheme: dark;
+  --c-canvas: #1f1813;
+  --c-surface: #281f18;
+  --c-surface-2: #33281f;
+  --c-border: #43362a;
+  --c-border-strong: #65513f;
+  --c-text: #efe4d3;
+  --c-text-muted: #bba88f;
+  --c-text-faint: #8a7762;
+  --c-brand: #e2895a;
+  --c-brand-hover: #eca076;
+  --c-brand-soft: rgb(226 137 90 / 0.15);
+  --c-on-brand: #1f1813;
+  --c-danger: #e57a6c;
+  --c-ok: #95bf7b;
+  --c-warn: #e2b462;
+  --c-warn-soft: #3a2d16;
+  --c-scrim: rgb(10 7 5 / 0.65);
 }
 
 html,
@@ -51,5 +124,27 @@ body,
 body {
   background: var(--color-canvas);
   color: var(--color-text);
-  font-family: system-ui, -apple-system, 'Segoe UI', 'Noto Sans TC', sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Every heading is set in the notebook's hand. A page that wants a sans
+   heading says so with font-sans; the default is the serif. */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+}
+
+::selection {
+  background: var(--color-brand-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
 }

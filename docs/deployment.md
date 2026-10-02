@@ -48,6 +48,24 @@ that automatically for exactly this reason: it would throw away every write
 since the dump in order to recover from a failure that usually did not touch
 data at all. So it freezes at tier 3, names the dump, and stops.
 
+**Rolling back across the later revisions loses data in further ways.**
+`i2storage`'s downgrade is lossy by design: it deletes every preservation row
+whose state is not `unused` and collapses each range to its maximum, or its
+minimum when there is no maximum, and it drops `ingredient.rating`, every
+heating row and every link outright. `m1images`'s downgrade drops the `image` and
+gallery tables but leaves the files under `data/images` where they are, so the
+pictures survive on disk and nothing in the database says which ingredient they
+belonged to. `r1recipes`'s downgrade drops every recipe table and every recipe
+in them; the pictures a recipe gallery attached stay in `image` and on disk.
+`k1notes`'s downgrade drops `kitchen_note`, its label links and its gallery,
+and every note with them; the pictures stay, as for recipes.
+
+**`i3import`'s downgrade is a deliberate no-op.** It loaded the starting
+ingredient list, and downgrading past it leaves every imported ingredient in
+place: the owner may have filled them in since, and deleting them is worse
+than keeping them. Re-running its upgrade inserts nothing that is already
+there, so a downgrade and upgrade round trip is harmless.
+
 **So there is no route that keeps the data.** The real choice is:
 
 - **roll back**, and lose everything entered since the release, or
@@ -75,6 +93,12 @@ they ever do not, believe the box.
 | --- | --- |
 | Before the first feature release | `0001_baseline` — one table, `alembic_version` |
 | After it | `i1ngredients` — six tables |
+| Vocabularies and their seeds | `v1ocabulary` |
+| Storage ranges, heating, links, rating | `i2storage` |
+| The image library | `m1images` — thirteen tables |
+| Recipes | `r1recipes` — twenty-three tables |
+| Kitchen notes | `k1notes` — twenty-six tables |
+| The starting ingredient list | `i3import` — no new table, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target
@@ -94,6 +118,25 @@ it, and answers `base` when there is no `alembic_version` table at all. That arm
 is for an app's very first deploy — travel's first deploy died there — and
 **food will not exercise it**, because food's database is already stamped. A
 reader assuming the first migration deploy tests every path would be wrong.
+
+## Uploaded images
+
+Uploads are written to `IMAGE_DIR`, which defaults to `data/images` and is
+`/app/data/images` in the container. `docker-compose.prod.yml` bind-mounts
+`./data/images` from the checkout on the box over it, so the pictures live
+outside the image and survive a rebuild. A bind mount rather than a named
+volume, so a backup job would see ordinary files.
+
+**Nothing needs creating on the box first.** The application creates the
+directory when it starts (`create_app` makes it, parents included, if it is
+missing), and Docker creates the host side of a bind mount if it does not
+exist. The first upload then makes `library/` and `library/thumbs/` beneath it.
+`tests/unit/test_prod_compose.py` asserts the mount is declared.
+
+**It is not backed up.** `bin/deploy` dumps the database and nothing else, so
+`data/images` on the box is the only copy of every uploaded photograph, and a
+restored database dump refers to files a restore does not bring back. See
+`docs/open-items.md`.
 
 ## Health
 

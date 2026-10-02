@@ -215,7 +215,7 @@ def test_deleting_an_ingredient_takes_its_aliases_with_it(db, fallback_category)
 def test_an_ingredient_may_not_list_one_preservation_method_twice(db, fallback_category):
     ingredient = make(db, fallback_category)
     db.flush()
-    db.add(IngredientPreservation(ingredient_id=ingredient.id, method="冷藏", duration_days=5))
+    db.add(IngredientPreservation(ingredient_id=ingredient.id, method="冷藏", duration_min_days=5))
     db.flush()
     db.add(IngredientPreservation(ingredient_id=ingredient.id, method="冷藏"))
     with pytest.raises(IntegrityError):
@@ -227,9 +227,9 @@ def test_an_ingredient_may_keep_several_ways(db, fallback_category):
     three ways with three different times."""
     ingredient = make(db, fallback_category)
     db.flush()
-    db.add(IngredientPreservation(ingredient_id=ingredient.id, method="常溫", duration_days=7))
-    db.add(IngredientPreservation(ingredient_id=ingredient.id, method="冷藏", duration_days=21))
-    db.add(IngredientPreservation(ingredient_id=ingredient.id, method="冷凍", duration_days=90))
+    db.add(IngredientPreservation(ingredient_id=ingredient.id, method="常溫", duration_min_days=7))
+    db.add(IngredientPreservation(ingredient_id=ingredient.id, method="冷藏", duration_min_days=21))
+    db.add(IngredientPreservation(ingredient_id=ingredient.id, method="冷凍", duration_min_days=90))
     db.flush()
     assert len(ingredient.preservation) == 3
 
@@ -237,7 +237,7 @@ def test_an_ingredient_may_keep_several_ways(db, fallback_category):
 def test_a_preservation_time_of_zero_days_is_refused(db, fallback_category):
     ingredient = make(db, fallback_category)
     db.flush()
-    db.add(IngredientPreservation(ingredient_id=ingredient.id, method="冷藏", duration_days=0))
+    db.add(IngredientPreservation(ingredient_id=ingredient.id, method="冷藏", duration_min_days=0))
     with pytest.raises(IntegrityError):
         db.flush()
 

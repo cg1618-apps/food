@@ -32,17 +32,35 @@ reference work.
 
 ## Status
 
-**Module 1 is built.** The ingredient library — six tables at revision
-`i1ngredients`, the read and write API over them, and the pages: a library
-with search and filters, a detail page, add and edit forms, and a categories
-and labels editor.
+**Modules 1 and 2 are built, with kitchen notes.** The schema is at revision
+`i3import` (the head).
 
-`docs/data-model.md` describes the schema, `docs/api.md` the routes and the
-error shape, `docs/testing.md` how the suite is arranged and which tests are
-load-bearing.
+- **Ingredients** - names and aliases, a category tree, varieties under a
+  parent, rating, labels, storage as a state x method grid with day ranges, a
+  heating guide, links, galleries, the 待補 (`needs_detail`) stub backlog,
+  and merge.
+- **Recipes** - lines naming an ingredient, a sub-recipe or a new stub made
+  by the save, steps in sections, sources, versions, a status, courses,
+  methods, equipment, labels, galleries, and "used in" for ingredients and
+  base recipes.
+- **Kitchen notes** - bookmarks with a title, a kind, a link, a body, labels
+  and a gallery.
+- **The notebook UI** - 食譜 · 食材 · 筆記 · 設定: the three libraries
+  (search and filters in the URL, a sidebar or a phone drawer, covers or a
+  table), their detail pages, their add and edit forms with the gallery
+  picker, one delete dialog, ingredient merge, 設定 for every vocabulary
+  (categories, labels, courses, cooking methods, equipment) and 圖片, the
+  image library.
 
-Module 2, recipes, is next. `docs/notes/decisions.md` records what module 1
-hands it.
+**The starting ingredient list is loaded by `i3import`**: 194 names from the
+recipe document's ingredient lists, approved by the owner, read from
+`alembic/import/ingredients.csv` and inserted as 待補 stubs, skipping any name
+already in the library.
+
+`docs/frontend.md` describes the pages, `docs/data-model.md` the schema,
+`docs/api.md` the routes and the error shape, `docs/testing.md` how the suite
+is arranged and which tests are load-bearing, and `docs/notes/decisions.md`
+why.
 
 ## The contract this app owes the platform
 

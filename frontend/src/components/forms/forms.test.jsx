@@ -1,0 +1,443 @@
+// The form components against a stubbed fetch: the typeahead's keyboard and
+// its 「新增」, the delete dialog correcting itself on a 409 and listing what
+// blocks a refusal, and the recipe form's save - one target per line, and a
+// new recipe's gallery PUT only after the POST has answered with an id.
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
+import { MemoryRouter, useLocation } from 'react-router-dom'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import AppRoutes from '../../routes'
+import Dialog from '../ui/Dialog'
+import DeleteDialog from './DeleteDialog'
+import Typeahead from './Typeahead'
+
+let calls
+let handler
+
+function json(body, status = 200) {
+  return new Response(body === null ? null : JSON.stringify(body), { status })
+}
+
+beforeEach(() => {
+  calls = []
+  handler = () => json([])
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url, options = {}) => {
+      const call = {
+        url: decodeURIComponent(url),
+        method: options.method ?? 'GET',
+        body: typeof options.body === 'string' ? JSON.parse(options.body) : options.body,
+      }
+      calls.push(call)
+      return handler(call)
+    }),
+  )
+})
+
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
+
+function LocationProbe() {
+  const { pathname } = useLocation()
+  return <output data-testid="location">{pathname}</output>
+}
+
+function wrap(ui, path = '/', client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[path]}>
+        {ui}
+        <LocationProbe />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
+const GINGER = { id: 1, display_name: '薑', name_cn: '薑', name_en: 'Ginger', needs_detail: false }
+const STOCK = { id: 7, display_name: '雞高湯', name_cn: '雞高湯', kind: 'base' }
+
+describe('Typeahead', () => {
+  it('searches both libraries once the typing settles and picks with the keyboard', async () => {
+    handler = ({ url }) =>
+      url.startsWith('/api/ingredients?') ? json([GINGER]) : url.startsWith('/api/recipes?') ? json([STOCK]) : json([])
+    const onSelect = vi.fn()
+    wrap(<Typeahead label="材料" onSelect={onSelect} allowNew />)
+
+    const box = screen.getByRole('combobox', { name: '材料' })
+    fireEvent.change(box, { target: { value: '薑' } })
+    await screen.findByRole('option', { name: /薑\s*Ginger/ })
+    expect(calls.map((c) => c.url)).toEqual(expect.arrayContaining(['/api/ingredients?q=薑', '/api/recipes?q=薑']))
+
+    // Down twice: the ingredient, then the recipe; Enter picks the recipe.
+    fireEvent.keyDown(box, { key: 'ArrowDown' })
+    fireEvent.keyDown(box, { key: 'ArrowDown' })
+    expect(box.getAttribute('aria-activedescendant')).toBeTruthy()
+    fireEvent.keyDown(box, { key: 'Enter' })
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ type: 'recipe', id: 7 }))
+    expect(box.value).toBe('')
+  })
+
+  it('offers 新增 when nothing matches exactly, and Escape closes the list', async () => {
+    handler = ({ url }) => (url.startsWith('/api/ingredients?') ? json([GINGER]) : json([]))
+    const onSelect = vi.fn()
+    wrap(<Typeahead label="材料" sources={['ingredient']} onSelect={onSelect} allowNew />)
+
+    const box = screen.getByRole('combobox', { name: '材料' })
+    fireEvent.change(box, { target: { value: '薑末' } })
+    const option = await screen.findByRole('option', { name: /新增.*薑末/ })
+    expect(option).toBeTruthy()
+    // Only the ingredient library was asked.
+    expect(calls.some((c) => c.url.startsWith('/api/recipes'))).toBe(false)
+
+    fireEvent.keyDown(box, { key: 'Escape' })
+    expect(screen.queryByRole('listbox')).toBeNull()
+
+    fireEvent.change(box, { target: { value: '薑末 ' } })
+    fireEvent.click(await screen.findByRole('option', { name: /新增.*薑末/ }))
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ type: 'new', label: '薑末' }))
+  })
+
+  // Found driving the app: 「新增」 was offered the moment the typing
+  // settled, before the search answered, so a quick Enter made a stub named
+  // after an ingredient that already exists.
+  it('does not offer 新增 until the search has answered', async () => {
+    let answer
+    handler = ({ url }) =>
+      url.startsWith('/api/ingredients?')
+        ? new Promise((resolve) => (answer = () => resolve(json([{ ...GINGER, display_name: '薑母', name_cn: '薑母' }]))))
+        : json([])
+    wrap(<Typeahead label="材料" sources={['ingredient']} onSelect={() => {}} allowNew />)
+    fireEvent.change(screen.getByRole('combobox', { name: '材料' }), { target: { value: '薑' } })
+    await waitFor(() => expect(answer).toBeTypeOf('function'))
+    expect(screen.queryByRole('option', { name: /新增/ })).toBeNull()
+    await act(async () => answer())
+    expect(await screen.findByRole('option', { name: /新增.*薑/ })).toBeTruthy()
+    expect(screen.getByRole('option', { name: /薑母/ })).toBeTruthy()
+  })
+
+  it('tells the caller what is typed and not yet picked, and clears it on a pick', async () => {
+    handler = ({ url }) => (url.startsWith('/api/ingredients?') ? json([GINGER]) : json([]))
+    const onQueryChange = vi.fn()
+    wrap(<Typeahead label="材料" sources={['ingredient']} onSelect={() => {}} onQueryChange={onQueryChange} />)
+    const box = screen.getByRole('combobox', { name: '材料' })
+    fireEvent.change(box, { target: { value: '薑' } })
+    expect(onQueryChange).toHaveBeenLastCalledWith('薑')
+    fireEvent.click(await screen.findByRole('option', { name: /薑\s*Ginger/ }))
+    expect(onQueryChange).toHaveBeenLastCalledWith('')
+  })
+
+  it('does not submit the form around it on Enter', async () => {
+    const onSubmit = vi.fn((event) => event.preventDefault())
+    wrap(
+      <form onSubmit={onSubmit}>
+        <Typeahead label="材料" onSelect={() => {}} />
+      </form>,
+    )
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' })
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+})
+
+describe('Dialog', () => {
+  function Opener() {
+    const [open, setOpen] = useState(false)
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)}>
+          打開
+        </button>
+        {open ? (
+          <Dialog title="測試" onClose={() => setOpen(false)} footer={<button type="button">最後</button>}>
+            <button type="button">第一</button>
+          </Dialog>
+        ) : null}
+      </>
+    )
+  }
+
+  it('keeps Tab inside itself and gives focus back to its opener on close', () => {
+    wrap(<Opener />)
+    const opener = screen.getByRole('button', { name: '打開' })
+    opener.focus()
+    fireEvent.click(opener)
+    const first = screen.getByRole('button', { name: '第一' })
+    const last = screen.getByRole('button', { name: '最後' })
+
+    last.focus()
+    fireEvent.keyDown(last, { key: 'Tab' })
+    expect(document.activeElement).toBe(first)
+    fireEvent.keyDown(first, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(last)
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(opener)
+  })
+
+  it('is drawn outside the form that opened it', () => {
+    wrap(
+      <form>
+        <Dialog title="測試" onClose={() => {}}>
+          <input aria-label="框" />
+        </Dialog>
+      </form>,
+    )
+    expect(screen.getByRole('dialog').closest('form')).toBeNull()
+  })
+
+  it('ignores Escape and the backdrop while busy', () => {
+    const onClose = vi.fn()
+    wrap(
+      <Dialog title="測試" onClose={onClose} busy>
+        <p>x</p>
+      </Dialog>,
+    )
+    fireEvent.keyDown(document, { key: 'Escape' })
+    const backdrop = screen.getByRole('dialog').parentElement
+    fireEvent.mouseDown(backdrop)
+    fireEvent.click(backdrop)
+    expect(onClose).not.toHaveBeenCalled()
+  })
+})
+
+describe('DeleteDialog', () => {
+  it('cannot be dismissed while the delete is running', async () => {
+    let finish
+    handler = ({ url, method }) => {
+      if (url === '/api/recipes/5/cascade') return json({ aliases: 0, sources: 0, lines: 0, steps: 0, used_in: 0 })
+      if (method === 'DELETE') return new Promise((resolve) => (finish = () => resolve(json(null, 204))))
+      return json([])
+    }
+    const onClose = vi.fn()
+    wrap(<DeleteDialog kind="recipe" id={5} name="x" onClose={onClose} onDeleted={() => {}} />)
+    await screen.findByText(/刪除後就找不回來了/)
+    fireEvent.click(screen.getByRole('button', { name: '刪除' }))
+    await screen.findByRole('button', { name: '刪除中…' })
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+    await act(async () => finish())
+  })
+
+  it('sends the counts it showed, takes the server number on a stale 409, and confirms again', async () => {
+    let stale = true
+    handler = ({ url, method }) => {
+      if (url === '/api/recipes/5/cascade') return json({ aliases: 1, sources: 2, lines: 3, steps: 4, used_in: 0 })
+      if (method === 'DELETE' && stale) {
+        stale = false
+        return json(
+          { detail: 'This now removes 5 ingredient lines, not 3.', field: 'lines', expected: 3, actual: 5 },
+          409,
+        )
+      }
+      if (method === 'DELETE') return json(null, 204)
+      return json([])
+    }
+    const onDeleted = vi.fn()
+    wrap(<DeleteDialog kind="recipe" id={5} name="炒高麗菜" onClose={() => {}} onDeleted={onDeleted} />)
+
+    await screen.findByText('3')
+    fireEvent.click(screen.getByRole('button', { name: '刪除' }))
+    await screen.findByText(/not 3/)
+    // Corrected in place: the 5 is on screen and the button asks again.
+    expect(screen.getByText('5')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '確認刪除' }))
+    await waitFor(() => expect(onDeleted).toHaveBeenCalled())
+
+    const deletes = calls.filter((c) => c.method === 'DELETE').map((c) => c.url)
+    expect(deletes).toEqual([
+      '/api/edit/recipes/5?aliases=1&sources=2&lines=3&steps=4',
+      '/api/edit/recipes/5?aliases=1&sources=2&lines=5&steps=4',
+    ])
+  })
+
+  it('lists the recipes that block a refused delete, as links', async () => {
+    handler = ({ url, method }) => {
+      if (url === '/api/ingredients/3/cascade') {
+        return json({ aliases: 0, preservation: 0, heating: 0, links: 0, labels: 0, children: 0, recipes: 1 })
+      }
+      if (method === 'DELETE') {
+        return json(
+          {
+            detail: 'A recipe still uses this ingredient; change or merge it there first.',
+            used_in: [{ id: 9, display_name: '薑汁燒肉' }],
+          },
+          409,
+        )
+      }
+      return json([])
+    }
+    wrap(<DeleteDialog kind="ingredient" id={3} name="薑" onClose={() => {}} onDeleted={() => {}} />)
+
+    // The blocking count is said up front...
+    expect(await screen.findByText(/有 1 道食譜直接用到它/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '刪除' }))
+    // ...and the refusal names them.
+    const link = await screen.findByRole('link', { name: '薑汁燒肉' })
+    expect(link.getAttribute('href')).toBe('/recipes/9')
+    expect(calls.filter((c) => c.method === 'DELETE')[0].url).toBe(
+      '/api/edit/ingredients/3?aliases=0&preservation=0&heating=0&links=0',
+    )
+  })
+
+  it('asks a plain question for a note, which has no cascade to count', async () => {
+    handler = ({ method }) => (method === 'DELETE' ? json(null, 204) : json([]))
+    wrap(<DeleteDialog kind="note" id={4} name="刀工" onClose={() => {}} />, '/notes/4')
+    fireEvent.click(screen.getByRole('button', { name: '刪除' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/notes'))
+    expect(calls.some((c) => c.url.includes('cascade'))).toBe(false)
+    expect(calls.find((c) => c.method === 'DELETE').url).toBe('/api/edit/kitchen-notes/4')
+  })
+})
+
+describe('RecipeForm', () => {
+  it('creates the recipe with one target per line, then puts the gallery under the new id', async () => {
+    const UPLOADED = { id: 31, url: '/images/a.jpg', thumb_url: '/images/ta.jpg' }
+    handler = ({ url, method }) => {
+      if (url === '/api/vocabularies/fixed') {
+        return json({
+          recipe_kinds: [{ value: 'dish', label: '料理' }],
+          recipe_statuses: [{ value: 'want_to_try', label: '想試' }],
+          source_platforms: [{ value: 'youtube', label: 'YouTube' }],
+        })
+      }
+      if (url.startsWith('/api/ingredients?')) return json([GINGER])
+      if (url.startsWith('/api/recipes?')) return json([STOCK])
+      if (url === '/api/edit/images' && method === 'POST') return json(UPLOADED, 201)
+      if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
+      if (url === '/api/edit/recipes/42/images' && method === 'PUT') return json({ id: 42 })
+      return json([])
+    }
+    wrap(<AppRoutes />, '/edit/recipes/new')
+
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '薑汁燒肉' } })
+
+    // A stub line and a sub-recipe line.
+    fireEvent.click(screen.getByRole('button', { name: /加一行材料/ }))
+    fireEvent.change(screen.getByRole('combobox', { name: '材料 1' }), { target: { value: '紫蘇' } })
+    fireEvent.click(await screen.findByRole('option', { name: /新增.*紫蘇/ }))
+    expect(screen.getByText('待補')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /加一行材料/ }))
+    fireEvent.change(screen.getByRole('combobox', { name: '材料 2' }), { target: { value: '高湯' } })
+    fireEvent.click(await screen.findByRole('option', { name: /雞高湯/ }))
+
+    // Steps pasted with their numbering.
+    fireEvent.click(screen.getByRole('button', { name: '貼上多行' }))
+    fireEvent.change(screen.getByLabelText(/一行一個步驟/), { target: { value: '1. 醃肉\n2) 煎香' } })
+    fireEvent.click(screen.getByRole('button', { name: '加入 2 個步驟' }))
+
+    // One picture.
+    const file = new File(['x'], 'a.png', { type: 'image/png' })
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('上傳圖片'), { target: { files: [file] } })
+    })
+    await screen.findByRole('listitem', { name: '圖片 1' })
+
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+
+    const writes = calls.filter((c) => c.method !== 'GET' && c.url !== '/api/edit/images')
+    expect(writes.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'POST /api/edit/recipes',
+      'PUT /api/edit/recipes/42/images',
+    ])
+    const body = writes[0].body
+    expect(body.name_cn).toBe('薑汁燒肉')
+    expect(body.lines).toEqual([
+      { section: null, amount: null, note: null, is_optional: false, new_ingredient: { name_cn: '紫蘇' } },
+      { section: null, amount: null, note: null, is_optional: false, sub_recipe_id: 7 },
+    ])
+    expect(body.steps).toEqual([
+      { section: null, body: '醃肉' },
+      { section: null, body: '煎香' },
+    ])
+    expect(writes[1].body).toEqual([{ image_id: 31, focus: null }])
+  })
+
+  it('refuses to save a line whose name was typed but never picked', async () => {
+    wrap(<AppRoutes />, '/edit/recipes/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    fireEvent.click(screen.getByRole('button', { name: /加一行材料/ }))
+    fireEvent.change(screen.getByRole('combobox', { name: '材料 1' }), { target: { value: '紫蘇' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/第 1 行.*紫蘇.*還沒選/)
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
+  })
+
+  it('refuses to save a version-of that was typed but never picked', async () => {
+    wrap(<AppRoutes />, '/edit/recipes/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    fireEvent.change(screen.getByRole('combobox', { name: '是哪道食譜的另一版' }), { target: { value: '高湯' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/另一版.*高湯/)
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
+  })
+
+  it('drops a blank source row and marks the category counts stale for a 新增 line', async () => {
+    handler = ({ url, method }) => {
+      if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
+      return json([])
+    }
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    // The fallback category's count is what a stub line moves.
+    client.setQueryData(['/api/ingredient-categories', null], [])
+    wrap(<AppRoutes />, '/edit/recipes/new', client)
+
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    fireEvent.click(screen.getByRole('button', { name: /加一個來源/ }))
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+
+    expect(calls.find((c) => c.method === 'POST').body.sources).toEqual([])
+    expect(client.getQueryState(['/api/ingredient-categories', null]).isInvalidated).toBe(true)
+  })
+
+  it('shows the server sentence beside the save button and stays on the form', async () => {
+    handler = ({ url, method }) =>
+      url === '/api/edit/recipes' && method === 'POST'
+        ? json({ detail: 'A recipe cannot use itself, directly or through another recipe.' }, 422)
+        : json([])
+    wrap(<AppRoutes />, '/edit/recipes/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: 'x' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'A recipe cannot use itself, directly or through another recipe.',
+    )
+    expect(screen.getByTestId('location').textContent).toBe('/edit/recipes/new')
+  })
+})
+
+describe('IngredientForm', () => {
+  const TREE = [{ id: 1, display_name: '預設', is_fallback: true, children: [] }]
+
+  it('refuses to save a parent that was typed but never picked', async () => {
+    handler = ({ url }) => (url === '/api/ingredient-categories' ? json(TREE) : json([]))
+    wrap(<AppRoutes />, '/edit/ingredients/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '三星蔥' } })
+    fireEvent.change(screen.getByRole('combobox', { name: '是哪種食材的品種' }), { target: { value: '青蔥' } })
+    await waitFor(() => expect(screen.getByRole('button', { name: '儲存' }).disabled).toBe(false))
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/品種.*青蔥/)
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
+  })
+
+  it('holds the save button until the categories it must choose from have loaded', async () => {
+    let release
+    handler = ({ url }) =>
+      url === '/api/ingredient-categories'
+        ? new Promise((resolve) => (release = () => resolve(json(TREE))))
+        : json([])
+    wrap(<AppRoutes />, '/edit/ingredients/new')
+    const save = await screen.findByRole('button', { name: /儲存|載入中/ })
+    expect(save.disabled).toBe(true)
+    await act(async () => release())
+    await waitFor(() => expect(screen.getByRole('button', { name: '儲存' }).disabled).toBe(false))
+  })
+})
