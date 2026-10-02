@@ -17,6 +17,8 @@ from app.schemas.ingredient import (
     IngredientUpdate,
     LinkIn,
     LinkResponse,
+    MergeIn,
+    MergePreview,
     PreservationIn,
     PreservationResponse,
     StorageRange,
@@ -50,6 +52,10 @@ from app.schemas.vocabulary import (
     VocabularyUpdate,
 )
 
+# IngredientResponse names RecipeRef by a forward reference, because
+# recipe.py imports ingredient.py; resolved here, once both are loaded.
+IngredientResponse.model_rebuild(_types_namespace={"RecipeRef": RecipeRef})
+
 __all__ = [
     "AttachedImage",
     "CoverRef",
@@ -75,6 +81,8 @@ __all__ = [
     "LineResponse",
     "LinkIn",
     "LinkResponse",
+    "MergeIn",
+    "MergePreview",
     "NewIngredientIn",
     "PreservationIn",
     "PreservationResponse",

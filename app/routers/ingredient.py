@@ -18,22 +18,48 @@ from app import schemas
 from app.database import get_db
 from app.errors import AppError, StaleCountError
 from app.models import Ingredient, IngredientImage
+from app.routers.recipe import recipe_ref
 from app.routing import read_router, write_router
-from app.services import images, ingredients
+from app.services import images, ingredients, recipes
 
 router = read_router("ingredients", "Ingredients")
 edit = write_router("ingredients", "Ingredients")
 
 
-def _summary(row: Ingredient) -> schemas.IngredientSummary:
+def _summary(row: Ingredient, counts: dict[int, int]) -> schemas.IngredientSummary:
+    """`counts` is `recipes.used_in_counts` for every row being shown, fetched
+    once by the caller rather than once per row."""
     summary = schemas.IngredientSummary.model_validate(row)
     fridge = ingredients.fridge_range(row)
     summary.fridge = schemas.StorageRange(**fridge) if fridge else None
     summary.cover = images.cover(row.images)
+    summary.used_in_count = counts.get(row.id, 0)
     return summary
 
 
-def _response(row: Ingredient) -> schemas.IngredientResponse:
+def _summaries(db: Session, rows: list[Ingredient]) -> list[schemas.IngredientSummary]:
+    counts = recipes.used_in_counts(db, [row.id for row in rows])
+    return [_summary(row, counts) for row in rows]
+
+
+def _related(row: Ingredient, counts: dict[int, int]) -> schemas.IngredientSummary:
+    """A parent or child on the full row: the summary's own columns and its
+    count, without the fridge range and cover a list row loads for itself."""
+    summary = schemas.IngredientSummary.model_validate(row)
+    summary.used_in_count = counts.get(row.id, 0)
+    return summary
+
+
+def _full(db: Session, row: Ingredient) -> schemas.IngredientResponse:
+    """The full response, with what it needs from outside the row."""
+    related = ([row.parent] if row.parent else []) + list(row.children)
+    counts = recipes.used_in_counts(db, [row.id] + [r.id for r in related])
+    return _response(row, counts, recipes.recipes_using_ingredient(db, [row.id]))
+
+
+def _response(
+    row: Ingredient, counts: dict[int, int], used_in: list
+) -> schemas.IngredientResponse:
     """Built explicitly rather than straight off the ORM row.
 
     `aliases` is a list of strings on the wire and a list of rows in the
@@ -52,8 +78,8 @@ def _response(row: Ingredient) -> schemas.IngredientResponse:
         )
         if row.category
         else None,
-        parent=schemas.IngredientSummary.model_validate(row.parent) if row.parent else None,
-        children=[schemas.IngredientSummary.model_validate(c) for c in row.children],
+        parent=_related(row.parent, counts) if row.parent else None,
+        children=[_related(c, counts) for c in row.children],
         description=row.description,
         selection_notes=row.selection_notes,
         sourcing_notes=row.sourcing_notes,
@@ -84,6 +110,7 @@ def _response(row: Ingredient) -> schemas.IngredientResponse:
         ],
         links=[schemas.LinkResponse.model_validate(link) for link in row.links],
         images=images.attached(row.images),
+        used_in=[recipe_ref(r) for r in used_in],
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -121,12 +148,12 @@ def list_ingredients(
         rating=rating,
         has_parent=has_parent,
     )
-    return [_summary(row) for row in rows]
+    return _summaries(db, rows)
 
 
 @router.get("/{ingredient_id}", response_model=schemas.IngredientResponse)
 def get_ingredient(ingredient_id: int, db: Session = Depends(get_db)):
-    return _response(ingredients.get(db, ingredient_id))
+    return _full(db, ingredients.get(db, ingredient_id))
 
 
 @router.get("/{ingredient_id}/cascade", response_model=dict)
@@ -134,12 +161,35 @@ def cascade_preview(ingredient_id: int, db: Session = Depends(get_db)):
     """What deleting this would remove, for the confirmation dialog.
 
     Public because it is a read, and because the dialog that uses it is behind
-    Access anyway. It returns counts, never rows.
+    Access anyway. It returns counts, never rows. `children` and `recipes`
+    block the delete rather than being removed by it.
     """
     ingredients.get(db, ingredient_id)
     counts = ingredients.cascade_counts(db, ingredient_id)
     counts["children"] = ingredients.child_count(db, ingredient_id)
+    counts["recipes"] = len(recipes.recipes_naming_ingredient(db, ingredient_id))
     return counts
+
+
+@router.get("/{ingredient_id}/merge-preview", response_model=schemas.MergePreview)
+def merge_preview(ingredient_id: int, into: int = Query(...), db: Session = Depends(get_db)):
+    """What merging this into `into` would move, drop and add. Writes nothing.
+
+    Computed by the same function the merge executes, so the preview cannot
+    describe a merge other than the one that runs.
+    """
+    plan = ingredients.merge_plan(db, ingredient_id, into)
+    counts = recipes.used_in_counts(db, [plan.source.id, plan.target.id])
+    return schemas.MergePreview(
+        source=_summary(plan.source, counts),
+        target=_summary(plan.target, counts),
+        moves=plan.moves(),
+        new_aliases=plan.new_aliases,
+        dropped_preservation=[
+            {"state": r.state, "method": r.method} for r in plan.dropped_preservation
+        ],
+        prose=plan.prose,
+    )
 
 
 # ==========================================
@@ -149,14 +199,14 @@ def cascade_preview(ingredient_id: int, db: Session = Depends(get_db)):
 
 @edit.post("", response_model=schemas.IngredientResponse, status_code=201)
 def create_ingredient(payload: schemas.IngredientCreate, db: Session = Depends(get_db)):
-    return _response(ingredients.create(db, payload))
+    return _full(db, ingredients.create(db, payload))
 
 
 @edit.patch("/{ingredient_id}", response_model=schemas.IngredientResponse)
 def update_ingredient(
     ingredient_id: int, payload: schemas.IngredientUpdate, db: Session = Depends(get_db)
 ):
-    return _response(ingredients.update(db, ingredient_id, payload))
+    return _full(db, ingredients.update(db, ingredient_id, payload))
 
 
 @edit.delete("/{ingredient_id}", status_code=204)
@@ -183,8 +233,20 @@ def delete_ingredient(
     Children are not part of the count. They are RESTRICT, so an ingredient
     with children cannot be deleted at all, and that is a refusal rather than a
     number - the IntegrityError handler turns it into a 409 saying so.
+
+    Recipe lines are RESTRICT too, but refused here, before the database is
+    asked, so the 409 can name the recipes: `used_in` on the body is what the
+    user has to change first. Lines naming a child do not block this - the
+    child does, on its own.
     """
     ingredient = ingredients.get(db, ingredient_id)
+    naming = recipes.recipes_naming_ingredient(db, ingredient_id)
+    if naming:
+        raise AppError(
+            409,
+            "A recipe still uses this ingredient; change or merge it there first.",
+            used_in=[{"id": r.id, "display_name": r.display_name} for r in naming],
+        )
     actual = ingredients.cascade_counts(db, ingredient_id)
 
     if actual["aliases"] != aliases:
@@ -210,7 +272,17 @@ def set_ingredient_images(
     """Replace the gallery, in order. Position 0 is the cover."""
     ingredient = ingredients.get(db, ingredient_id)
     images.set_images(db, ingredient, "images", IngredientImage, payload)
-    return _response(ingredients.get(db, ingredient_id))
+    return _full(db, ingredients.get(db, ingredient_id))
+
+
+@edit.post("/{ingredient_id}/merge", response_model=schemas.IngredientResponse)
+def merge_ingredient(ingredient_id: int, payload: schemas.MergeIn, db: Session = Depends(get_db)):
+    """Merge this ingredient into `into` and delete it; answers the target.
+
+    The fix for a duplicate, rather than deleting one of the two: every line,
+    child and note the duplicate carries survives on the row that stays.
+    """
+    return _full(db, ingredients.merge(db, ingredient_id, payload.into))
 
 
 @edit.post("/{ingredient_id}/labels/{label_id}", status_code=204)

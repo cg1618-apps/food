@@ -36,6 +36,12 @@ def _walk_to_root(db: Session, model, start_id: int | None):
         current = db.query(model.parent_id).filter(model.id == current).scalar()
 
 
+def is_descendant(db: Session, model, row_id: int, ancestor_id: int) -> bool:
+    """True when `row_id` sits somewhere below `ancestor_id` (not itself)."""
+    row = db.query(model.parent_id).filter(model.id == row_id).scalar()
+    return ancestor_id in set(_walk_to_root(db, model, row))
+
+
 def check_parent(db: Session, model, row_id: int | None, new_parent_id: int | None, what: str):
     """Refuse a parent that would make a cycle, or that does not exist.
 

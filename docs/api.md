@@ -94,10 +94,12 @@ discipline was never tested.
 | --- | --- |
 | `GET /api/ingredients` | list, search and filter |
 | `GET /api/ingredients/{id}` | the full row |
-| `GET /api/ingredients/{id}/cascade` | what a delete would remove |
+| `GET /api/ingredients/{id}/cascade` | what a delete would remove, and what blocks it |
+| `GET /api/ingredients/{id}/merge-preview?into={target}` | what a merge would do |
 | `POST /api/edit/ingredients` | |
 | `PATCH /api/edit/ingredients/{id}` | |
 | `DELETE /api/edit/ingredients/{id}` | requires the confirmation counts |
+| `POST /api/edit/ingredients/{id}/merge` | merge into another, then delete |
 | `PUT /api/edit/ingredients/{id}/images` | replace the gallery, in order |
 | `POST /api/edit/ingredients/{id}/labels/{label_id}` | attach |
 | `DELETE /api/edit/ingredients/{id}/labels/{label_id}` | detach |
@@ -110,11 +112,20 @@ answer differently within a month. Query parameters: `q`, `category_id`,
 
 A list row is a summary: names, `category_id`, `parent_id`, `needs_detail`,
 `rating`, `cover` (the first gallery image's `thumb_url` and `focus`, or null)
-and `fridge`, the `{min, max}` of the unused, refrigerated preservation row or
-null when there is none.
+`fridge`, the `{min, max}` of the unused, refrigerated preservation row or
+null when there is none, and `used_in_count`.
 
-**The full row** adds `aliases`, `preservation`, `heating`, `links`, `labels`
-and `images`. A preservation entry is `state` (`unused`, `opened`, `cooked`;
+**"Used in" is distinct recipes with a line naming the ingredient or any
+ingredient below it**, at any depth of `parent_id`. A recipe naming both 生抽
+and 老抽 counts once on 醬油. Depth through sub-recipes is zero: a dish using a
+base that uses the ingredient is not counted. `used_in_count` on a summary,
+`used_in` on the full row and the recipe list's `ingredient_id` filter all read
+one query, so they cannot disagree; the list computes every row's count in a
+fixed number of queries.
+
+**The full row** adds `aliases`, `preservation`, `heating`, `links`, `labels`,
+`images` and `used_in` (`{id, display_name, kind}` recipes, sorted by display
+name). Its `parent` and `children` are summaries, `used_in_count` included. A preservation entry is `state` (`unused`, `opened`, `cooked`;
 default `unused`), `method`, `duration_min_days`, `duration_max_days` and
 `notes`. A heating entry is `method` (`{id, display_name}`), `temperature_c`,
 `temperature_f` (computed, never sent), `duration`, `preheat`, `flip` and
@@ -148,6 +159,56 @@ Children are not in the counts. They are `RESTRICT`, so an ingredient with
 children cannot be deleted at all — a refusal, not a number. Gallery rows are
 not in the counts either: the pictures survive, so nothing is removed that the
 user would miss.
+
+**An ingredient a recipe line names is refused with 409 first**, before the
+database is asked, with `used_in: [{id, display_name}]` on the body — the
+recipes naming it **directly**. A line naming one of its children does not
+block it; the child does that on its own. Merging is the way out of a
+duplicate that recipes use.
+
+**`GET .../cascade` answers `{aliases, preservation, heating, links, labels,
+children, recipes}`.** The first four are echoed back to the delete;
+`children` and `recipes` (distinct recipes with a line naming it directly)
+block the delete rather than being removed by it.
+
+**Merge.** `POST /api/edit/ingredients/{id}/merge` with `{"into": target}`
+moves everything the source has onto the target, deletes the source, and
+answers the target's full row. `GET /api/ingredients/{id}/merge-preview?into=`
+answers what it would do, computed by the same function, without writing:
+
+```json
+{
+  "source": {"...": "summary"},
+  "target": {"...": "summary"},
+  "moves": {"lines": 2, "children": 1, "links": 1, "labels": 1,
+            "images": 1, "heating": 1, "preservation": 1},
+  "new_aliases": ["蔥花", "青蔥"],
+  "dropped_preservation": [{"state": "unused", "method": "冷藏"}],
+  "prose": {"description": "dropped", "selection_notes": "moved"}
+}
+```
+
+The target wins every collision:
+
+- recipe lines naming the source, its children, links and heating rows all
+  move; links and heating are numbered after the target's own;
+- labels are the union — `moves.labels` counts those the target lacked;
+- images are appended after the target's gallery, skipping any the target
+  already carries;
+- the source's name slots and aliases become target **aliases**, never names,
+  unless the target already answers to them (a name slot or an alias,
+  ignoring case). `new_aliases` is sorted;
+- a preservation row moves unless the target has a note for that
+  `(state, method)`, in which case it is dropped and listed;
+- each prose field the source has (`description`, `selection_notes`,
+  `sourcing_notes`, `preservation_notes`) moves when the target's is empty and
+  is dropped otherwise; `prose` lists only fields the source has;
+- names, category, parent, rating and `needs_detail` are the target's and are
+  not touched.
+
+Refused with 422: into itself, into one of its own descendants, and an `into`
+that names nothing. A missing source — the id in the URL — is 404. The body
+refuses unknown fields.
 
 **`PUT /api/edit/ingredients/{id}/images`** takes a list of
 `{"image_id": 12, "focus": "50% 30%"}` and makes it the gallery, in that order;
@@ -187,7 +248,8 @@ Query parameters:
   **any of** its values (`?status=can_cook&status=regular`). Different
   parameters narrow each other. `course_id` is the course a recipe is filed
   under, not one it serves as; `creator` matches a source's creator exactly;
-  `ingredient_id` matches recipes with a line naming that ingredient directly;
+  `ingredient_id` matches recipes using that ingredient as "used in" defines
+  it — a line naming it or anything below it, depth zero through sub-recipes;
 - `written_up` — `true` for recipes with at least one line or step, `false`
   for the rest.
 

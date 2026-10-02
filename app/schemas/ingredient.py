@@ -15,12 +15,19 @@ from.
 """
 
 from datetime import datetime
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from app.constants import PRESERVATION_METHODS, PRESERVATION_STATES, RATINGS
 from app.schemas.image import AttachedImage, CoverRef
 from app.schemas.vocabulary import VocabRef
+
+if TYPE_CHECKING:
+    # recipe.py imports this module, so RecipeRef cannot be imported here at
+    # runtime; `app/schemas/__init__.py` resolves the forward reference once
+    # both modules exist.
+    from app.schemas.recipe import RecipeRef
 
 
 def _clean_aliases(values: list[str]) -> list[str]:
@@ -217,6 +224,9 @@ class IngredientSummary(BaseModel):
     rating: str | None = None
     fridge: StorageRange | None = None
     cover: CoverRef | None = None
+    # Distinct recipes using this or anything below it. Computed for a whole
+    # list at once by the router; never read off the row.
+    used_in_count: int = 0
 
 
 class IngredientBase(BaseModel):
@@ -352,6 +362,43 @@ class IngredientResponse(BaseModel):
     links: list[LinkResponse] = []
     labels: list[LabelRef] = []
     images: list[AttachedImage] = []
+    used_in: list["RecipeRef"] = []
 
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class MergeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    into: int
+
+
+class MergeMoves(BaseModel):
+    """How many rows of each kind move to the target."""
+
+    lines: int
+    children: int
+    links: int
+    labels: int
+    images: int
+    heating: int
+    preservation: int
+
+
+class PreservationKey(BaseModel):
+    state: str
+    method: str
+
+
+class MergePreview(BaseModel):
+    """What a merge will do, computed by the same function the merge runs."""
+
+    source: IngredientSummary
+    target: IngredientSummary
+    moves: MergeMoves
+    new_aliases: list[str]
+    dropped_preservation: list[PreservationKey]
+    # Only the prose fields the source has: "moved" when the target's is
+    # empty, "dropped" when the target already has its own.
+    prose: dict[str, Literal["moved", "dropped"]]

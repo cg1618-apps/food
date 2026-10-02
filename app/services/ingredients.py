@@ -8,7 +8,10 @@ because they ask exactly the same question and two implementations of it would
 answer differently within a month.
 """
 
+from dataclasses import dataclass
+
 from sqlalchemy import func, or_, select
+from sqlalchemy import update as update_rows
 from sqlalchemy.orm import Session, selectinload
 
 from app.errors import AppError
@@ -22,8 +25,9 @@ from app.models import (
     IngredientLink,
     IngredientPreservation,
     Label,
+    RecipeLine,
 )
-from app.services.hierarchy import check_parent
+from app.services.hierarchy import check_parent, is_descendant
 
 
 def _loaded(query):
@@ -307,3 +311,163 @@ def fridge_range(ingredient: Ingredient) -> dict | None:
         if row.state == "unused" and row.method == "冷藏":
             return {"min": row.duration_min_days, "max": row.duration_max_days}
     return None
+
+
+# --- merge -------------------------------------------------------------------
+
+PROSE_FIELDS = ("description", "selection_notes", "sourcing_notes", "preservation_notes")
+
+
+@dataclass
+class MergePlan:
+    """Everything a merge will do, as rows. The preview reports it and the merge
+    executes it, and neither recomputes anything, so the two cannot disagree.
+
+    The target wins every collision: a name or alias it already answers to, a
+    `(state, method)` it already has a note for, a label or an image it already
+    carries, a prose field it already filled. What only the source has moves.
+    """
+
+    source: Ingredient
+    target: Ingredient
+    line_ids: list[int]
+    child_ids: list[int]
+    links: list[IngredientLink]
+    labels: list[Label]
+    images: list[IngredientImage]
+    heating: list[IngredientHeating]
+    preservation: list[IngredientPreservation]
+    dropped_preservation: list[IngredientPreservation]
+    new_aliases: list[str]
+    prose: dict[str, str]
+
+    def moves(self) -> dict[str, int]:
+        return {
+            "lines": len(self.line_ids),
+            "children": len(self.child_ids),
+            "links": len(self.links),
+            "labels": len(self.labels),
+            "images": len(self.images),
+            "heating": len(self.heating),
+            "preservation": len(self.preservation),
+        }
+
+
+def _answers_to(ingredient: Ingredient) -> list[str]:
+    """Every string an ingredient answers to: its name slots, then its aliases."""
+    slots = [ingredient.name_cn, ingredient.name_en, ingredient.name_alt]
+    return [n for n in slots if n] + sorted(alias.value for alias in ingredient.aliases)
+
+
+def merge_plan(db: Session, source_id: int, target_id: int) -> MergePlan:
+    """Validate a merge of `source_id` into `target_id`, and say what it does.
+
+    Source missing is 404 - the URL names it. Everything else is 422, the
+    payload being wrong: into itself, into an id that names nothing, into one
+    of its own descendants (its children move to the target, so that would
+    make a cycle).
+    """
+    source = get(db, source_id)
+    if target_id == source_id:
+        raise AppError(422, "An ingredient cannot be merged into itself.")
+    target = _loaded(db.query(Ingredient)).filter(Ingredient.id == target_id).one_or_none()
+    if target is None:
+        raise AppError(422, f"No such ingredient: {target_id}.")
+    if is_descendant(db, Ingredient, target_id, source_id):
+        raise AppError(422, "An ingredient cannot be merged into one of its own descendants.")
+
+    # Name slots become aliases, never names: the target keeps its own, and
+    # the source's unique name_cn / name_en vanish with the source row.
+    taken = {name.casefold() for name in _answers_to(target)}
+    new_aliases = []
+    for name in _answers_to(source):
+        if name.casefold() not in taken:
+            taken.add(name.casefold())
+            new_aliases.append(name)
+
+    kept_keys = {(row.state, row.method) for row in target.preservation}
+    kept_labels = {label.id for label in target.labels}
+    kept_images = {row.image_id for row in target.images}
+    line_ids = db.execute(select(RecipeLine.id).where(RecipeLine.ingredient_id == source_id))
+
+    return MergePlan(
+        source=source,
+        target=target,
+        line_ids=[line_id for (line_id,) in line_ids],
+        child_ids=[child.id for child in source.children],
+        links=list(source.links),
+        labels=[label for label in source.labels if label.id not in kept_labels],
+        images=[row for row in source.images if row.image_id not in kept_images],
+        heating=list(source.heating),
+        preservation=[r for r in source.preservation if (r.state, r.method) not in kept_keys],
+        dropped_preservation=[r for r in source.preservation if (r.state, r.method) in kept_keys],
+        new_aliases=sorted(new_aliases),
+        prose={
+            name: "dropped" if getattr(target, name) else "moved"
+            for name in PROSE_FIELDS
+            if getattr(source, name)
+        },
+    )
+
+
+def _move_after(db: Session, model, rows, target_id: int, order: str, taken: list[int]) -> None:
+    """Move `rows` to the target, numbered after the target's own `order` values.
+
+    One UPDATE per row, each to a number no row of the target holds, so the
+    gallery's per-ingredient position key never sees two rows in one slot.
+    """
+    start = max(taken, default=-1) + 1
+    for offset, row in enumerate(rows):
+        db.execute(
+            update_rows(model)
+            .where(model.id == row.id)
+            .values(ingredient_id=target_id, **{order: start + offset})
+        )
+
+
+def merge(db: Session, source_id: int, target_id: int) -> Ingredient:
+    """Execute `merge_plan`, then delete the source. One transaction.
+
+    Rows move by UPDATE rather than through the relationships: the source is
+    deleted at the end with `cascade="all, delete-orphan"` on its collections,
+    and an in-memory collection still holding a moved row would delete it.
+    The session is expired before the delete, so the source's collections are
+    re-read and hold only what stayed behind - the dropped notes, the images
+    the target already had, its aliases - which go with it.
+    """
+    plan = merge_plan(db, source_id, target_id)
+    target = plan.target
+
+    db.execute(
+        update_rows(RecipeLine)
+        .where(RecipeLine.id.in_(plan.line_ids))
+        .values(ingredient_id=target_id)
+    )
+    db.execute(
+        update_rows(Ingredient)
+        .where(Ingredient.id.in_(plan.child_ids))
+        .values(parent_id=target_id)
+    )
+    links = [r.sort_order for r in target.links]
+    heating = [r.sort_order for r in target.heating]
+    positions = [r.position for r in target.images]
+    _move_after(db, IngredientLink, plan.links, target_id, "sort_order", links)
+    _move_after(db, IngredientHeating, plan.heating, target_id, "sort_order", heating)
+    _move_after(db, IngredientImage, plan.images, target_id, "position", positions)
+    db.execute(
+        update_rows(IngredientPreservation)
+        .where(IngredientPreservation.id.in_([r.id for r in plan.preservation]))
+        .values(ingredient_id=target_id)
+    )
+
+    target.labels.extend(plan.labels)
+    target.aliases.extend(IngredientAlias(value=v) for v in plan.new_aliases)
+    for name, outcome in plan.prose.items():
+        if outcome == "moved":
+            setattr(target, name, getattr(plan.source, name))
+    db.flush()
+
+    db.expire_all()
+    db.delete(db.get(Ingredient, source_id))
+    db.commit()
+    return get(db, target_id)

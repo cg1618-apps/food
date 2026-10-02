@@ -12,7 +12,7 @@ that name them, so "used in" is always an explicit query here.
 """
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.errors import AppError
 from app.models import (
@@ -137,18 +137,81 @@ def all_creators(db: Session) -> list[str]:
     return sorted((creator for (creator,) in rows), key=str.casefold)
 
 
-def recipe_ids_using_ingredients(ingredient_ids: list[int]):
-    """A subquery of the recipes with a line naming any of `ingredient_ids`.
+def _below(ingredient_ids: list[int]):
+    """A recursive CTE of `(root_id, ingredient_id)`: each of `ingredient_ids`
+    paired with itself and with every ingredient below it, at any depth.
 
-    Direct lines only, for now. The ingredient's own "used in" replaces this
-    body with the descendant query, so the list filter and the ingredient page
-    cannot disagree about what "uses" means.
+    UNION rather than UNION ALL, so that a cycle in `parent_id` - which the
+    write path refuses, but a hand-written UPDATE could make - ends the walk
+    instead of hanging it: a pair seen once is never produced again.
     """
-    return (
-        select(RecipeLine.recipe_id)
-        .where(RecipeLine.ingredient_id.in_(ingredient_ids))
-        .scalar_subquery()
+    tree = select(
+        Ingredient.id.label("root_id"), Ingredient.id.label("ingredient_id")
+    ).where(Ingredient.id.in_(ingredient_ids)).cte("ingredient_below", recursive=True)
+    child = aliased(Ingredient)
+    return tree.union(
+        select(tree.c.root_id, child.id).where(child.parent_id == tree.c.ingredient_id)
     )
+
+
+def _usage(ingredient_ids: list[int]):
+    """`(root_id, recipe_id)` for every line naming a root or anything below it.
+
+    THE definition of "uses" for an ingredient. The recipe list's
+    `ingredient_id` filter, an ingredient's `used_in` and its `used_in_count`
+    all read this and nothing else, so the three cannot disagree. Depth through
+    sub-recipes is zero: a line naming a base recipe is not a line naming what
+    that base uses.
+    """
+    tree = _below(ingredient_ids)
+    return (
+        select(tree.c.root_id, RecipeLine.recipe_id)
+        .join(RecipeLine, RecipeLine.ingredient_id == tree.c.ingredient_id)
+        .subquery()
+    )
+
+
+def recipe_ids_using_ingredients(ingredient_ids: list[int]):
+    """A subquery of the recipes using any of `ingredient_ids`, as `_usage`
+    defines using."""
+    return select(_usage(ingredient_ids).c.recipe_id).scalar_subquery()
+
+
+def recipes_using_ingredient(db: Session, ingredient_ids: list[int]) -> list[Recipe]:
+    """Distinct recipes using any of `ingredient_ids` or anything below them."""
+    rows = db.query(Recipe).filter(Recipe.id.in_(recipe_ids_using_ingredients(ingredient_ids)))
+    return sorted(rows, key=lambda r: r.display_name.casefold())
+
+
+def used_in_counts(db: Session, ingredient_ids: list[int]) -> dict[int, int]:
+    """Ingredient id -> how many distinct recipes use it. One query, however
+    many ids; an id no recipe uses is absent rather than zero."""
+    if not ingredient_ids:
+        return {}
+    usage = _usage(ingredient_ids)
+    rows = db.execute(
+        select(usage.c.root_id, func.count(usage.c.recipe_id.distinct())).group_by(
+            usage.c.root_id
+        )
+    )
+    return dict(rows.all())
+
+
+def recipes_naming_ingredient(db: Session, ingredient_id: int) -> list[Recipe]:
+    """Distinct recipes with a line naming this ingredient ITSELF.
+
+    Not "used in": this is what the foreign key refuses a delete over, and a
+    recipe naming only a child does not block deleting the parent - the child
+    does that on its own.
+    """
+    rows = db.query(Recipe).filter(
+        Recipe.id.in_(
+            select(RecipeLine.recipe_id)
+            .where(RecipeLine.ingredient_id == ingredient_id)
+            .scalar_subquery()
+        )
+    )
+    return sorted(rows, key=lambda r: r.display_name.casefold())
 
 
 def _any_of(link, column, values):

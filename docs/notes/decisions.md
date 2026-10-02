@@ -369,8 +369,33 @@ What the branch after module 1 chose, and what it turned down.
   person is there to decide.
 - **"Used in" for a recipe is depth zero through sub-recipes.** A dish using a
   base that uses this base is not listed; only lines naming this recipe
-  directly. An ingredient's "used in", when it lands, takes the same depth
-  through sub-recipes, so the two cannot disagree about what "uses" means.
+  directly. An ingredient's "used in" takes the same depth through
+  sub-recipes, so the two cannot disagree about what "uses" means.
+- **"Used in" for an ingredient goes all the way DOWN its own tree and not at
+  all through sub-recipes.** It counts distinct recipes with a line naming the
+  ingredient or any ingredient below it, so 生抽 in one line and 老抽 in
+  another is one recipe using 醬油. It is a recursive CTE over
+  `ingredient.parent_id` (UNION, so a cycle a hand-written UPDATE made ends the
+  walk rather than hanging it), and it is the only definition: the recipe
+  list's `ingredient_id` filter, `used_in` and `used_in_count` all read it.
+  The plan was a Python walk over a fetched parent map for the counts; one
+  grouped query over the same CTE is as fixed in cost and leaves no second
+  implementation to drift.
+- **The delete refusal is direct lines only**, unlike "used in". It is the
+  foreign key's question, and a parent whose child a recipe names is already
+  refused for having a child.
+- **Merge: the target wins.** Whatever only the source has moves - lines,
+  children, links, heating, labels it lacked, images it lacked (after its
+  own), preservation rows for a `(state, method)` it lacked, prose fields it
+  left empty. Whatever collides is the target's and the source's is dropped,
+  and the preview lists every drop. The source's name slots become aliases on
+  the target, never names: the target's names are what the user chose to
+  keep, and a second name_cn has nowhere to go. Category, parent, rating and
+  `needs_detail` are not merged at all - each is one value, and the user is
+  merging INTO the row whose values they want. The preview and the merge are
+  one function's output, so the preview cannot describe a different merge
+  from the one that runs. Merging into a descendant is refused, since the
+  source's children would move under their own descendant.
 - **A refused recipe save writes nothing**, because the service validates
   every name, id, version and cycle before its first write - the stubs - and
   touches the row only after them. Relying on the request's rollback alone
