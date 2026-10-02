@@ -13,6 +13,7 @@ import {
   TextArea,
 } from '../../components/ui'
 import { useApiMutation, useApiQuery } from '../../hooks/useApi'
+import { reconcileMinDays } from './storageDuration'
 import { flatten } from '../../lib/tree'
 import DeleteIngredientDialog from './DeleteIngredientDialog'
 
@@ -78,8 +79,13 @@ export default function IngredientForm() {
       needs_detail: row.needs_detail,
       aliases: row.aliases.join(', '),
       preservation: row.preservation.map((entry) => ({
+        // Kept as loaded and sent back unchanged: this form has no control for
+        // either, and dropping them would rewrite stored data on every save.
+        state: entry.state,
+        duration_min_days: entry.duration_min_days,
+        loaded_max_days: entry.duration_max_days,
         method: entry.method,
-        duration_days: entry.duration_days ?? '',
+        duration_max_days: entry.duration_max_days ?? '',
         notes: entry.notes ?? '',
         sort_order: entry.sort_order ?? 0,
       })),
@@ -119,11 +125,17 @@ export default function IngredientForm() {
       preservation: form.preservation
         .filter((entry) => entry.method)
         .map((entry) => ({
+          state: entry.state,
+          duration_min_days: reconcileMinDays({
+            loadedMin: entry.duration_min_days,
+            loadedMax: entry.loaded_max_days,
+            editedMax: entry.duration_max_days,
+          }),
           method: entry.method,
           // An empty number input means "unknown", which is null - not 0,
           // which the CHECK constraint refuses and which would surface as a
           // confusing 422 about a field deliberately left blank.
-          duration_days: entry.duration_days === '' ? null : Number(entry.duration_days),
+          duration_max_days: entry.duration_max_days === '' ? null : Number(entry.duration_max_days),
           notes: entry.notes || null,
           sort_order: entry.sort_order ?? 0,
         })),
@@ -235,8 +247,8 @@ export default function IngredientForm() {
               type="number"
               min="1"
               placeholder="days"
-              value={entry.duration_days}
-              onChange={(event) => setEntry(index, { duration_days: event.target.value })}
+              value={entry.duration_max_days}
+              onChange={(event) => setEntry(index, { duration_max_days: event.target.value })}
             />
             <Input
               className="sm:col-span-2"
@@ -254,8 +266,10 @@ export default function IngredientForm() {
               preservation: [
                 ...previous.preservation,
                 {
+                  state: 'unused',
+                  duration_min_days: null,
                   method: '',
-                  duration_days: '',
+                  duration_max_days: '',
                   notes: '',
                   sort_order: previous.preservation.length,
                 },

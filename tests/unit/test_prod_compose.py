@@ -149,3 +149,10 @@ def test_the_compose_file_sits_beside_the_env_it_interpolates():
     assert COMPOSE.parent == ROOT, (
         f"{COMPOSE.name} must sit beside .env at the repository root; found it in {COMPOSE.parent}"
     )
+
+
+def test_uploaded_images_are_a_bind_mount_outside_the_image(compose):
+    """The only copy of every uploaded photograph. Without the mount it lives
+    in the container's writable layer and the next deploy deletes it."""
+    mounts = compose["services"]["app"].get("volumes", [])
+    assert "./data/images:/app/data/images" in mounts, mounts

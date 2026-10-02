@@ -52,16 +52,32 @@ CONSTRAINT_MESSAGES = {
     "ck_ingredient_has_a_name": "An ingredient needs at least one name.",
     "ck_ingredient_category_has_a_name": "A category needs at least one name.",
     "ck_label_has_a_name": "A label needs at least one name.",
+    "ck_recipe_course_has_a_name": "A course needs at least one name.",
+    "uq_recipe_course_name_cn": "Another course already has that Chinese name.",
+    "uq_recipe_course_name_en": "Another course already has that English name.",
+    "ck_cooking_method_has_a_name": "A cooking method needs at least one name.",
+    "uq_cooking_method_name_cn": "Another cooking method already has that Chinese name.",
+    "uq_cooking_method_name_en": "Another cooking method already has that English name.",
+    "ck_equipment_has_a_name": "A piece of equipment needs at least one name.",
+    "uq_equipment_name_cn": "Another piece of equipment already has that Chinese name.",
+    "uq_equipment_name_en": "Another piece of equipment already has that English name.",
     "ck_ingredient_preservation_duration_positive": (
-        "A preservation time has to be a positive number of days, or left empty."
+        "A storage time has to be a positive number of days, or left empty."
     ),
+    "ck_ingredient_preservation_duration_order": (
+        "The shortest storage time cannot be longer than the longest."
+    ),
+    "ck_ingredient_heating_temperature_positive": "A temperature has to be positive.",
+    "uq_image_checksum": "That image is already in the library.",
+    "uq_ingredient_image_position": "Two images cannot share one position.",
+    "uq_ingredient_image_once": "That image is already in this gallery.",
     "uq_ingredient_name_cn": "Another ingredient already has that Chinese name.",
     "uq_ingredient_name_en": "Another ingredient already has that English name.",
     "uq_label_name_cn": "Another label already has that Chinese name.",
     "uq_label_name_en": "Another label already has that English name.",
     "uq_ingredient_alias": "That ingredient already carries that alias.",
-    "uq_ingredient_preservation_method": (
-        "That ingredient already has a note for that preservation method."
+    "uq_ingredient_preservation_state_method": (
+        "That ingredient already has a note for that state and storage method."
     ),
     "uq_ingredient_category_sibling_cn": (
         "Another category in the same place already has that name."
@@ -101,12 +117,17 @@ class StaleCountError(AppError):
     in place. Without them the only recovery a page has is a full reload, which
     is why media's equivalent message ends "Reload and confirm again" - the
     sentence is an artifact of having nothing to hand back.
+
+    `field` names which count moved, using the delete's query-parameter names.
+    Several counts can share a value, so a dialog matching `expected` against
+    its own numbers would correct the wrong one and loop.
     """
 
-    def __init__(self, what: str, expected: int, actual: int):
+    def __init__(self, field: str, what: str, expected: int, actual: int):
         super().__init__(
             409,
             f"This now removes {actual} {what}, not {expected}. Check and confirm again.",
+            field=field,
             expected=expected,
             actual=actual,
         )

@@ -32,6 +32,8 @@ export default function DeleteIngredientDialog({ id, name, onClose, onDeleted })
         buildUrl(endpoints.ingredients.remove(id), {
           aliases: live.aliases,
           preservation: live.preservation,
+          heating: live.heating,
+          links: live.links,
         }),
         { method: 'DELETE' },
       )
@@ -40,7 +42,7 @@ export default function DeleteIngredientDialog({ id, name, onClose, onDeleted })
       if (caught.status === 409 && caught.body?.actual !== undefined) {
         // The numbers moved. Take the server's, say so, and let them confirm
         // again - no reload, and nothing lost from the page behind this.
-        setConfirmed({ ...live, ...inferCounts(caught.body, live) })
+        setConfirmed({ ...live, ...inferCounts(caught.body) })
       }
       setError(caught)
     } finally {
@@ -80,11 +82,9 @@ export default function DeleteIngredientDialog({ id, name, onClose, onDeleted })
   )
 }
 
-// The 409 names one count at a time - whichever was checked first - so only
-// that one is known to have moved. Guessing the other would be inventing a
-// number; the next attempt re-checks it anyway.
-function inferCounts(body, live) {
-  if (body.expected === live.aliases) return { aliases: body.actual }
-  if (body.expected === live.preservation) return { preservation: body.actual }
-  return {}
+// The 409 names the count that moved in `field`, using the same names as the
+// delete's query parameters. Matching on the number instead is ambiguous when
+// two counts are equal, and the dialog would correct the wrong one forever.
+function inferCounts(body) {
+  return body.field ? { [body.field]: body.actual } : {}
 }

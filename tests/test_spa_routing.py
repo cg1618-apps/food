@@ -28,6 +28,14 @@ def test_an_unknown_api_path_is_404_not_the_spa(tmp_path):
     assert response.status_code == 404
 
 
+def test_a_missing_image_is_404_not_the_spa(tmp_path):
+    # Same reason as the /api guard: a picture that is not there must say so,
+    # not come back as index.html with a 200 that the browser fails to decode.
+    response = TestClient(_app_with_dist(tmp_path)).get("/images/nope.jpg")
+    assert response.status_code == 404
+    assert "spa" not in response.text
+
+
 def test_a_mistyped_health_path_is_404_not_the_spa(tmp_path):
     # This app's health path is /health, not /api/health, so the `api` prefix
     # check does not cover it. A typo under it would otherwise answer 200 with

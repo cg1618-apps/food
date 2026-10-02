@@ -76,11 +76,57 @@ is load-bearing and says so. Some examples worth knowing about:
   satisfy. It sits on the boundary rather than safely inside it, so an
   off-by-one in the pattern is caught too.
 
+- `air_fryer` (`tests/api/test_ingredient_storage.py`) is a cooking method that
+  a heating row then points at. It is what makes
+  `test_a_cooking_method_in_use_by_a_heating_row_cannot_be_deleted` bite: with
+  no referencing row the delete is simply allowed, and the refusal is vacuous.
+  It is also what gives the delete-count tests a non-zero `heating` count to get
+  stale.
+- `tests/test_seed_migration.py` inserts a label 飯 and a category 肉類 *before*
+  the vocabulary migration runs. On an empty database every seed `INSERT`
+  succeeds and `ON CONFLICT DO NOTHING` is never consulted, so a seed written
+  without it passes. The pre-existing rows are the only thing that proves the
+  clause is there. The storage test is built the same way: it needs old
+  preservation rows to prove the range copy and the lossy downgrade, and a
+  migration run over an empty table touches nothing.
+- `image_dir` (`tests/api/test_images.py`) is **autouse**, and points
+  `IMAGE_DIR` at the test's own `tmp_path`. It has to be: the `/images` mount is
+  built when the app is, and the `client` fixture builds the app, so a test that
+  chose its directory afterwards would have mounted the real one.
+
 One more that is weaker than it looks unless read carefully:
 `test_uvicorns_own_loggers_are_taken_over` asserts the handler **by identity**
 against the root console handler. Asserting merely that a handler exists passes
 while the bug is present, because uvicorn installs one of its own — which is
 the entire failure.
+
+## Where the tests are
+
+| File | What it covers |
+| --- | --- |
+| `tests/api/test_ingredient_crud.py` | create, read, update, delete and search over HTTP; re-sending existing aliases and storage rows on `PATCH` |
+| `tests/api/test_category_crud.py`, `test_label_crud.py` | the same round trip for categories and labels |
+| `tests/api/test_ingredient_storage.py` | storage state and range, heating, links, rating, the new list filters, the delete counts and the 409 that names the moved one, `/api/vocabularies/fixed` |
+| `tests/api/test_vocabularies.py` | the three vocabularies, parametrised over one factory |
+| `tests/api/test_images.py` | upload, re-encode, deduplication, galleries, deletion, serving |
+| `tests/test_seed_migration.py` | the seeds, and the storage migration's copy and lossy downgrade, on a scratch database |
+| `tests/unit/test_prod_compose.py` | the production compose file, including the image bind mount |
+
+**The image tests never touch the real `data/images`.** `image_dir` redirects
+the setting to a temporary directory for every test in the file. The upload code
+reads `IMAGE_DIR` at call time, so the redirect works; a file turning up in the
+real directory would mean that rule had broken.
+
+**The `i2storage` downgrade is tested against a scratch database**
+(`food_seed_test`, created and dropped by the test), because it is the one
+migration here that loses data on purpose. The test asserts what survives: rows
+in a state other than `unused` are gone, and the range collapses to its maximum.
+
+**The API test client rolls the shared session back after a refused request.**
+The real `get_db` opens a session per request, which discards a failed flush.
+The fixture hands every request the test's one session, so a request the
+database refused would otherwise leave it needing a rollback and fail the *next*
+request with an unrelated 500.
 
 ## Constraint violations are tested through HTTP
 

@@ -12,7 +12,17 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.errors import AppError
-from app.models import Ingredient, IngredientAlias, IngredientLabel, IngredientPreservation, Label
+from app.models import (
+    CookingMethod,
+    Ingredient,
+    IngredientAlias,
+    IngredientHeating,
+    IngredientImage,
+    IngredientLabel,
+    IngredientLink,
+    IngredientPreservation,
+    Label,
+)
 from app.services.hierarchy import check_parent
 
 
@@ -30,8 +40,31 @@ def _loaded(query):
         selectinload(Ingredient.children),
         selectinload(Ingredient.aliases),
         selectinload(Ingredient.preservation),
+        selectinload(Ingredient.heating).selectinload(IngredientHeating.method),
+        selectinload(Ingredient.links),
+        selectinload(Ingredient.images).selectinload(IngredientImage.image),
         selectinload(Ingredient.labels),
     )
+
+
+def set_images(db: Session, ingredient: Ingredient, entries) -> None:
+    """Replace the gallery, in order. Position 0 is the cover.
+
+    Cleared and flushed BEFORE the new rows are assigned: the unit of work
+    INSERTs before it DELETEs, so replacing in one step collides with
+    uq_ingredient_image_position (and _once) whenever a position or an image
+    is reused - which a reorder always does.
+    """
+    from app.services.images import resolve_attachments
+
+    found = resolve_attachments(db, entries)
+    ingredient.images = []
+    db.flush()  # clear the old positions before reusing them
+    ingredient.images = [
+        IngredientImage(image_id=found[e.image_id].id, position=i, focus=e.focus)
+        for i, e in enumerate(entries)
+    ]
+    db.commit()
 
 
 def get(db: Session, ingredient_id: int) -> Ingredient:
@@ -48,6 +81,8 @@ def search(
     label_id: int | None = None,
     needs_detail: bool | None = None,
     parent_id: int | None = None,
+    rating: str | None = None,
+    has_parent: bool | None = None,
 ) -> list[Ingredient]:
     query = _loaded(db.query(Ingredient))
 
@@ -77,6 +112,12 @@ def search(
         query = query.filter(Ingredient.parent_id == parent_id)
     if needs_detail is not None:
         query = query.filter(Ingredient.needs_detail.is_(needs_detail))
+    if rating is not None:
+        query = query.filter(Ingredient.rating == rating)
+    if has_parent is not None:
+        query = query.filter(
+            Ingredient.parent_id.isnot(None) if has_parent else Ingredient.parent_id.is_(None)
+        )
     if label_id is not None:
         query = query.filter(
             Ingredient.id.in_(
@@ -107,18 +148,66 @@ def _apply_labels(db: Session, ingredient: Ingredient, label_ids: list[int]) -> 
 
 
 def _apply_aliases(ingredient: Ingredient, values: list[str]) -> None:
-    ingredient.aliases = [IngredientAlias(value=value) for value in values]
+    """Make the alias rows match `values`, keeping the rows already there.
+
+    Replacing the whole collection looks equivalent and is not: the unit of
+    work INSERTs the new rows before it DELETEs the orphaned ones, so re-sending
+    an alias the ingredient already has trips uq_ingredient_alias, and a PATCH
+    that keeps any existing alias is a 409. Reconciling by value touches only
+    what changed.
+    """
+    wanted = list(dict.fromkeys(values))
+    ingredient.aliases = [row for row in ingredient.aliases if row.value in wanted]
+    kept = {row.value for row in ingredient.aliases}
+    ingredient.aliases.extend(IngredientAlias(value=v) for v in wanted if v not in kept)
 
 
 def _apply_preservation(ingredient: Ingredient, entries) -> None:
-    ingredient.preservation = [
-        IngredientPreservation(
-            method=entry.method,
-            duration_days=entry.duration_days,
-            notes=entry.notes,
-            sort_order=entry.sort_order,
+    """Reconcile by (state, method), for the reason `_apply_aliases` gives.
+
+    uq_ingredient_preservation_state_method makes a wholesale replace fail the
+    moment a PATCH re-sends a note the ingredient already has.
+    """
+    existing = {(row.state, row.method): row for row in ingredient.preservation}
+    rows = []
+    for entry in entries:
+        row = existing.get((entry.state, entry.method)) or IngredientPreservation(
+            method=entry.method, state=entry.state
         )
-        for entry in entries
+        row.duration_min_days = entry.duration_min_days
+        row.duration_max_days = entry.duration_max_days
+        row.notes = entry.notes
+        row.sort_order = entry.sort_order
+        rows.append(row)
+    ingredient.preservation = rows
+
+
+def _apply_heating(db: Session, ingredient: Ingredient, entries) -> None:
+    method_ids = {entry.method_id for entry in entries}
+    found = {
+        row.id for row in db.query(CookingMethod.id).filter(CookingMethod.id.in_(method_ids))
+    }
+    missing = method_ids - found
+    if missing:
+        raise AppError(422, f"No such cooking method: {sorted(missing)[0]}.")
+    ingredient.heating = [
+        IngredientHeating(
+            method_id=e.method_id,
+            temperature_c=e.temperature_c,
+            duration=e.duration,
+            preheat=e.preheat,
+            flip=e.flip,
+            notes=e.notes,
+            sort_order=position,
+        )
+        for position, e in enumerate(entries)
+    ]
+
+
+def _apply_links(ingredient: Ingredient, entries) -> None:
+    ingredient.links = [
+        IngredientLink(url=e.url, title=e.title, sort_order=position)
+        for position, e in enumerate(entries)
     ]
 
 
@@ -136,9 +225,12 @@ def create(db: Session, payload) -> Ingredient:
         sourcing_notes=payload.sourcing_notes,
         preservation_notes=payload.preservation_notes,
         needs_detail=payload.needs_detail,
+        rating=payload.rating,
     )
     _apply_aliases(ingredient, payload.aliases)
     _apply_preservation(ingredient, payload.preservation)
+    _apply_heating(db, ingredient, payload.heating)
+    _apply_links(ingredient, payload.links)
     db.add(ingredient)
     db.flush()
     _apply_labels(db, ingredient, payload.label_ids)
@@ -147,6 +239,8 @@ def create(db: Session, payload) -> Ingredient:
 
 
 def update(db: Session, ingredient_id: int, payload) -> Ingredient:
+    from app import schemas  # deferred: avoids an import cycle
+
     ingredient = get(db, ingredient_id)
     changes = payload.model_dump(exclude_unset=True)
 
@@ -155,6 +249,8 @@ def update(db: Session, ingredient_id: int, payload) -> Ingredient:
 
     aliases = changes.pop("aliases", None)
     preservation = changes.pop("preservation", None)
+    heating = changes.pop("heating", None)
+    links = changes.pop("links", None)
     label_ids = changes.pop("label_ids", None)
 
     for field, value in changes.items():
@@ -172,7 +268,11 @@ def update(db: Session, ingredient_id: int, payload) -> Ingredient:
     if aliases is not None:
         _apply_aliases(ingredient, aliases)
     if preservation is not None:
-        _apply_preservation(ingredient, _as_entries(preservation))
+        _apply_preservation(ingredient, _as_entries(preservation, schemas.PreservationIn))
+    if heating is not None:
+        _apply_heating(db, ingredient, _as_entries(heating, schemas.HeatingIn))
+    if links is not None:
+        _apply_links(ingredient, _as_entries(links, schemas.LinkIn))
     if label_ids is not None:
         _apply_labels(db, ingredient, label_ids)
 
@@ -180,17 +280,15 @@ def update(db: Session, ingredient_id: int, payload) -> Ingredient:
     return get(db, ingredient_id)
 
 
-def _as_entries(raw):
+def _as_entries(raw, model):
     """`model_dump` turns the nested models into dicts; put them back.
 
-    Only the top level is re-validated by the router, so the nested
-    preservation entries arrive here as plain dicts. Rebuilding them as simple
-    objects keeps `_apply_preservation` reading one way rather than branching
-    on which caller it came from.
+    Only the top level is re-validated by the router, so the nested entries
+    arrive here as plain dicts. Rebuilding them as simple objects keeps the
+    `_apply_*` helpers reading one way rather than branching on which caller
+    it came from.
     """
-    from app.schemas import PreservationIn
-
-    return [PreservationIn(**entry) if isinstance(entry, dict) else entry for entry in raw]
+    return [model(**entry) if isinstance(entry, dict) else entry for entry in raw]
 
 
 def child_count(db: Session, ingredient_id: int) -> int:
@@ -211,7 +309,21 @@ def cascade_counts(db: Session, ingredient_id: int) -> dict[str, int]:
         "preservation": db.query(IngredientPreservation)
         .filter(IngredientPreservation.ingredient_id == ingredient_id)
         .count(),
+        "heating": db.query(IngredientHeating)
+        .filter(IngredientHeating.ingredient_id == ingredient_id)
+        .count(),
+        "links": db.query(IngredientLink)
+        .filter(IngredientLink.ingredient_id == ingredient_id)
+        .count(),
         "labels": db.query(IngredientLabel)
         .filter(IngredientLabel.ingredient_id == ingredient_id)
         .count(),
     }
+
+
+def fridge_range(ingredient: Ingredient) -> dict | None:
+    """The unused-and-refrigerated range, for the library's list view."""
+    for row in ingredient.preservation:
+        if row.state == "unused" and row.method == "冷藏":
+            return {"min": row.duration_min_days, "max": row.duration_max_days}
+    return None

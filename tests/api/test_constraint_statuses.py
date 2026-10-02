@@ -74,7 +74,7 @@ def test_a_preservation_time_of_zero_is_422(client, fallback_category):
         json={
             "category_id": fallback_category.id,
             "name_cn": "生薑",
-            "preservation": [{"method": "冷藏", "duration_days": 0}],
+            "preservation": [{"method": "冷藏", "duration_min_days": 0}],
         },
     )
     assert response.status_code == 422, response.text
@@ -151,7 +151,7 @@ def test_deleting_an_ingredient_that_has_children_is_409(client, ingredient, fal
     assert child.status_code == 201, child.text
 
     response = client.delete(
-        f"/api/edit/ingredients/{ingredient.id}?aliases=0&preservation=0"
+        f"/api/edit/ingredients/{ingredient.id}?aliases=0&preservation=0&heating=0&links=0"
     )
     assert response.status_code == 409, response.text
     assert "still refers to this" in response.json()["detail"]

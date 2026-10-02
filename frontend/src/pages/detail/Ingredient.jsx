@@ -4,6 +4,16 @@ import { endpoints } from '../../api/endpoints'
 import { Card, Empty, ErrorNote, Loading, Pill } from '../../components/ui'
 import { useApiQuery } from '../../hooks/useApi'
 
+const STATE_LABELS = { opened: '已開封', cooked: '熟食' }
+
+// min = max is one number, a lone max is "up to", a lone min is "at least".
+function durationText({ duration_min_days: min, duration_max_days: max }) {
+  if (min && max) return min === max ? `${min} days` : `${min}–${max} days`
+  if (max) return `up to ${max} days`
+  if (min) return `at least ${min} days`
+  return null
+}
+
 function Notes({ title, body }) {
   if (!body) return null
   return (
@@ -87,8 +97,13 @@ export default function IngredientDetail() {
             {data.preservation.map((entry) => (
               <li key={entry.id} className="flex flex-wrap gap-2">
                 <span className="font-medium">{entry.method}</span>
-                {entry.duration_days ? (
-                  <span className="text-text-muted">about {entry.duration_days} days</span>
+                {durationText(entry) ? (
+                  <span className="text-text-muted">
+                    {STATE_LABELS[entry.state] ? `${STATE_LABELS[entry.state]} ` : ''}
+                    {durationText(entry)}
+                  </span>
+                ) : STATE_LABELS[entry.state] ? (
+                  <span className="text-text-muted">{STATE_LABELS[entry.state]}</span>
                 ) : null}
                 {entry.notes ? <span>{entry.notes}</span> : null}
               </li>
