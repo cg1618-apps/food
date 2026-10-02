@@ -25,9 +25,7 @@ section a page belongs to - its edit pages included - is marked with
 | 設定 (`/settings` redirects here) | `/edit/settings` | Access |
 | Image library | `/edit/images` | Access |
 
-The image library renders a heading and an empty note until its real
-version lands; 設定 hosts the categories-and-labels editor. Any other path is a "page not found" page,
-not a redirect.
+Any other path is a "page not found" page, not a redirect.
 
 **The first release's paths redirect**, query string included, so bookmarks
 survive: `/library/ingredient` → `/ingredients`, `/ingredient/:id` →
@@ -43,9 +41,9 @@ second id went with the integer-primary-key decision, so ours is
 phone in a shop, signed out: selection notes, the preservation methods with
 their durations, where to get the thing. Everything else is a list or a form.
 
-**Categories and labels share one page**, as two sections. They are the same
-kind of work — maintaining a small vocabulary — and a page each would be two
-screens with four rows on them.
+**Every vocabulary shares one page**, 設定, a section each. They are the
+same kind of work — maintaining a short list — and a page each would be five
+screens with a handful of rows on them.
 
 **There is no route guard, and there must not be one.** The gate is Cloudflare
 Access on the path prefix, in front of the box. A guard in the browser would
@@ -247,6 +245,51 @@ at once, attaching waits for 儲存. 從圖庫選 opens the library in a dialog,
 one already in the gallery is marked and can be taken out. Each picture has
 ◀ / ▶, 焦點 (`FocusPicker.jsx`: click or drag, arrow keys nudge 1% / 10%,
 previewed as a cover and a thumbnail) and 移除.
+
+## 設定 and 圖片
+
+`/edit/settings` is `pages/edit/Settings.jsx`: 食材分類, 標籤, 類別, 做法 and
+器材, top to bottom, each its own query with its own loading, error and empty
+state, so one vocabulary failing to load leaves the others usable. Each value
+is a `components/settings/NameRow.jsx`:
+
+- **改名** turns the row into its two name slots in place; Enter saves,
+  Escape puts the row back. A 409 (a duplicate name) or 422 is said under
+  the boxes.
+- **▲ / ▼** (上移 / 下移) reorder by `sort_order` (`lib/vocabulary.js`
+  `reorderPatches`): when every sibling's number is distinct the two rows
+  swap numbers - so up then down restores exactly what was there - and when
+  any tie (ordered by name, which a swap cannot change) the siblings are
+  renumbered 1..n, sending only the rows that change. **Labels have no
+  `sort_order`** and are listed by name, so their rows have no arrows.
+- **刪除** asks in `ConfirmModal`, saying the count it knows. A refusal is
+  explained **in the row**: for a course, method or piece of equipment with
+  the 409's `usage_count` (the server's number, newer than the page's); for a
+  category with what is under it - its ingredients and child categories, both
+  `RESTRICT`. The button stays even when the page already knows the delete
+  will be refused: the refusal is the server's. The fallback category (預設)
+  has no delete.
+- **Add** is the line under each section (`AddNameForm.jsx`); a new value
+  goes after the last one. A category row's ＋子分類 opens the same line
+  under that node; renaming a category also offers 上層, its parent (never
+  itself or anything beneath it).
+
+Label rows show where each label is used - 食材, 食譜 and 筆記 separately; the
+other vocabularies show `usage_count`. A change invalidates the vocabulary
+and every owner that shows its names (a label: ingredients, recipes and
+notes; a method: recipes and ingredients).
+
+`/edit/images` is `pages/edit/ImageLibrary.jsx`, media's admin image page
+without what food lacks: a grid of thumbnails (centred, `data-focus="none"` -
+a focus belongs to an owner, not the file), each with its size and either
+its owners as links (食材 / 食譜 / 筆記, `lib/imageOwners.js`) or 未使用 and
+刪除. **Only an unused image offers delete**, as in media: taking a picture
+off a recipe is done on the recipe's form. The owners come from each attached
+image's detail, read only for the tiles that have any; the list itself
+carries just `attachment_count`. If the server refuses a delete because the
+picture was attached since the page loaded, the tile shows the 409's owners.
+「只看未使用」 and the page are in the URL (`?unused=1&page=2`); a page is 30,
+fetched as 31 so 下一頁 knows whether there is one.
 
 ## Layers
 
