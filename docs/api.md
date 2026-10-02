@@ -48,8 +48,8 @@ detail.** A stale delete answers:
 
 `field` names which count moved, in the delete's query-parameter names. Several
 counts can share a value, so a dialog matching `expected` against its own
-numbers would correct the wrong one. The dialog corrects itself in place. Telling the user to reload is what a
-prose-only body forces.
+numbers would correct the wrong one. The dialog corrects itself in place.
+Telling the user to reload is what a prose-only body forces.
 
 **FastAPI's automatic validation error is the exception**: its `detail` is an
 *array* of `{loc, msg, type}`. That is a real shape the client must handle —
@@ -130,9 +130,9 @@ matching two of its own aliases comes back once.
 
 **`DELETE` takes `aliases`, `preservation`, `heating` and `links` as required
 query parameters** — the counts the confirmation dialog showed. If any has
-moved, the answer is 409 carrying `field`, `expected` and `actual`. It is an optimistic check, not a lock:
-nothing is held between the count and the delete, and what it guards is a tab
-left open rather than a second person.
+moved, the answer is 409 carrying `field`, `expected` and `actual`. It is an
+optimistic check, not a lock: nothing is held between the count and the delete,
+and what it guards is a tab left open rather than a second person.
 
 Children are not in the counts. They are `RESTRICT`, so an ingredient with
 children cannot be deleted at all — a refusal, not a number. Gallery rows are
