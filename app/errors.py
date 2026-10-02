@@ -62,15 +62,19 @@ CONSTRAINT_MESSAGES = {
     "uq_equipment_name_cn": "Another piece of equipment already has that Chinese name.",
     "uq_equipment_name_en": "Another piece of equipment already has that English name.",
     "ck_ingredient_preservation_duration_positive": (
-        "A preservation time has to be a positive number of days, or left empty."
+        "A storage time has to be a positive number of days, or left empty."
     ),
+    "ck_ingredient_preservation_duration_order": (
+        "The shortest storage time cannot be longer than the longest."
+    ),
+    "ck_ingredient_heating_temperature_positive": "A temperature has to be positive.",
     "uq_ingredient_name_cn": "Another ingredient already has that Chinese name.",
     "uq_ingredient_name_en": "Another ingredient already has that English name.",
     "uq_label_name_cn": "Another label already has that Chinese name.",
     "uq_label_name_en": "Another label already has that English name.",
     "uq_ingredient_alias": "That ingredient already carries that alias.",
-    "uq_ingredient_preservation_method": (
-        "That ingredient already has a note for that preservation method."
+    "uq_ingredient_preservation_state_method": (
+        "That ingredient already has a note for that state and storage method."
     ),
     "uq_ingredient_category_sibling_cn": (
         "Another category in the same place already has that name."

@@ -25,6 +25,13 @@ router = read_router("ingredients", "Ingredients")
 edit = write_router("ingredients", "Ingredients")
 
 
+def _summary(row: Ingredient) -> schemas.IngredientSummary:
+    summary = schemas.IngredientSummary.model_validate(row)
+    fridge = ingredients.fridge_range(row)
+    summary.fridge = schemas.StorageRange(**fridge) if fridge else None
+    return summary
+
+
 def _response(row: Ingredient) -> schemas.IngredientResponse:
     """Built explicitly rather than straight off the ORM row.
 
@@ -51,6 +58,7 @@ def _response(row: Ingredient) -> schemas.IngredientResponse:
         sourcing_notes=row.sourcing_notes,
         preservation_notes=row.preservation_notes,
         needs_detail=row.needs_detail,
+        rating=row.rating,
         aliases=sorted(alias.value for alias in row.aliases),
         preservation=[
             schemas.PreservationResponse.model_validate(entry) for entry in row.preservation
@@ -59,6 +67,21 @@ def _response(row: Ingredient) -> schemas.IngredientResponse:
             schemas.ingredient.LabelRef(id=label.id, display_name=label.display_name)
             for label in row.labels
         ],
+        heating=[
+            schemas.HeatingResponse(
+                id=h.id,
+                method=schemas.VocabRef(id=h.method.id, display_name=h.method.display_name),
+                temperature_c=h.temperature_c,
+                temperature_f=None if h.temperature_c is None else round(h.temperature_c * 9 / 5 + 32),
+                duration=h.duration,
+                preheat=h.preheat,
+                flip=h.flip,
+                notes=h.notes,
+                sort_order=h.sort_order,
+            )
+            for h in row.heating
+        ],
+        links=[schemas.LinkResponse.model_validate(link) for link in row.links],
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -76,6 +99,8 @@ def list_ingredients(
     label_id: int | None = None,
     parent_id: int | None = None,
     needs_detail: bool | None = None,
+    rating: str | None = None,
+    has_parent: bool | None = None,
     db: Session = Depends(get_db),
 ):
     """The library, the search box, and module 2's typeahead - one endpoint.
@@ -91,8 +116,10 @@ def list_ingredients(
         label_id=label_id,
         parent_id=parent_id,
         needs_detail=needs_detail,
+        rating=rating,
+        has_parent=has_parent,
     )
-    return [schemas.IngredientSummary.model_validate(row) for row in rows]
+    return [_summary(row) for row in rows]
 
 
 @router.get("/{ingredient_id}", response_model=schemas.IngredientResponse)
@@ -135,6 +162,8 @@ def delete_ingredient(
     ingredient_id: int,
     aliases: int = Query(..., description="Alias count the dialog showed"),
     preservation: int = Query(..., description="Preservation-note count the dialog showed"),
+    heating: int = Query(..., description="Heating-note count the dialog showed"),
+    links: int = Query(..., description="Link count the dialog showed"),
     db: Session = Depends(get_db),
 ):
     """Delete, with the counts the user was shown echoed back.
@@ -160,6 +189,10 @@ def delete_ingredient(
         raise StaleCountError("aliases", aliases, actual["aliases"])
     if actual["preservation"] != preservation:
         raise StaleCountError("preservation notes", preservation, actual["preservation"])
+    if actual["heating"] != heating:
+        raise StaleCountError("heating notes", heating, actual["heating"])
+    if actual["links"] != links:
+        raise StaleCountError("links", links, actual["links"])
 
     db.delete(ingredient)
     db.commit()

@@ -32,6 +32,8 @@ export default function DeleteIngredientDialog({ id, name, onClose, onDeleted })
         buildUrl(endpoints.ingredients.remove(id), {
           aliases: live.aliases,
           preservation: live.preservation,
+          heating: live.heating,
+          links: live.links,
         }),
         { method: 'DELETE' },
       )
@@ -86,5 +88,7 @@ export default function DeleteIngredientDialog({ id, name, onClose, onDeleted })
 function inferCounts(body, live) {
   if (body.expected === live.aliases) return { aliases: body.actual }
   if (body.expected === live.preservation) return { preservation: body.actual }
+  if (body.expected === live.heating) return { heating: body.actual }
+  if (body.expected === live.links) return { links: body.actual }
   return {}
 }

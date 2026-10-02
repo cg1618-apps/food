@@ -14,6 +14,8 @@ from app.models.ingredient import (
     Ingredient,
     IngredientAlias,
     IngredientCategory,
+    IngredientHeating,
+    IngredientLink,
     IngredientPreservation,
 )
 from app.models.label import IngredientLabel, Label
@@ -25,7 +27,9 @@ __all__ = [
     "Ingredient",
     "IngredientAlias",
     "IngredientCategory",
+    "IngredientHeating",
     "IngredientLabel",
+    "IngredientLink",
     "IngredientPreservation",
     "Label",
     "RecipeCourse",

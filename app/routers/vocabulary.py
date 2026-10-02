@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from app import schemas
+from app.constants import FIXED_VOCABULARIES
 from app.database import get_db
 from app.errors import AppError
 from app.models import CookingMethod, Equipment, RecipeCourse
@@ -90,6 +91,15 @@ method_router, method_edit = build(
 )
 equipment_router, equipment_edit = build(Equipment, "equipment", "Equipment", "piece of equipment")
 
+fixed_router = read_router("vocabularies", "Vocabularies")
+
+
+@fixed_router.get("/fixed")
+def fixed_vocabularies():
+    """Every closed list, with display labels, so no component copies one."""
+    return FIXED_VOCABULARIES
+
+
 ROUTERS = [
     course_router,
     course_edit,
@@ -97,4 +107,5 @@ ROUTERS = [
     method_edit,
     equipment_router,
     equipment_edit,
+    fixed_router,
 ]

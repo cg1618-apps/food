@@ -87,8 +87,12 @@ export default function IngredientDetail() {
             {data.preservation.map((entry) => (
               <li key={entry.id} className="flex flex-wrap gap-2">
                 <span className="font-medium">{entry.method}</span>
-                {entry.duration_days ? (
-                  <span className="text-text-muted">about {entry.duration_days} days</span>
+                {entry.duration_min_days && entry.duration_max_days ? (
+                  <span className="text-text-muted">
+                    {entry.duration_min_days}–{entry.duration_max_days} days
+                  </span>
+                ) : entry.duration_max_days ? (
+                  <span className="text-text-muted">up to {entry.duration_max_days} days</span>
                 ) : null}
                 {entry.notes ? <span>{entry.notes}</span> : null}
               </li>

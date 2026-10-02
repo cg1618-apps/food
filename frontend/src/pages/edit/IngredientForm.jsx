@@ -79,7 +79,7 @@ export default function IngredientForm() {
       aliases: row.aliases.join(', '),
       preservation: row.preservation.map((entry) => ({
         method: entry.method,
-        duration_days: entry.duration_days ?? '',
+        duration_max_days: entry.duration_max_days ?? '',
         notes: entry.notes ?? '',
         sort_order: entry.sort_order ?? 0,
       })),
@@ -119,11 +119,12 @@ export default function IngredientForm() {
       preservation: form.preservation
         .filter((entry) => entry.method)
         .map((entry) => ({
+          state: 'unused',
           method: entry.method,
           // An empty number input means "unknown", which is null - not 0,
           // which the CHECK constraint refuses and which would surface as a
           // confusing 422 about a field deliberately left blank.
-          duration_days: entry.duration_days === '' ? null : Number(entry.duration_days),
+          duration_max_days: entry.duration_max_days === '' ? null : Number(entry.duration_max_days),
           notes: entry.notes || null,
           sort_order: entry.sort_order ?? 0,
         })),
@@ -235,8 +236,8 @@ export default function IngredientForm() {
               type="number"
               min="1"
               placeholder="days"
-              value={entry.duration_days}
-              onChange={(event) => setEntry(index, { duration_days: event.target.value })}
+              value={entry.duration_max_days}
+              onChange={(event) => setEntry(index, { duration_max_days: event.target.value })}
             />
             <Input
               className="sm:col-span-2"
@@ -255,7 +256,7 @@ export default function IngredientForm() {
                 ...previous.preservation,
                 {
                   method: '',
-                  duration_days: '',
+                  duration_max_days: '',
                   notes: '',
                   sort_order: previous.preservation.length,
                 },

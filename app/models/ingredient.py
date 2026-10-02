@@ -140,6 +140,10 @@ class Ingredient(Base, NameFallbackMixin):
     # guide, and a derived flag could never be told so.
     needs_detail = Column(Boolean, nullable=False, server_default=text("false"))
 
+    # How good this one is, S to D - the Fruit sheet's grades. Used mostly on
+    # varieties (愛文芒果 under 芒果). Validated against RATINGS.
+    rating = Column(String, nullable=True)
+
     created_at = Column(DateTime, default=get_taipei_now)
     updated_at = Column(DateTime, default=get_taipei_now, onupdate=get_taipei_now)
 
@@ -154,6 +158,18 @@ class Ingredient(Base, NameFallbackMixin):
         back_populates="ingredient",
         cascade="all, delete-orphan",
         order_by="IngredientPreservation.sort_order",
+    )
+    heating = relationship(
+        "IngredientHeating",
+        back_populates="ingredient",
+        cascade="all, delete-orphan",
+        order_by="IngredientHeating.sort_order",
+    )
+    links = relationship(
+        "IngredientLink",
+        back_populates="ingredient",
+        cascade="all, delete-orphan",
+        order_by="IngredientLink.sort_order",
     )
     labels = relationship("Label", secondary="ingredient_label", back_populates="ingredients")
 
@@ -214,13 +230,15 @@ class IngredientAlias(Base):
 
 
 class IngredientPreservation(Base):
-    """One row per WAY of keeping the thing. 冷藏 5 天; 冷凍 90 天; 乾燥, no time.
+    """One row per state and WAY of keeping the thing.
 
-    `duration_days` is a single typical number, not a range, and the range goes
-    in `notes` ("3-5 天, less once cut"). The integer is what a future "what is
-    about to go off" view can compute with; the prose is what is actually true.
-    Storing only the prose would have made that view impossible, and storing
-    only a range would have made every row two fields of ceremony.
+    未使用 冷藏 3-5 天; 已開封 冷藏 1-2 天; 熟食 冷凍 2-3 月. The state axis comes
+    from the reference sheet's Unused / Opened columns and its 熟肉 rows.
+
+    The duration is a RANGE, both ends optional: the sheet states a range in
+    almost every row, and module 1's single typical number would have meant
+    inventing one. "infinite" and "see the date" are notes, with both ends
+    null.
     """
 
     __tablename__ = "ingredient_preservation"
@@ -229,19 +247,80 @@ class IngredientPreservation(Base):
     ingredient_id = Column(
         Integer, ForeignKey("ingredient.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    # Validated against PRESERVATION_METHODS in the schema layer, not by a
-    # Postgres enum - see app/constants.py.
+    # Validated against PRESERVATION_STATES / PRESERVATION_METHODS in the
+    # schema layer - see app/constants.py.
+    state = Column(String, nullable=False, server_default=text("'unused'"))
     method = Column(String, nullable=False)
-    duration_days = Column(Integer, nullable=True)
+    duration_min_days = Column(Integer, nullable=True)
+    duration_max_days = Column(Integer, nullable=True)
     notes = Column(Text, nullable=True)
     sort_order = Column(Integer, nullable=False, server_default=text("0"))
 
     ingredient = relationship("Ingredient", back_populates="preservation")
 
     __table_args__ = (
-        UniqueConstraint("ingredient_id", "method", name="uq_ingredient_preservation_method"),
+        UniqueConstraint(
+            "ingredient_id", "state", "method", name="uq_ingredient_preservation_state_method"
+        ),
         CheckConstraint(
-            "duration_days IS NULL OR duration_days > 0",
+            "(duration_min_days IS NULL OR duration_min_days > 0) "
+            "AND (duration_max_days IS NULL OR duration_max_days > 0)",
             name="ck_ingredient_preservation_duration_positive",
         ),
+        CheckConstraint(
+            "duration_min_days IS NULL OR duration_max_days IS NULL "
+            "OR duration_min_days <= duration_max_days",
+            name="ck_ingredient_preservation_duration_order",
+        ),
     )
+
+
+class IngredientHeating(Base):
+    """How to heat or cook one thing quickly - the reference's 加熱 sheet.
+
+    Not unique on method: 香腸 may be air-fried two ways. Temperature is
+    stored in Celsius only; Fahrenheit is computed for display, because two
+    stored temperatures can disagree and one cannot.
+    """
+
+    __tablename__ = "ingredient_heating"
+
+    id = Column(Integer, primary_key=True)
+    ingredient_id = Column(
+        Integer, ForeignKey("ingredient.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    method_id = Column(
+        Integer, ForeignKey("cooking_method.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    temperature_c = Column(Integer, nullable=True)
+    duration = Column(String, nullable=True)
+    preheat = Column(Boolean, nullable=False, server_default=text("false"))
+    flip = Column(Boolean, nullable=False, server_default=text("false"))
+    notes = Column(Text, nullable=True)
+    sort_order = Column(Integer, nullable=False, server_default=text("0"))
+
+    ingredient = relationship("Ingredient", back_populates="heating")
+    method = relationship("CookingMethod", passive_deletes="all")
+
+    __table_args__ = (
+        CheckConstraint(
+            "temperature_c IS NULL OR temperature_c > 0",
+            name="ck_ingredient_heating_temperature_positive",
+        ),
+    )
+
+
+class IngredientLink(Base):
+    """A reference link: where the selection or storage advice came from."""
+
+    __tablename__ = "ingredient_link"
+
+    id = Column(Integer, primary_key=True)
+    ingredient_id = Column(
+        Integer, ForeignKey("ingredient.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    url = Column(String, nullable=False)
+    title = Column(String, nullable=True)
+    sort_order = Column(Integer, nullable=False, server_default=text("0"))
+
+    ingredient = relationship("Ingredient", back_populates="links")
