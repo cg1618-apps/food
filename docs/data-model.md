@@ -1,13 +1,14 @@
 # Data model
 
-What the database holds today: twenty-three tables, at revision `r1recipes`.
+What the database holds today: twenty-six tables, at revision `k1notes`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the three managed
 vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
-its two galleries (`image`, `ingredient_image`, `recipe_image`), and the
-recipe family's nine (`recipe`, `recipe_alias`, `recipe_serves_as`,
-`recipe_label`, `recipe_method`, `recipe_equipment`, `recipe_source`,
-`recipe_line`, `recipe_step`).
+its three galleries (`image`, `ingredient_image`, `recipe_image`,
+`kitchen_note_image`), the recipe family's nine (`recipe`, `recipe_alias`,
+`recipe_serves_as`, `recipe_label`, `recipe_method`, `recipe_equipment`,
+`recipe_source`, `recipe_line`, `recipe_step`), and kitchen notes' two
+(`kitchen_note`, `kitchen_note_label`).
 
 ## Conventions shared by every table
 
@@ -189,7 +190,7 @@ things that would stop it being deleted:
 | `cooking_method` | `ingredient_heating` rows plus `recipe_method` links |
 | `equipment` | `recipe_equipment` links |
 
-## `image`, `ingredient_image` and `recipe_image`
+## `image` and its galleries
 
 `image` is the library: one row per stored picture. `checksum` is the SHA-256 of
 the *normalised* JPEG and is unique (`uq_image_checksum`), so identical pixels
@@ -199,17 +200,18 @@ are one row. `storage_key` and `thumb_key` are paths under the image directory
 pixels are on disk, not in the database.
 
 **A gallery is a join table per owner type, with real foreign keys.**
-`ingredient_image` and `recipe_image` exist; kitchen notes will add their own. Media has one polymorphic table with an `owner_type` and an `owner_id` that
-nothing constrains.
+`ingredient_image`, `recipe_image` and `kitchen_note_image` exist. Media has one
+polymorphic table with an `owner_type` and an `owner_id` that nothing
+constrains.
 
 | Column | Notes |
 | --- | --- |
-| `ingredient_id` / `recipe_id` | the owner, `CASCADE` |
+| `ingredient_id` / `recipe_id` / `kitchen_note_id` | the owner, `CASCADE` |
 | `image_id` | `RESTRICT` |
 | `position` | 0 is the cover; unique per owner |
 | `focus` | `"X% Y%"` with each 0–100, or null for centred |
 
-The two gallery tables have the same shape. Deleting an owner removes its
+The three gallery tables have the same shape. Deleting an owner removes its
 gallery rows and never the pictures. An image
 that is still attached cannot be deleted: the API answers 409 naming the owners,
 and the foreign key is the backstop. `focus` is per attachment, because one
@@ -307,7 +309,27 @@ sauce — so nothing is unique on it.
 One step of the method: `position` (unique per recipe,
 `uq_recipe_step_position`), an optional `section`, and a required `body`.
 
-## `label`, `ingredient_label` and `recipe_label`
+## `kitchen_note`
+
+A bookmark to something worth keeping that is not a recipe: a compilation video
+of twenty dishes, one technique, a page to look things up in.
+
+| Column | Notes |
+| --- | --- |
+| `title` | `NOT NULL`, and not blank once trimmed (`ck_kitchen_note_has_a_title`). Not unique |
+| `kind` | `compilation` / `technique` / `reference` (`KITCHEN_NOTE_KINDS`, shown 合輯 / 技巧 / 參考); server default `reference` |
+| `url` | nullable; http or https only, checked by the API |
+| `body` | nullable free text |
+| `created_at`, `updated_at` | as every table |
+
+A note has one title, not the name slots a catalogue entity has: nothing will
+ever look one up by an English name it does not have. Its `display_name` - what
+an image's owner list shows - is the title.
+
+`kitchen_note_label` links labels, both sides `CASCADE`, with `label_id`
+indexed on its own. Its gallery is `kitchen_note_image`, above.
+
+## `label`, `ingredient_label`, `recipe_label` and `kitchen_note_label`
 
 Cross-cutting tags — 辛, 素, 常備, 貴. A label is not a category: a category
 says where a thing sits in one taxonomy and every ingredient has exactly one, a
@@ -327,6 +349,7 @@ Labels have two name slots, not three; a tag has no formal alternative form.
 | recipe → its aliases, sources, lines, steps, gallery rows, and serves-as, label, method and equipment links | `CASCADE` |
 | recipe → the lines in other recipes that name it as a base | `RESTRICT` |
 | recipe → its versions | `SET NULL` |
+| kitchen note → its label links and gallery rows | `CASCADE` |
 | course → the recipes filed in it | `RESTRICT` |
 | course → its serves-as links; label → any link | `CASCADE` |
 | cooking method → the heating rows and recipe links that use it | `RESTRICT` |

@@ -29,6 +29,12 @@ from app.schemas.ingredient_category import (
     CategoryResponse,
     CategoryUpdate,
 )
+from app.schemas.kitchen_note import (
+    KitchenNoteCreate,
+    KitchenNoteResponse,
+    KitchenNoteSummary,
+    KitchenNoteUpdate,
+)
 from app.schemas.label import LabelCreate, LabelResponse, LabelUpdate
 from app.schemas.recipe import (
     IngredientRef,
@@ -74,6 +80,10 @@ __all__ = [
     "IngredientResponse",
     "IngredientSummary",
     "IngredientUpdate",
+    "KitchenNoteCreate",
+    "KitchenNoteResponse",
+    "KitchenNoteSummary",
+    "KitchenNoteUpdate",
     "LabelCreate",
     "LabelResponse",
     "LabelUpdate",

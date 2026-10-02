@@ -43,7 +43,9 @@ Editing only an ingredient's aliases, storage, heating, links, labels or
 gallery leaves its `updated_at` where it was, because no column on
 `ingredient` itself changed. Recipes have the same gap: a `PATCH` sending only
 lists (aliases, lines, steps, sources, labels, methods, equipment, courses
-served as) and the gallery `PUT` leave `recipe.updated_at` untouched. Anything that sorts or reports by "recently edited" will miss
+served as) and the gallery `PUT` leave `recipe.updated_at` untouched. Kitchen
+notes too: a `PATCH` sending only `label_ids`, and the gallery `PUT`, leave
+`kitchen_note.updated_at` where it was. Anything that sorts or reports by "recently edited" will miss
 those edits. The service would have to touch the timestamp whenever a list it
 replaces was sent.
 

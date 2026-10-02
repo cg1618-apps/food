@@ -353,6 +353,52 @@ refused with 409 first, before the database is asked, with
 `variant_of` null. Label, method, equipment and serves-as links and gallery
 rows go with it uncounted; the images themselves stay.
 
+## Kitchen notes
+
+| Route | |
+| --- | --- |
+| `GET /api/kitchen-notes` | list, search and filter |
+| `GET /api/kitchen-notes/{id}` | the full note |
+| `POST /api/edit/kitchen-notes` | |
+| `PATCH /api/edit/kitchen-notes/{id}` | |
+| `DELETE /api/edit/kitchen-notes/{id}` | no confirmation counts |
+| `PUT /api/edit/kitchen-notes/{id}/images` | replace the gallery, in order |
+
+**`GET /api/kitchen-notes`** is a bare array of summaries, **newest first** —
+unlike the ingredient and recipe libraries, which sort by name: a note is
+found by when it was saved as often as by what it is called. A summary is
+`id`, `title`, `kind`, `url`, `labels` (`{id, display_name}` list) and `cover`.
+
+Query parameters:
+
+- `q` — the title or the body, case-insensitively, as a substring, with `%`,
+  `_` and `\` matched literally;
+- `kind`, `label_id` — each may repeat, meaning **any of** its values; the two
+  narrow each other. A note carrying two of the labels comes back once.
+
+**The full note** is `id`, `title`, `kind` (`compilation`, `technique`,
+`reference`), `url`, `body`, `labels`, `images` (as an ingredient's),
+`created_at` and `updated_at`.
+
+**`POST` takes `title`, `kind`, `url`, `body` and `label_ids`; `PATCH` takes
+any subset.** `kind` defaults to `reference`. `label_ids` replaces the labels
+when sent and is left alone when absent. A blank `body` or `url` is stored as
+null. Refused with 422, and a refused save writes nothing:
+
+- a missing title, or one that is blank once trimmed — on `PATCH` an explicit
+  null as well;
+- a `kind` outside its list, including an explicit null;
+- a `url` that is not `http` or `https`;
+- an id in `label_ids` that names nothing; the detail names the id;
+- any other field.
+
+**`DELETE` takes no counts and answers 204.** Nothing a note owns is something
+the user would miss: its label links and gallery rows go with it, and the
+pictures stay in the library.
+
+**`PUT .../images`** replaces the gallery exactly as an ingredient's does, and
+answers the full note.
+
 ## Vocabularies
 
 Three managed vocabularies share one shape, so one description covers them:
@@ -379,8 +425,9 @@ recipes using it; for equipment, recipes using it.
 
 **`GET /api/vocabularies/fixed`** serves every closed list the interface
 renders, as `{value, label}` pairs under `preservation_methods`,
-`preservation_states`, `ratings`, `recipe_kinds`, `recipe_statuses` and
-`source_platforms`, so no component keeps its own copy. These
+`preservation_states`, `ratings`, `recipe_kinds`, `recipe_statuses`,
+`source_platforms` and `kitchen_note_kinds`, so no component keeps its own
+copy. These
 lists are constants in the code and are not editable through the API.
 
 ## Images
@@ -395,7 +442,8 @@ lists are constants in the code and are not editable through the API.
 
 An image is `id`, `url`, `thumb_url`, `width`, `height`, `byte_size`,
 `original_filename`, `uploaded_at` and `attachment_count`; the single-image read
-adds `owners`, a list of `{type, id, display_name}`.
+adds `owners`, a list of `{type, id, display_name}` where `type` is
+`ingredient`, `recipe` or `kitchen_note` (whose `display_name` is its title).
 
 **`GET /api/images` takes `unused`, `limit` (default 60, at most 200) and
 `offset`.** `unused=true` returns only images nothing attaches, `false` only

@@ -422,6 +422,29 @@ What the branch after module 1 chose, and what it turned down.
   level, refusing past `MAX_DEPTH` rather than stopping short - a walk that
   gave up early would let a cycle through. A recursive CTE would be one query
   instead of a few, for a graph a person builds by hand.
+- **The rule that a body id naming nothing is 422 is one function,
+  `services/lookup.fetch_all`.** It began private to the recipe service; kitchen
+  notes needed the same rule for `label_ids`, and a second copy is how two
+  owners come to word or order the refusal differently.
+
+## Kitchen notes
+
+- **A note has a title, not name slots.** It is a bookmark - a compilation, a
+  technique video, a page - not a catalogue entity, and nothing will ever look
+  one up by an English name it does not have. The title is not unique, and
+  `ck_kitchen_note_has_a_title` refuses one that is blank once trimmed,
+  because `NOT NULL` alone accepts "". Its `display_name` is the title, so an
+  image's owner list reads it like any other owner.
+- **A note delete takes no confirmation counts.** A recipe's delete echoes the
+  aliases, sources, lines and steps the dialog showed, because those are
+  content the user wrote. A note owns only label links and gallery rows:
+  nothing the user would miss, and the pictures survive in the library. A
+  count with nothing behind it would be a ritual, not a guard.
+- **The list is newest first**, unlike the two name-sorted libraries. A note
+  is saved in the moment and found again by when as often as by what; a title
+  sort would bury the one just added among similarly-named compilations.
+- **Search reads the title and the body.** A note's body is where the
+  reason it was kept is written, which is the part worth finding it by.
 
 ## Rules with no referent yet
 
