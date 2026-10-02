@@ -111,7 +111,9 @@ default `unused`), `method`, `duration_min_days`, `duration_max_days` and
 `notes`. A heating entry is `method` (`{id, display_name}`), `temperature_c`,
 `temperature_f` (computed, never sent), `duration`, `preheat`, `flip` and
 `notes`; a link is `url` and `title`. An image is `image_id`, `url`,
-`thumb_url`, `width`, `height` and `focus`.
+`thumb_url`, `width`, `height` and `focus`. Heating rows and links come back
+with a `sort_order`, but it is not sent: their order is the order of the list,
+and a request naming `sort_order` on either is a 422.
 
 **`POST` and `PATCH` take `rating`, `preservation`, `heating` (each entry names
 a `method_id`) and `links`.** On `PATCH`, each list that is sent replaces the

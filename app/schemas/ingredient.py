@@ -119,6 +119,8 @@ class PreservationResponse(PreservationIn):
 
 
 class HeatingIn(BaseModel):
+    """No `sort_order`: a heating row's order is its position in the list."""
+
     model_config = ConfigDict(extra="forbid")
 
     method_id: int
@@ -127,7 +129,6 @@ class HeatingIn(BaseModel):
     preheat: bool = False
     flip: bool = False
     notes: str | None = None
-    sort_order: int = 0
 
     @field_validator("temperature_c")
     @classmethod
@@ -150,11 +151,12 @@ class HeatingResponse(BaseModel):
 
 
 class LinkIn(BaseModel):
+    """No `sort_order`: a link's order is its position in the list."""
+
     model_config = ConfigDict(extra="forbid")
 
     url: str
     title: str | None = None
-    sort_order: int = 0
 
     @field_validator("url")
     @classmethod
@@ -166,6 +168,7 @@ class LinkResponse(LinkIn):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    sort_order: int
 
 
 class StorageRange(BaseModel):

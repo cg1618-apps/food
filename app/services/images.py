@@ -101,12 +101,21 @@ def _jpeg(image: PILImage.Image) -> bytes:
 
 
 def normalise(raw: bytes) -> tuple[bytes, bytes, int, int]:
-    """(full JPEG, thumbnail JPEG, width, height) of the normalised image."""
-    image = _to_rgb(ImageOps.exif_transpose(_open(raw)))
-    image.thumbnail((LONG_EDGE, LONG_EDGE))
-    thumb = image.copy()
-    thumb.thumbnail((THUMB_EDGE, THUMB_EDGE))
-    return _jpeg(image), _jpeg(thumb), image.width, image.height
+    """(full JPEG, thumbnail JPEG, width, height) of the normalised image.
+
+    A file can open cleanly and still fail later - a malformed EXIF block in
+    exif_transpose, a truncated stream at encode time. Those are the upload's
+    fault, not the server's, so they are a 422 like a file that fails to open.
+    """
+    image = _open(raw)
+    try:
+        image = _to_rgb(ImageOps.exif_transpose(image))
+        image.thumbnail((LONG_EDGE, LONG_EDGE))
+        thumb = image.copy()
+        thumb.thumbnail((THUMB_EDGE, THUMB_EDGE))
+        return _jpeg(image), _jpeg(thumb), image.width, image.height
+    except Exception:
+        raise AppError(422, "That file is not an image this app can read.") from None
 
 
 def _write(key: str, data: bytes) -> None:
