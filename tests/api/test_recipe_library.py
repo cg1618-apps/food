@@ -124,6 +124,18 @@ def test_search_matches_name_slots_and_aliases_and_returns_a_recipe_once(client)
     assert names(client, q="nothing") == []
 
 
+def test_search_treats_like_wildcards_as_literal_characters(client):
+    # Rows that contain none of the characters are what let "%" and "_"
+    # match everything if they reach LIKE unescaped.
+    create(client, name_cn="紅燒肉", aliases=["東坡肉"])
+    create(client, name_cn="100% 果汁", aliases=["a_b"])
+    create(client, name_cn="斜線", name_en="back\\slash")
+    assert names(client, q="%") == ["100% 果汁"]
+    assert names(client, q="_") == ["100% 果汁"]
+    assert names(client, q="\\") == ["斜線"]
+    assert names(client, q="燒") == ["紅燒肉"]  # the mirror: an ordinary term still matches
+
+
 @pytest.mark.parametrize(
     "param, key",
     [

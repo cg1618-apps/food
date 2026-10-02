@@ -35,6 +35,7 @@ from app.models import (
 )
 from app.schemas.recipe import LIST_FIELDS
 from app.services.hierarchy import MAX_DEPTH
+from app.services.search import ESCAPE, contains
 
 # The id lists a recipe carries, the relationship each fills, the model it
 # names, and the word a 422 uses for it.
@@ -242,17 +243,17 @@ def search(
     query = _summary_loaded(db.query(Recipe))
 
     if q:
-        term = f"%{q.strip()}%"
+        term = contains(q)
         alias_match = (
             select(RecipeAlias.recipe_id)
-            .where(func.lower(RecipeAlias.value).like(func.lower(term)))
+            .where(func.lower(RecipeAlias.value).like(func.lower(term), escape=ESCAPE))
             .scalar_subquery()
         )
         query = query.filter(
             or_(
-                Recipe.name_cn.ilike(term),
-                Recipe.name_en.ilike(term),
-                Recipe.name_alt.ilike(term),
+                Recipe.name_cn.ilike(term, escape=ESCAPE),
+                Recipe.name_en.ilike(term, escape=ESCAPE),
+                Recipe.name_alt.ilike(term, escape=ESCAPE),
                 Recipe.id.in_(alias_match),
             )
         )

@@ -147,7 +147,7 @@ the entire failure.
 | `tests/api/test_recipe_model.py` | every named recipe constraint, each refusal with its mirror; SET NULL on a version's parent; CASCADE and RESTRICT on delete |
 | `tests/api/test_recipe_crud.py` | the recipe round trip, `PATCH` list semantics, enums, sources, the version rule, delete refusals and stale counts |
 | `tests/api/test_recipe_lines.py` | line targets, the claimed-type refusal, the cycle guard, stub creation and reuse |
-| `tests/api/test_recipe_library.py` | the list's search and "any of" filters, creators, and the query count |
+| `tests/api/test_recipe_library.py` | the list's search (wildcards literal) and "any of" filters, creators, and the query count |
 | `tests/api/test_ingredient_used_in.py` | "used in" over descendants, the list filter agreeing with it, the delete refusal, the query count |
 | `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, ordering after the target's rows, the fingerprint and its 409, refusals |
 | `tests/test_seed_migration.py` | the seeds, and the storage migration's copy and lossy downgrade, on a scratch database |

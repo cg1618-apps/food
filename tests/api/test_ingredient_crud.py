@@ -67,6 +67,21 @@ def test_search_matches_any_name_slot_and_aliases_once(client, fallback_category
     assert [row["name_cn"] for row in by_english] == ["洋蔥"]
 
 
+def test_search_treats_like_wildcards_as_literal_characters(client, fallback_category):
+    # The other rows contain neither character, so an unescaped "%" or "_"
+    # would return them too.
+    for body in (
+        {"name_cn": "青蔥", "aliases": ["蔥花"]},
+        {"name_cn": "可可 70%", "aliases": ["dark_chocolate"]},
+    ):
+        client.post("/api/edit/ingredients", json={**body, "category_id": fallback_category.id})
+    for q in ("%", "_"):
+        found = client.get("/api/ingredients", params={"q": q}).json()
+        assert [row["name_cn"] for row in found] == ["可可 70%"], q
+    found = client.get("/api/ingredients", params={"q": "蔥"}).json()
+    assert [row["name_cn"] for row in found] == ["青蔥"]
+
+
 def test_an_ingredient_with_children_cannot_be_deleted(client, fallback_category):
     parent = client.post(
         "/api/edit/ingredients", json={"name_cn": "醬油", "category_id": fallback_category.id}

@@ -146,7 +146,8 @@ duration that is not positive, a minimum above the maximum, the same
 entry naming no cooking method. A preservation row with only a maximum is valid.
 
 `q` matches any of the three name slots or any alias, case-insensitively, as a
-substring. The alias arm is a subquery rather than a join, so an ingredient
+substring. It is literal text: `%`, `_` and `\` match themselves, not any
+character (`app/services/search.py`). The alias arm is a subquery rather than a join, so an ingredient
 matching two of its own aliases comes back once.
 
 **`DELETE` takes `aliases`, `preservation`, `heating` and `links` as required
@@ -257,8 +258,8 @@ in source order, skipping sources with none), `time`, `written_up` and `cover`
 
 Query parameters:
 
-- `q` — any name slot or any alias, case-insensitively, as a substring. The
-  alias arm is a subquery, so a recipe matching two of its aliases comes back
+- `q` — any name slot or any alias, case-insensitively, as a substring, with
+  `%`, `_` and `\` matched literally as on the ingredient list. The alias arm is a subquery, so a recipe matching two of its aliases comes back
   once;
 - `course_id`, `status`, `kind`, `label_id`, `method_id`, `equipment_id`,
   `creator`, `ingredient_id` — each may repeat, and a repeated parameter means

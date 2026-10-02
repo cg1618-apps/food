@@ -31,6 +31,7 @@ from app.models import (
     RecipeLine,
 )
 from app.services.hierarchy import check_parent, is_descendant
+from app.services.search import ESCAPE, contains
 
 
 def _loaded(query):
@@ -74,21 +75,21 @@ def search(
     query = _loaded(db.query(Ingredient))
 
     if q:
-        term = f"%{q.strip()}%"
+        term = contains(q)
         # The alias arm is a subquery rather than a join, so that an ingredient
         # matching on two aliases comes back once. A join would duplicate the
         # row per matching alias, and the duplicate only appears for rows with
         # several aliases - which is exactly the data a small test set lacks.
         alias_match = (
             select(IngredientAlias.ingredient_id)
-            .where(func.lower(IngredientAlias.value).like(func.lower(term)))
+            .where(func.lower(IngredientAlias.value).like(func.lower(term), escape=ESCAPE))
             .scalar_subquery()
         )
         query = query.filter(
             or_(
-                Ingredient.name_cn.ilike(term),
-                Ingredient.name_en.ilike(term),
-                Ingredient.name_alt.ilike(term),
+                Ingredient.name_cn.ilike(term, escape=ESCAPE),
+                Ingredient.name_en.ilike(term, escape=ESCAPE),
+                Ingredient.name_alt.ilike(term, escape=ESCAPE),
                 Ingredient.id.in_(alias_match),
             )
         )
