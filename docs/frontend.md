@@ -230,7 +230,9 @@ endpoints' `q` - every name slot and alias, on the server - 250 ms after the
 typing stops: `sources` is `['ingredient']`, `['recipe']` or both, `exclude`
 keeps a row out (a recipe is not its own version), and `allowNew` adds
 「新增 'xxx'」 when no result's name equals the typed text exactly
-(`lib/typeahead.js`). Up / Down move, Enter picks - and never submits the form
+(`lib/typeahead.js`) - and only once the search has answered, so a quick Enter
+cannot make a stub named after something the library already has. Up / Down
+move, Enter picks - and never submits the form
 around it - Escape closes the list without closing a dialog it sits in. It only
 picks: `onSelect(option)` hands the caller `{ type, id, label, needsDetail,
 kind }` and the box clears. `Picked`, from the same file, is how every caller

@@ -96,17 +96,19 @@ export default function Typeahead({
   )
 
   const typed = query.trim()
+  const searching =
+    typed !== settled || (searchIngredients && ingredients.isFetching) || (searchRecipes && recipes.isFetching)
+  // 「新增」 waits for the search to answer: offered before it, a quick Enter
+  // makes a stub named after something the library already has.
   const options = typed
     ? mergeResults({
         ingredients: searchIngredients ? ingredients.data : [],
         recipes: searchRecipes ? recipes.data : [],
         query: typed,
         exclude,
-        allowNew,
+        allowNew: allowNew && !searching,
       })
     : []
-  const searching =
-    typed !== settled || (searchIngredients && ingredients.isFetching) || (searchRecipes && recipes.isFetching)
   const showList = open && typed !== ''
   const activeIndex = active < options.length ? active : -1
 

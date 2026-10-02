@@ -103,6 +103,24 @@ describe('Typeahead', () => {
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ type: 'new', label: '薑末' }))
   })
 
+  // Found driving the app: 「新增」 was offered the moment the typing
+  // settled, before the search answered, so a quick Enter made a stub named
+  // after an ingredient that already exists.
+  it('does not offer 新增 until the search has answered', async () => {
+    let answer
+    handler = ({ url }) =>
+      url.startsWith('/api/ingredients?')
+        ? new Promise((resolve) => (answer = () => resolve(json([{ ...GINGER, display_name: '薑母', name_cn: '薑母' }]))))
+        : json([])
+    wrap(<Typeahead label="材料" sources={['ingredient']} onSelect={() => {}} allowNew />)
+    fireEvent.change(screen.getByRole('combobox', { name: '材料' }), { target: { value: '薑' } })
+    await waitFor(() => expect(answer).toBeTypeOf('function'))
+    expect(screen.queryByRole('option', { name: /新增/ })).toBeNull()
+    await act(async () => answer())
+    expect(await screen.findByRole('option', { name: /新增.*薑/ })).toBeTruthy()
+    expect(screen.getByRole('option', { name: /薑母/ })).toBeTruthy()
+  })
+
   it('tells the caller what is typed and not yet picked, and clears it on a pick', async () => {
     handler = ({ url }) => (url.startsWith('/api/ingredients?') ? json([GINGER]) : json([]))
     const onQueryChange = vi.fn()
