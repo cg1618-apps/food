@@ -113,6 +113,12 @@ is load-bearing and says so. Some examples worth knowing about:
   prose field the preview did not list, so its plan really differs; its mirror
   merges with the fresh preview's fingerprint, so a guard refusing every merge
   cannot pass it.
+- An unknown id in a body is refused twice over: by the service, which names
+  the id, and by the foreign key behind it, which answers 422 with a generic
+  sentence. A refusal test asserting only the status passes with the service
+  check deleted, so `test_a_version_of_a_missing_recipe_is_refused` and the
+  recipe gallery's unknown-image test assert the id in `detail`, with a real
+  row beside the missing one and its permitted mirror.
 - The cycle tests come in a set: a self-reference, a two-recipe cycle, a
   three-recipe cycle, and `test_a_chain_without_a_cycle_is_fine`. The last is
   the mirror; without it a guard refusing every sub-recipe line would pass the
@@ -137,11 +143,11 @@ the entire failure.
 | `tests/api/test_category_crud.py`, `test_label_crud.py` | the same round trip for categories and labels |
 | `tests/api/test_ingredient_storage.py` | storage state and range, heating, links, rating, the new list filters, the delete counts and the 409 that names the moved one, `/api/vocabularies/fixed` |
 | `tests/api/test_vocabularies.py` | the three vocabularies, parametrised over one factory |
-| `tests/api/test_images.py` | upload, re-encode, deduplication, galleries, deletion, serving |
+| `tests/api/test_images.py` | upload, re-encode, deduplication, ingredient and recipe galleries, an image's owners, deletion, serving |
 | `tests/api/test_recipe_model.py` | every named recipe constraint, each refusal with its mirror; SET NULL on a version's parent; CASCADE and RESTRICT on delete |
 | `tests/api/test_recipe_crud.py` | the recipe round trip, `PATCH` list semantics, enums, sources, the version rule, delete refusals and stale counts |
 | `tests/api/test_recipe_lines.py` | line targets, the claimed-type refusal, the cycle guard, stub creation and reuse |
-| `tests/api/test_recipe_library.py` | the list's search and "any of" filters, creators, the recipe gallery, and the query count |
+| `tests/api/test_recipe_library.py` | the list's search and "any of" filters, creators, and the query count |
 | `tests/api/test_ingredient_used_in.py` | "used in" over descendants, the list filter agreeing with it, the delete refusal, the query count |
 | `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, ordering after the target's rows, the fingerprint and its 409, refusals |
 | `tests/test_seed_migration.py` | the seeds, and the storage migration's copy and lossy downgrade, on a scratch database |

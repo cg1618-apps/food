@@ -220,9 +220,13 @@ def test_a_recipe_gallery_is_set_in_order_and_its_first_image_is_the_cover(clien
 def test_a_recipe_gallery_refuses_an_unknown_image_and_an_unknown_recipe(client):
     image = _upload(client, _png()).json()
     recipe = _recipe(client)
-    assert (
-        client.put(f"/api/edit/recipes/{recipe['id']}/images", json=[{"image_id": 999999}])
-    ).status_code == 422
+    url = f"/api/edit/recipes/{recipe['id']}/images"
+    # The foreign key would answer 422 as well; the id in the detail is what
+    # proves the service refused it. The real image is the mirror.
+    unknown = client.put(url, json=[{"image_id": image["id"]}, {"image_id": 999999}])
+    assert unknown.status_code == 422
+    assert "999999" in unknown.json()["detail"]
+    assert client.put(url, json=[{"image_id": image["id"]}]).status_code == 200
     assert (
         client.put("/api/edit/recipes/999999/images", json=[{"image_id": image["id"]}])
     ).status_code == 404

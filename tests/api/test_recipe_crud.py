@@ -270,8 +270,14 @@ def test_versions_are_listed_from_the_parent_and_from_each_version(client):
 
 
 def test_a_version_of_a_missing_recipe_is_refused(client):
+    # The foreign key would answer 422 too, so the status alone passes with the
+    # service's check deleted: the id in the detail is the service's own. The
+    # real recipe is the mirror - a version of it is permitted.
+    real = create(client, name_cn="real")
     response = client.post("/api/edit/recipes", json={"name_cn": "x", "variant_of_id": 999999})
     assert response.status_code == 422
+    assert "999999" in response.json()["detail"]
+    assert create(client, name_cn="x", variant_of_id=real["id"])["variant_of"]["id"] == real["id"]
 
 
 def test_a_recipe_cannot_be_a_version_of_itself(client):
