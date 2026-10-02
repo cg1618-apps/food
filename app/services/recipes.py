@@ -35,6 +35,7 @@ from app.models import (
 )
 from app.schemas.recipe import LIST_FIELDS
 from app.services.hierarchy import MAX_DEPTH
+from app.services.lookup import fetch_all
 from app.services.search import ESCAPE, contains
 
 # The id lists a recipe carries, the relationship each fills, the model it
@@ -289,24 +290,9 @@ def search(
 # --- validation: everything here runs before anything is written -------------
 
 
-def _fetch_all(db: Session, model, ids: list[int], what: str) -> list:
-    """The rows `ids` name, in that order, or 422 naming the first missing id.
-
-    422 rather than 404: the URL resolved; it is the payload that is wrong.
-    """
-    wanted = list(dict.fromkeys(ids))
-    if not wanted:
-        return []
-    found = {row.id: row for row in db.query(model).filter(model.id.in_(wanted))}
-    missing = [i for i in wanted if i not in found]
-    if missing:
-        raise AppError(422, f"No such {what}: {missing[0]}.")
-    return [found[i] for i in wanted]
-
-
 def _check_course(db: Session, course_id: int | None) -> None:
     if course_id is not None:
-        _fetch_all(db, RecipeCourse, [course_id], "course")
+        fetch_all(db, RecipeCourse, [course_id], "course")
 
 
 def _check_version(db: Session, recipe_id: int | None, variant_of_id: int | None) -> None:
@@ -362,9 +348,9 @@ def _check_line_targets(db: Session, recipe_id: int | None, entries) -> None:
     recipe stops being a question about them.
     """
     ingredient_ids = [e.ingredient_id for e in entries if e.ingredient_id is not None]
-    _fetch_all(db, Ingredient, ingredient_ids, "ingredient")
+    fetch_all(db, Ingredient, ingredient_ids, "ingredient")
     sub_ids = [e.sub_recipe_id for e in entries if e.sub_recipe_id is not None]
-    _fetch_all(db, Recipe, sub_ids, "recipe")
+    fetch_all(db, Recipe, sub_ids, "recipe")
     if recipe_id is None or not sub_ids:
         return
     if recipe_id in sub_ids:
@@ -500,7 +486,7 @@ def _check_and_fetch(db: Session, recipe_id: int | None, lists: dict) -> dict:
     fetched = {}
     for field, (_, model, what) in _LINKED.items():
         if lists.get(field) is not None:
-            fetched[field] = _fetch_all(db, model, lists[field], what)
+            fetched[field] = fetch_all(db, model, lists[field], what)
     if lists.get("lines") is not None:
         _check_line_targets(db, recipe_id, lists["lines"])
     return fetched
