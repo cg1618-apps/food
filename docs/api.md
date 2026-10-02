@@ -60,7 +60,7 @@ malformed body produces.
 
 **A missing row named by the URL is 404; an id inside the request body that
 names no row is 422**, everywhere — a parent, a label, a cooking method, a
-course, a version's original, a line's ingredient or base recipe, a gallery's
+course, a version's original, a line's ingredient or sub-recipe, a gallery's
 `image_id`. The URL resolved; it is the payload that is wrong. The detail
 names the id.
 

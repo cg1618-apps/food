@@ -36,7 +36,7 @@ as they bind this app:
   missing row named by the URL is 404.** Owner decision, 2026-10-02. The URL
   resolved, so the resource exists; it is the payload that is wrong. This
   covers a parent, a label, a cooking method, a course, a version's original,
-  a line's ingredient or base recipe, and a gallery's `image_id` - the last
+  a line's ingredient or sub-recipe, and a gallery's `image_id` - the last
   was 404 until recipes added a third case and one convention had to cover
   all of them. The detail names the id. Rejected: 404 for body ids, which
   reads as "the thing you addressed is gone" when the thing addressed is
@@ -174,7 +174,9 @@ than now — a spec written months ahead describes a system that was imagined.
   says so; it can be cooked alone and appear as a line inside others. The graph
   needs a cycle guard, and "what can I cook" resolves *through* a nested recipe
   rather than treating it as an opaque item. Rejected: a separate table for
-  bases, which would duplicate ingredients, steps and notes.
+  bases, which would duplicate ingredients, steps and notes. A line may nest a
+  `dish` as well as a `base`: `kind` is how the library files a recipe, not a
+  permission, and a dish served inside another (rice under a curry) is real.
 - **Inventory is presence, not stock.** `in_stock` with a free-text quantity and
   notes. Rejected: quantities decremented as you cook, which demands that every
   meal, snack and spill be recorded or the numbers silently stop being true —

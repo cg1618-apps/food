@@ -37,11 +37,13 @@ uploads at once can see each other's filter. An explicit `width * height`
 check against the ceiling after opening would be deterministic and need no
 filter at all.
 
-## `ingredient.updated_at` does not move when only child rows change
+## `updated_at` does not move when only child rows change
 
-Editing only aliases, storage, heating, links, labels or the gallery leaves
-the ingredient's `updated_at` where it was, because no column on `ingredient`
-itself changed. Anything that sorts or reports by "recently edited" will miss
+Editing only an ingredient's aliases, storage, heating, links, labels or
+gallery leaves its `updated_at` where it was, because no column on
+`ingredient` itself changed. Recipes have the same gap: a `PATCH` sending only
+lists (aliases, lines, steps, sources, labels, methods, equipment, courses
+served as) and the gallery `PUT` leave `recipe.updated_at` untouched. Anything that sorts or reports by "recently edited" will miss
 those edits. The service would have to touch the timestamp whenever a list it
 replaces was sent.
 

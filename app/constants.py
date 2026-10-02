@@ -26,7 +26,8 @@ PRESERVATION_STATES = {
 RATINGS = ["S", "A", "B", "C", "D"]
 
 # A dish is eaten; a base - a sauce, a stock, a dough - is cooked to be used
-# inside other recipes, and is what a recipe line's sub_recipe_id names.
+# inside other recipes. The kind is how the library files a recipe, not a rule:
+# a recipe line's sub_recipe_id may name a recipe of either kind.
 RECIPE_KINDS = {"dish": "料理", "base": "基底"}
 
 # How far a recipe has got from "saw it somewhere" to "cook it every week".

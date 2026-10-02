@@ -76,8 +76,8 @@ def build_tree(rows, counts: dict[int, int], node_schema):
     """Assemble a flat list of category rows into a nested structure.
 
     In Python, from one query, because the tree is a few dozen rows. A
-    recursive CTE would be correct and would also be the only recursive query
-    in the codebase, for a result that fits on a screen.
+    recursive CTE would be correct, as the recipe service's are for "used in",
+    but buys nothing for a result that fits on a screen.
 
     Rows whose parent is missing from `rows` become roots rather than
     vanishing. That cannot happen through the API - the foreign key is

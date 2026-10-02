@@ -284,7 +284,7 @@ One ingredient line.
 | `position` | required, unique per recipe (`uq_recipe_line_position`) |
 | `section` | optional heading the line sits under — 醬汁, 醃料 |
 | `ingredient_id` | → `ingredient`, `RESTRICT` |
-| `sub_recipe_id` | → `recipe`, `RESTRICT` — a base recipe used as an ingredient |
+| `sub_recipe_id` | → `recipe`, `RESTRICT` — another recipe used as an ingredient, usually a base; any `kind` is accepted |
 | `amount`, `note` | free text |
 | `is_optional` | default false |
 
@@ -293,7 +293,7 @@ One ingredient line.
 is set; there is no stored discriminator to disagree with them.
 
 **A line may not name its own recipe** (`ck_recipe_line_not_itself`). Longer
-cycles through nested base recipes need a recursive query and are refused on
+cycles through nested recipes need a recursive query and are refused on
 the write path.
 
 The same ingredient may appear on two lines — once for the meat, once for the

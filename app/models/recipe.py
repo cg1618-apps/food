@@ -7,7 +7,7 @@ shape with each other more than with their owners.
 
 Three directions of deletion meet here and they differ on purpose (the table is
 in `docs/data-model.md`): what a recipe OWNS cascades with it; what it NAMES -
-an ingredient, a base recipe, a course, a method, a piece of equipment - is
+an ingredient, a sub-recipe, a course, a method, a piece of equipment - is
 RESTRICT, so nothing in use disappears from under a recipe; and its versions
 are SET NULL, because a version is a complete recipe in its own right.
 """
@@ -232,7 +232,7 @@ class RecipeSource(Base):
 
 
 class RecipeLine(Base):
-    """One ingredient line: an ingredient, or a base recipe, never both.
+    """One ingredient line: an ingredient, or another recipe, never both.
 
     Which kind of line it is comes from which column is set, never from a
     stored discriminator that could disagree with them.
