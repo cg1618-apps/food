@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session
 
 from app import config
 from app.errors import AppError
-from app.models import Image, Ingredient, IngredientImage
+from app.models import Image, Ingredient, IngredientImage, Recipe, RecipeImage
 
 LONG_EDGE = 2000
 THUMB_EDGE = 400
@@ -39,10 +39,11 @@ CHUNK = 1024 * 1024
 # ~50 megapixels: well above any phone camera, far below a bomb.
 MAX_PIXELS = 50_000_000
 
-# (attachment model, owner type name, owner model). Plans 2 and 3 append their
-# gallery tables here; owners() and attachment counts read only this list.
+# (attachment model, owner type name, owner model). Plan 3 appends kitchen
+# notes here; owners() and attachment counts read only this list.
 OWNER_TABLES: list[tuple[type, str, type]] = [
     (IngredientImage, "ingredient", Ingredient),
+    (RecipeImage, "recipe", Recipe),
 ]
 
 

@@ -61,3 +61,27 @@ class IngredientImage(Base):
         UniqueConstraint("ingredient_id", "position", name="uq_ingredient_image_position"),
         UniqueConstraint("ingredient_id", "image_id", name="uq_ingredient_image_once"),
     )
+
+
+class RecipeImage(Base):
+    """One picture in one recipe's gallery. The same shape as IngredientImage."""
+
+    __tablename__ = "recipe_image"
+
+    id = Column(Integer, primary_key=True)
+    recipe_id = Column(
+        Integer, ForeignKey("recipe.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    image_id = Column(
+        Integer, ForeignKey("image.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    position = Column(Integer, nullable=False)
+    focus = Column(String, nullable=True)
+
+    recipe = relationship("Recipe", back_populates="images")
+    image = relationship("Image", passive_deletes="all")
+
+    __table_args__ = (
+        UniqueConstraint("recipe_id", "position", name="uq_recipe_image_position"),
+        UniqueConstraint("recipe_id", "image_id", name="uq_recipe_image_once"),
+    )

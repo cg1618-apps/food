@@ -166,13 +166,16 @@ Each value is `id`, `display_name`, `name_cn`, `name_en`, `sort_order` and
 and names are unique case-insensitively per slot.
 
 **Deleting a value that is in use is a 409 carrying `usage_count`**, answered
-before the database is asked; the `RESTRICT` foreign key is the backstop. Today
-only cooking methods have referents (ingredient heating rows). Courses and
-equipment report zero until recipes exist.
+before the database is asked; the `RESTRICT` foreign key is the backstop. The
+count is the number of `RESTRICT` references: for a course, the recipes filed
+in it (a recipe that only serves as that course does not count, and its link
+goes with the course); for a cooking method, ingredient heating rows plus
+recipes using it; for equipment, recipes using it.
 
 **`GET /api/vocabularies/fixed`** serves every closed list the interface
 renders, as `{value, label}` pairs under `preservation_methods`,
-`preservation_states` and `ratings`, so no component keeps its own copy. These
+`preservation_states`, `ratings`, `recipe_kinds`, `recipe_statuses` and
+`source_platforms`, so no component keeps its own copy. These
 lists are constants in the code and are not editable through the API.
 
 ## Images

@@ -25,11 +25,29 @@ PRESERVATION_STATES = {
 # How good one variety is: the Fruit sheet's grades.
 RATINGS = ["S", "A", "B", "C", "D"]
 
+# A dish is eaten; a base - a sauce, a stock, a dough - is cooked to be used
+# inside other recipes, and is what a recipe line's sub_recipe_id names.
+RECIPE_KINDS = {"dish": "料理", "base": "基底"}
+
+# How far a recipe has got from "saw it somewhere" to "cook it every week".
+RECIPE_STATUSES = {"want_to_try": "想試", "can_cook": "可煮", "regular": "常煮"}
+
+# Where a recipe came from - the platform of one recipe_source row.
+SOURCE_PLATFORMS = {
+    "youtube": "YouTube",
+    "shorts": "Shorts",
+    "website": "網站",
+    "book": "書",
+    "other": "其他",
+}
+
 # Every closed list the frontend renders, with its display label, served by
-# GET /api/vocabularies/fixed so no list is copied into a component. Plan 2
-# appends recipe kinds, statuses and source platforms.
+# GET /api/vocabularies/fixed so no list is copied into a component.
 FIXED_VOCABULARIES = {
     "preservation_methods": [{"value": m, "label": m} for m in PRESERVATION_METHODS],
     "preservation_states": [{"value": k, "label": v} for k, v in PRESERVATION_STATES.items()],
     "ratings": [{"value": r, "label": r} for r in RATINGS],
+    "recipe_kinds": [{"value": k, "label": v} for k, v in RECIPE_KINDS.items()],
+    "recipe_statuses": [{"value": k, "label": v} for k, v in RECIPE_STATUSES.items()],
+    "source_platforms": [{"value": k, "label": v} for k, v in SOURCE_PLATFORMS.items()],
 }
