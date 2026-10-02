@@ -289,6 +289,30 @@ so a later reader can tell a decision from an accident. These are food's.
 - **A library table's name cell is a link**, where media makes the whole row
   clickable. A link opens in a new tab and is reached by Tab; a clickable row
   is neither.
+- **A gallery, not one image per role.** media's `ImagePicker` holds a
+  single picture for an owner's role and attaches it the moment it is picked.
+  food's recipes, ingredients and notes each hold an ordered gallery whose
+  first picture is the cover, so `GalleryPicker` is a list - several uploads at
+  once, reorder, a focus per picture - and it attaches nothing itself: the form
+  PUTs the whole gallery with its save, after the first save for a new owner.
+  A cancelled form therefore leaves at most an unused picture in the library
+  and changes no owner, where media's attach-on-pick changes the owner before
+  Save is pressed.
+- **The typeahead searches the server and is driven from the keyboard**, where
+  media's `ComboBox` filters a list it was handed and handles only Escape and
+  Tab. A recipe line may name any ingredient or any recipe, so handing the box
+  a list means downloading both libraries for every line; the list endpoints'
+  `q` already matches every name slot and alias. Arrow keys and Enter are what
+  make filling twenty lines bearable, and Enter must never submit the form, so
+  the box owns it. 「新增」 is offered only when nothing matches exactly, where
+  media's CastEditor always offers "create new" beside the matches: there a
+  create is a plain insert that would split one character into two, here the
+  server folds a name it already knows into the existing ingredient, so the
+  option is shown only when it can mean something new.
+- **One delete dialog for every kind**, configured per kind
+  (`lib/deleteTargets.js`), where media has a dialog per page. Every delete
+  here has the same contract - cascade counts echoed back, `field`/`actual` on
+  a stale 409, `used_in` on a refusal - so the differences are data, not code.
 
 ### The one that is not a divergence but reads like one
 

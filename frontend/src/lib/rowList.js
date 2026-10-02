@@ -1,0 +1,87 @@
+// Frontend: the list operations every sub-row editor shares.
+//
+// media's CastEditor shape - a controlled list the parent owns, edited by
+// whole-list replacement, reordered by Move up / Move down rather than a drag
+// library - with the operations pulled out as one pure reducer so that every
+// list on every form (lines, steps, sources, storage, heating, links, the
+// gallery) moves, removes and inserts the same way, and is tested once.
+//
+// Each row carries a `_key` that never leaves the browser: React needs a key
+// that survives a reorder, and an index is exactly the key that does not. The
+// payload builders pick their fields by name, so `_key` is never sent.
+
+let counter = 0
+
+/** A key unique for the life of the page. */
+export function nextKey() {
+  counter += 1
+  return `row-${counter}`
+}
+
+/** The row with a `_key`, keeping one it already has. */
+export function keyed(row) {
+  return row._key ? row : { ...row, _key: nextKey() }
+}
+
+/**
+ * Apply one action to a list of rows and return the new list. Never mutates.
+ *
+ *   { type: 'add', row }              append
+ *   { type: 'insert', rows }          append several (the step paste)
+ *   { type: 'update', index, patch }  merge `patch` into one row
+ *   { type: 'remove', index }
+ *   { type: 'move', index, delta }    swap with the neighbour; a move off
+ *                                     either end is a no-op, not a wrap
+ */
+export function rowsReducer(rows, action) {
+  switch (action.type) {
+    case 'add':
+      return [...rows, keyed(action.row)]
+    case 'insert':
+      return [...rows, ...action.rows.map(keyed)]
+    case 'update':
+      return rows.map((row, i) => (i === action.index ? { ...row, ...action.patch } : row))
+    case 'remove':
+      return rows.filter((_, i) => i !== action.index)
+    case 'move': {
+      const j = action.index + action.delta
+      if (j < 0 || j >= rows.length || action.index < 0 || action.index >= rows.length) return rows
+      const next = [...rows]
+      ;[next[action.index], next[j]] = [next[j], next[action.index]]
+      return next
+    }
+    default:
+      throw new Error(`Unknown row action: ${action.type}`)
+  }
+}
+
+/** '' -> null, and anything else trimmed: an empty field is an absent value. */
+export function blankToNull(value) {
+  if (value === null || value === undefined) return null
+  const text = String(value).trim()
+  return text === '' ? null : text
+}
+
+/** A number input's string as an integer, or null when it is empty. */
+export function numberOrNull(value) {
+  if (value === null || value === undefined || String(value).trim() === '') return null
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * Aliases as typed into one box: split on commas (ASCII or Chinese) and the
+ * enumeration comma, trimmed, empties dropped. The server refuses a duplicate,
+ * so a case-insensitive repeat is dropped here rather than sent to fail.
+ */
+export function splitAliases(text) {
+  const seen = new Set()
+  const out = []
+  for (const part of String(text ?? '').split(/[,，、\n]/)) {
+    const value = part.trim()
+    if (!value || seen.has(value.toLowerCase())) continue
+    seen.add(value.toLowerCase())
+    out.push(value)
+  }
+  return out
+}

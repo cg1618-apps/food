@@ -25,9 +25,9 @@ section a page belongs to - its edit pages included - is marked with
 | 設定 (`/settings` redirects here) | `/edit/settings` | Access |
 | Image library | `/edit/images` | Access |
 
-The recipe and note detail pages, the recipe and note forms and the image
-library render a heading and an empty note until their real versions land; 設定 hosts
-the categories-and-labels editor. Any other path is a "page not found" page,
+The recipe and note detail pages and the image library render a heading and
+an empty note until their real versions land; 設定 hosts the
+categories-and-labels editor. Any other path is a "page not found" page,
 not a redirect.
 
 **The first release's paths redirect**, query string included, so bookmarks
@@ -108,9 +108,89 @@ library, with a count shown next to the filter. Without the count the backlog
 is invisible and stubs accumulate forever.
 
 **Delete is a dialog, not a page**, and not `window.confirm` — it has to show
-counts and to correct itself. It sends the counts it displayed back as required
-parameters; on a 409 it takes the server's `actual`, says so, and re-offers the
-button. Asking for a reload is what a prose-only error body forces.
+counts and to correct itself. One component, `components/forms/DeleteDialog.jsx`,
+deletes every kind of row (`<DeleteDialog kind="recipe" | "ingredient" | "note"
+id name onClose onDeleted? />`; `onDeleted` defaults to the kind's library), and
+`lib/deleteTargets.js` says per kind which `cascade` counts it shows and echoes,
+which block, and which reads go stale:
+
+- it fetches `GET .../{id}/cascade` and sends the counts it displayed back as
+  the delete's required parameters;
+- on a 409 carrying `field` and `actual` it takes the server's number for that
+  field, says so, and re-offers the button (「確認刪除」). Asking for a reload is
+  what a prose-only error body forces;
+- a blocking count (`used_in` on a recipe; `children` and `recipes` on an
+  ingredient) is said up front in words, but the button stays: the refusal is
+  the server's, and its 409 lists the recipes in `used_in`, shown as links;
+- a kitchen note has no cascade, so its dialog is the plain question.
+
+## Forms
+
+`/edit/recipes/...`, `/edit/ingredients/...` and `/edit/notes/...` are one page
+per entity, in sections on the reading column (`Section`), ending in
+`components/forms/FormActions.jsx`: the error, then 儲存 / 取消 / 刪除. **The
+error sits directly above the save button** with the server's own sentence -
+a 409's or a 422's `detail` - because that is where the eye is when a save
+did not work. A successful save goes to the detail page.
+
+- **Loading an existing row** sets the form's state during render, keyed on the
+  row's id (React's "adjusting state when a prop changes"), so there is no
+  flash of the empty form and a background refetch never discards typing.
+- **Saving** is `hooks/useOwnerSave.js`: POST or PATCH the row, then PUT the
+  gallery to `.../{id}/images` - after the first save for a new row, since
+  there is no id before it, and on an edit only when the gallery changed. If
+  the row saved and the gallery did not, the new id is kept, so 儲存 again
+  PATCHes it rather than creating a second row.
+- **Every list is `components/forms/RowEditor.jsx`**: controlled `rows` /
+  `onChange`, each row with ▲ / ▼ (上移 / 下移) and ✕, an add button under
+  the list, and a render prop for the row's cells (`children(row, { index,
+  update })`). The list operations are one pure reducer, `lib/rowList.js`;
+  each row carries a browser-only `_key` so a reorder keeps React's state with
+  its row, and the payload builders never send it.
+- **Choosing from a short vocabulary** - labels, methods, equipment,
+  serves-as - is `ChipPicker.jsx`, toggle chips with `aria-pressed`.
+- **Aliases are one box**, split on any comma or 、 (`splitAliases`): they are
+  unordered and never displayed, so a row editor's ordering would be noise.
+
+**The typeahead** (`components/forms/Typeahead.jsx`) searches the list
+endpoints' `q` - every name slot and alias, on the server - 250 ms after the
+typing stops: `sources` is `['ingredient']`, `['recipe']` or both, `exclude`
+keeps a row out (a recipe is not its own version), and `allowNew` adds
+「新增 'xxx'」 when no result's name equals the typed text exactly
+(`lib/typeahead.js`). Up / Down move, Enter picks - and never submits the form
+around it - Escape closes the list without closing a dialog it sits in. It only
+picks: `onSelect(option)` hands the caller `{ type, id, label, needsDetail,
+kind }` and the box clears. `Picked`, from the same file, is how every caller
+shows the choice in its place, with 待補 for a stub and 更換 to search again.
+
+**Recipe lines** hold a `target` - an ingredient, a recipe, or `{ type: 'new',
+label }` - from which `lib/recipeLines.js` builds exactly one of
+`ingredient_id`, `sub_recipe_id` or `new_ingredient` per line (a typed name in
+Han characters is `name_cn`, otherwise `name_en`). A 新增 line shows 待補 until
+the save creates the stub. An entirely blank line is dropped; one with an
+amount but nothing chosen is refused by number. Sections are free text with
+the recipe's own sections offered (a `datalist` shared by lines and steps); a
+new line or step starts in the section of the one above it.
+
+**Steps** take 「貼上多行」 too: a dialog whose text becomes one step per
+non-blank line with the leading numbering stripped (`lib/steps.js` -
+`1.`, `1)`, `1、`, `(1)`, `①`, `一、`, `第一步`, `Step 1:`, bullets), because the
+page numbers steps itself.
+
+**Storage rows** show a min and a max. A row stored as one number (min = max,
+the i2storage migration's shape) keeps its min following the max until the
+min is edited itself - `pages/edit/storageDuration.js`'s rule, applied live.
+**Heating rows** show the °F beside the °C as it is typed (`lib/temperature.js`).
+
+**The gallery** (`components/forms/GalleryPicker.jsx`) is controlled and saves
+nothing itself: `value` is `[{ image_id, url, thumb_url, focus }]`, first is
+the cover (marked 封面). 上傳圖片 takes several files, uploading one at a time
+so a bad file fails alone with its own message; uploading reaches the library
+at once, attaching waits for 儲存. 從圖庫選 opens the library in a dialog,
+「只看未使用」 on by default, 30 a page; several can be added before 完成, and
+one already in the gallery is marked and can be taken out. Each picture has
+◀ / ▶, 焦點 (`FocusPicker.jsx`: click or drag, arrow keys nudge 1% / 10%,
+previewed as a cover and a thumbnail) and 移除.
 
 ## Layers
 
