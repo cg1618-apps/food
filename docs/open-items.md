@@ -44,3 +44,19 @@ the ingredient's `updated_at` where it was, because no column on `ingredient`
 itself changed. Anything that sorts or reports by "recently edited" will miss
 those edits. The service would have to touch the timestamp whenever a list it
 replaces was sent.
+
+## An unknown id inside a request body is 404 in one place and 422 in another
+
+A gallery `PUT` naming an image that does not exist answers 404; a heating row
+naming a cooking method that does not exist answers 422. Both are "the body
+refers to something that is not there", and one convention should cover both
+before recipe lines add a third case. 422 reads more naturally - the URL
+resolved, the payload was wrong - but changing the gallery route is a contract
+change for its one caller.
+
+## The detail page and category counts are stale after a save
+
+After an ingredient is saved, its detail page and the category counts keep
+showing the values from before the save until the page is reloaded. The
+form's create and update mutations invalidate only the ingredient list, not
+the detail query or the category tree.
