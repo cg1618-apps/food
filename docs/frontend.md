@@ -25,9 +25,8 @@ section a page belongs to - its edit pages included - is marked with
 | 設定 (`/settings` redirects here) | `/edit/settings` | Access |
 | Image library | `/edit/images` | Access |
 
-The recipe and note detail pages and the image library render a heading and
-an empty note until their real versions land; 設定 hosts the
-categories-and-labels editor. Any other path is a "page not found" page,
+The image library renders a heading and an empty note until its real
+version lands; 設定 hosts the categories-and-labels editor. Any other path is a "page not found" page,
 not a redirect.
 
 **The first release's paths redirect**, query string included, so bookmarks
@@ -123,6 +122,61 @@ which block, and which reads go stale:
   ingredient) is said up front in words, but the button stays: the refusal is
   the server's, and its 409 lists the recipes in `used_in`, shown as links;
 - a kitchen note has no cascade, so its dialog is the plain question.
+
+## Detail pages
+
+`/recipes/:id`, `/ingredients/:id` and `/notes/:id` are one reading column
+each, built from `components/layout/Detail.jsx`: `DetailStatus` (loading; a
+404 as "not found" with a link back to the library; any other error),
+`Prose` (written notes with their line breaks, no markdown), `LabelLinks`
+(each label a link to its library filtered by it), `RecipeLinks` and
+`DetailActions` (編輯, then 刪除 through `DeleteDialog`). Pictures are
+`components/ui/Gallery.jsx`: the first image large, the rest a strip of
+thumbnails that swap it in place, every one cropped at its focus.
+
+**A section with nothing in it is not drawn** - no heading over an empty
+list. A recipe saved only as a bookmark is a short page, not a page of
+empties.
+
+- **Recipe**: course (a link to the library filtered by it), 基底 for a
+  base, 也可以當作, 書籤 when not written up; names; a meta line of servings,
+  time, methods and equipment; the **status, changed in place**; labels;
+  description; 來源 (platform, creator and title, linked when there is a URL);
+  其他版本 (`lib/versions.js`: the original first, marked 原版, then the
+  siblings, never the recipe itself); 材料 and 步驟 grouped by section
+  (`lib/sections.js`: one block per section in first-use order, rows keeping
+  their order; steps numbered through the whole recipe); 保存; 筆記; 用在
+  (the recipes naming a base directly). A line links to its ingredient or
+  sub-recipe; an optional line is drawn faint with （可省略）; a stub
+  ingredient carries 待補.
+- **The status change** is `PATCH /api/edit/recipes/{id}` with `{status}`
+  alone. The 想試 / 可煮 / 常煮 toggle shows the chosen value while the
+  request runs and the stored one again, with the server's sentence, if it
+  fails; success invalidates every recipe read.
+- **Ingredient**: category (`/ingredients?category=<id>`) and, for a
+  variety, its parent; names, rating, 待補; aliases; how many recipes use it
+  and how many varieties it has; labels. A stub adds a 待補 note linking to
+  its form. Then 說明, 挑選, 品種 (each child with its rating and where it is
+  bought - the full row's children carry `sourcing_notes` for this), 哪裡買,
+  保存, 加熱 (°C with the °F beside it, 要預熱, 中途翻面), 參考連結, 用在.
+- **保存 is a state x method grid** (`lib/storageGrid.js`): rows are the
+  states and columns the methods, both in the fixed vocabularies' order, and
+  only those in use - a fridge-only ingredient is one column, not seven. A
+  cell is its range (`formatDays`) and its notes; the general preservation
+  notes follow the grid.
+- **Note**: title, kind, the link shown by its host, labels, body, pictures.
+
+**Merge** is 「合併到…」 on the ingredient page,
+`components/modals/MergeDialog.jsx`: pick the target with the Typeahead
+(ingredients, never itself); read the preview in words
+(`lib/mergePreview.js` - counts that move, names that become aliases, and in
+a warning block the storage rows and notes the target already has and so
+drops); 合併 posts `{into, fingerprint}`. If either ingredient changed since
+the preview, the server's 409 carries a fresh preview: it replaces the one
+shown, the dialog says it changed, and the button becomes 確認合併. On
+success the reads a merge moves are marked stale and the page goes to the
+target - the source no longer exists. The dialog's body keeps room for the
+result list, which would otherwise be clipped by the body's scroll.
 
 ## Forms
 

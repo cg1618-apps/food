@@ -37,9 +37,7 @@ afterEach(() => {
 describe('every page has a route', () => {
   it.each([
     ['/recipes', '食譜'],
-    ['/recipes/1', '食譜'],
     ['/notes', '筆記'],
-    ['/notes/1', '筆記'],
     ['/edit/recipes/new', '新增食譜'],
     ['/edit/recipes/1', '編輯食譜'],
     ['/edit/notes/new', '新增筆記'],
@@ -50,6 +48,15 @@ describe('every page has a route', () => {
   ])('%s renders its page', (path, heading) => {
     expect(renderAt(path)).toBe(path)
     expect(screen.getByRole('heading', { level: 1, name: heading })).toBeTruthy()
+  })
+})
+
+// The detail pages fetch before they have a heading; their content is
+// pages/detail/details.test.jsx's. Here only that the route is theirs.
+describe('every detail page has a route', () => {
+  it.each(['/recipes/1', '/ingredients/1', '/notes/1'])('%s stays on its route', (path) => {
+    expect(renderAt(path)).toBe(path)
+    expect(screen.queryByRole('heading', { name: '找不到這一頁' })).toBeNull()
   })
 })
 
