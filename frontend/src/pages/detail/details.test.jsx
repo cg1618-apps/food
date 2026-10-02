@@ -207,6 +207,26 @@ describe('the recipe page', () => {
     )
   })
 
+  // The PATCH answers with the saved recipe, and that is what the page shows -
+  // not the old status again when the refetch after it fails.
+  it('shows the saved status even when the refetch after it fails', async () => {
+    let reads = 0
+    handler = ({ url, method }) => {
+      if (method === 'PATCH') return json({ ...RECIPE, status: 'regular' })
+      if (url === '/api/recipes/5') {
+        reads += 1
+        return reads === 1 ? json(RECIPE) : json({ detail: 'down' }, 500)
+      }
+      return null
+    }
+    renderAt('/recipes/5')
+    const group = await screen.findByRole('group', { name: '狀態' })
+    fireEvent.click(await within(group).findByRole('button', { name: '常煮' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
+    await waitFor(() => expect(reads).toBe(2))
+    expect(within(group).getByRole('button', { name: '常煮' }).getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('says so, and shows the stored status again, when the change fails', async () => {
     handler = ({ url, method }) => {
       if (method === 'PATCH') return json({ detail: '壞掉了' }, 500)

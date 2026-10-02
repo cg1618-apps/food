@@ -4,10 +4,12 @@
 // new recipe's gallery PUT only after the POST has answered with an id.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AppRoutes from '../../routes'
+import Dialog from '../ui/Dialog'
 import DeleteDialog from './DeleteDialog'
 import Typeahead from './Typeahead'
 
@@ -46,8 +48,7 @@ function LocationProbe() {
   return <output data-testid="location">{pathname}</output>
 }
 
-function wrap(ui, path = '/') {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+function wrap(ui, path = '/', client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
@@ -102,6 +103,17 @@ describe('Typeahead', () => {
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ type: 'new', label: '薑末' }))
   })
 
+  it('tells the caller what is typed and not yet picked, and clears it on a pick', async () => {
+    handler = ({ url }) => (url.startsWith('/api/ingredients?') ? json([GINGER]) : json([]))
+    const onQueryChange = vi.fn()
+    wrap(<Typeahead label="材料" sources={['ingredient']} onSelect={() => {}} onQueryChange={onQueryChange} />)
+    const box = screen.getByRole('combobox', { name: '材料' })
+    fireEvent.change(box, { target: { value: '薑' } })
+    expect(onQueryChange).toHaveBeenLastCalledWith('薑')
+    fireEvent.click(await screen.findByRole('option', { name: /薑\s*Ginger/ }))
+    expect(onQueryChange).toHaveBeenLastCalledWith('')
+  })
+
   it('does not submit the form around it on Enter', async () => {
     const onSubmit = vi.fn((event) => event.preventDefault())
     wrap(
@@ -114,7 +126,86 @@ describe('Typeahead', () => {
   })
 })
 
+describe('Dialog', () => {
+  function Opener() {
+    const [open, setOpen] = useState(false)
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)}>
+          打開
+        </button>
+        {open ? (
+          <Dialog title="測試" onClose={() => setOpen(false)} footer={<button type="button">最後</button>}>
+            <button type="button">第一</button>
+          </Dialog>
+        ) : null}
+      </>
+    )
+  }
+
+  it('keeps Tab inside itself and gives focus back to its opener on close', () => {
+    wrap(<Opener />)
+    const opener = screen.getByRole('button', { name: '打開' })
+    opener.focus()
+    fireEvent.click(opener)
+    const first = screen.getByRole('button', { name: '第一' })
+    const last = screen.getByRole('button', { name: '最後' })
+
+    last.focus()
+    fireEvent.keyDown(last, { key: 'Tab' })
+    expect(document.activeElement).toBe(first)
+    fireEvent.keyDown(first, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(last)
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(opener)
+  })
+
+  it('is drawn outside the form that opened it', () => {
+    wrap(
+      <form>
+        <Dialog title="測試" onClose={() => {}}>
+          <input aria-label="框" />
+        </Dialog>
+      </form>,
+    )
+    expect(screen.getByRole('dialog').closest('form')).toBeNull()
+  })
+
+  it('ignores Escape and the backdrop while busy', () => {
+    const onClose = vi.fn()
+    wrap(
+      <Dialog title="測試" onClose={onClose} busy>
+        <p>x</p>
+      </Dialog>,
+    )
+    fireEvent.keyDown(document, { key: 'Escape' })
+    const backdrop = screen.getByRole('dialog').parentElement
+    fireEvent.mouseDown(backdrop)
+    fireEvent.click(backdrop)
+    expect(onClose).not.toHaveBeenCalled()
+  })
+})
+
 describe('DeleteDialog', () => {
+  it('cannot be dismissed while the delete is running', async () => {
+    let finish
+    handler = ({ url, method }) => {
+      if (url === '/api/recipes/5/cascade') return json({ aliases: 0, sources: 0, lines: 0, steps: 0, used_in: 0 })
+      if (method === 'DELETE') return new Promise((resolve) => (finish = () => resolve(json(null, 204))))
+      return json([])
+    }
+    const onClose = vi.fn()
+    wrap(<DeleteDialog kind="recipe" id={5} name="x" onClose={onClose} onDeleted={() => {}} />)
+    await screen.findByText(/刪除後就找不回來了/)
+    fireEvent.click(screen.getByRole('button', { name: '刪除' }))
+    await screen.findByRole('button', { name: '刪除中…' })
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+    await act(async () => finish())
+  })
+
   it('sends the counts it showed, takes the server number on a stale 409, and confirms again', async () => {
     let stale = true
     handler = ({ url, method }) => {
@@ -251,6 +342,44 @@ describe('RecipeForm', () => {
     expect(writes[1].body).toEqual([{ image_id: 31, focus: null }])
   })
 
+  it('refuses to save a line whose name was typed but never picked', async () => {
+    wrap(<AppRoutes />, '/edit/recipes/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    fireEvent.click(screen.getByRole('button', { name: /加一行材料/ }))
+    fireEvent.change(screen.getByRole('combobox', { name: '材料 1' }), { target: { value: '紫蘇' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/第 1 行.*紫蘇.*還沒選/)
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
+  })
+
+  it('refuses to save a version-of that was typed but never picked', async () => {
+    wrap(<AppRoutes />, '/edit/recipes/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    fireEvent.change(screen.getByRole('combobox', { name: '是哪道食譜的另一版' }), { target: { value: '高湯' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/另一版.*高湯/)
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
+  })
+
+  it('drops a blank source row and marks the category counts stale for a 新增 line', async () => {
+    handler = ({ url, method }) => {
+      if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
+      return json([])
+    }
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    // The fallback category's count is what a stub line moves.
+    client.setQueryData(['/api/ingredient-categories', null], [])
+    wrap(<AppRoutes />, '/edit/recipes/new', client)
+
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    fireEvent.click(screen.getByRole('button', { name: /加一個來源/ }))
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+
+    expect(calls.find((c) => c.method === 'POST').body.sources).toEqual([])
+    expect(client.getQueryState(['/api/ingredient-categories', null]).isInvalidated).toBe(true)
+  })
+
   it('shows the server sentence beside the save button and stays on the form', async () => {
     handler = ({ url, method }) =>
       url === '/api/edit/recipes' && method === 'POST'
@@ -264,5 +393,33 @@ describe('RecipeForm', () => {
       'A recipe cannot use itself, directly or through another recipe.',
     )
     expect(screen.getByTestId('location').textContent).toBe('/edit/recipes/new')
+  })
+})
+
+describe('IngredientForm', () => {
+  const TREE = [{ id: 1, display_name: '預設', is_fallback: true, children: [] }]
+
+  it('refuses to save a parent that was typed but never picked', async () => {
+    handler = ({ url }) => (url === '/api/ingredient-categories' ? json(TREE) : json([]))
+    wrap(<AppRoutes />, '/edit/ingredients/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '三星蔥' } })
+    fireEvent.change(screen.getByRole('combobox', { name: '是哪種食材的品種' }), { target: { value: '青蔥' } })
+    await waitFor(() => expect(screen.getByRole('button', { name: '儲存' }).disabled).toBe(false))
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/品種.*青蔥/)
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
+  })
+
+  it('holds the save button until the categories it must choose from have loaded', async () => {
+    let release
+    handler = ({ url }) =>
+      url === '/api/ingredient-categories'
+        ? new Promise((resolve) => (release = () => resolve(json(TREE))))
+        : json([])
+    wrap(<AppRoutes />, '/edit/ingredients/new')
+    const save = await screen.findByRole('button', { name: /儲存|載入中/ })
+    expect(save.disabled).toBe(true)
+    await act(async () => release())
+    await waitFor(() => expect(screen.getByRole('button', { name: '儲存' }).disabled).toBe(false))
   })
 })

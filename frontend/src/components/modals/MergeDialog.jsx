@@ -3,6 +3,7 @@
 // Three steps in one dialog:
 //
 //   1. pick the target with the Typeahead (ingredients only, never itself);
+//      typed text that matches nothing picked is said, not merged;
 //   2. read the preview - GET .../merge-preview?into=, computed by the same
 //      function the merge runs - in words (lib/mergePreview.js): what moves,
 //      which names become aliases, which storage rows the target already has
@@ -88,6 +89,9 @@ export default function MergeDialog({ ingredient, onClose }) {
   const queryClient = useQueryClient()
   const fixed = useFixedVocabularies()
   const [target, setTarget] = useState(null)
+  // What is typed in the picker and not yet picked: 合併 stays off until a
+  // target is chosen, so say why rather than leave a dead button.
+  const [typed, setTyped] = useState('')
   // The preview the server sent with a 409, which replaces the fetched one.
   const [fresh, setFresh] = useState(null)
   const [error, setError] = useState(null)
@@ -103,6 +107,7 @@ export default function MergeDialog({ ingredient, onClose }) {
 
   function choose(option) {
     setTarget(option)
+    setTyped('')
     setFresh(null)
     setError(null)
   }
@@ -136,6 +141,7 @@ export default function MergeDialog({ ingredient, onClose }) {
       title={`把「${ingredient.display_name}」合併到…`}
       size="md"
       onClose={onClose}
+      busy={busy}
       footer={
         <>
           <Button onClick={onClose} disabled={busy}>
@@ -158,10 +164,14 @@ export default function MergeDialog({ ingredient, onClose }) {
               sources={['ingredient']}
               exclude={{ ingredient: [ingredient.id] }}
               onSelect={choose}
+              onQueryChange={setTyped}
               label="合併到哪個食材"
               placeholder="搜尋要保留的食材…"
               autoFocus
             />
+            {typed.trim() ? (
+              <p className="mt-2 text-text-muted">打了「{typed.trim()}」：從清單選一個要保留的食材，才能合併。</p>
+            ) : null}
           </div>
         )}
 

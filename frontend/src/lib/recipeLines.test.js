@@ -55,6 +55,13 @@ describe('recipe lines', () => {
     expect(() => linesPayload([emptyLine(), { ...emptyLine(), amount: '2 匙' }])).toThrow(/第 2 行/)
   })
 
+  // Text typed into a line's search box and never picked is not a blank line:
+  // dropping it would save the recipe without an ingredient the cook named.
+  it('refuses a line whose name was typed but never picked', () => {
+    expect(() => linesPayload([{ ...emptyLine(), pending: '紫蘇' }])).toThrow(/第 1 行.*還沒選/)
+    expect(linesPayload([{ ...emptyLine(), pending: '   ' }])).toEqual([])
+  })
+
   it('collects sections in first-use order across lists', () => {
     expect(sectionsOf([{ section: '醬汁' }, { section: ' ' }], [{ section: '主料' }, { section: '醬汁' }])).toEqual([
       '醬汁',

@@ -25,7 +25,7 @@ import { ErrorNote, Loading } from '../../components/ui/states'
 import { useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
 import { useOwnerSave } from '../../hooks/useOwnerSave'
 import { galleryChanged, galleryFromImages } from '../../lib/gallery'
-import { blankToNull, keyed, numberOrNull, splitAliases } from '../../lib/rowList'
+import { blankToNull, integerOrNull, keyed, splitAliases } from '../../lib/rowList'
 import { toFahrenheit } from '../../lib/temperature'
 import { flatten } from '../../lib/tree'
 import { reconcileMinDays } from './storageDuration'
@@ -130,6 +130,11 @@ export default function IngredientForm() {
   const [loaded, setLoaded] = useState(null)
   const [error, setError] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  // Typed into the parent box and not picked: refused on save, never dropped.
+  const [parentTyped, setParentTyped] = useState('')
+  // The category select is required and the storage and heating rows' selects
+  // are drawn from these lists: Save waits for them.
+  const vocabulariesReady = Boolean(categories.data && fixed.data && methods.data)
 
   const flatCategories = useMemo(() => flatten(categories.data ?? []), [categories.data])
   // A new ingredient is filed in the fallback category until told otherwise,
@@ -167,14 +172,14 @@ export default function IngredientForm() {
         method: row.method,
         // An empty box is "unknown", which is null - not 0, which the CHECK
         // refuses with a 422 about a field deliberately left blank.
-        duration_min_days: numberOrNull(row.min),
-        duration_max_days: numberOrNull(row.max),
+        duration_min_days: integerOrNull(row.min),
+        duration_max_days: integerOrNull(row.max),
         notes: blankToNull(row.notes),
         sort_order: index,
       })),
       heating: form.heating.map((row) => ({
         method_id: Number(row.method_id),
-        temperature_c: numberOrNull(row.temperature_c),
+        temperature_c: integerOrNull(row.temperature_c),
         duration: blankToNull(row.duration),
         preheat: row.preheat,
         flip: row.flip,
@@ -187,6 +192,12 @@ export default function IngredientForm() {
   async function submit(event) {
     event.preventDefault()
     setError(null)
+    if (!form.parent && parentTyped.trim()) {
+      setError(
+        new Error(`「是哪種食材的品種」打了「${parentTyped.trim()}」，但還沒從清單選：選一個，或把文字清掉。`),
+      )
+      return
+    }
     try {
       const saved = await save({
         id,
@@ -218,6 +229,9 @@ export default function IngredientForm() {
 
       {!isNew && existing.isPending ? <Loading /> : null}
       {!isNew && existing.error ? <ErrorNote error={existing.error} /> : null}
+      {categories.error ? (
+        <ErrorNote error={categories.error}>分類載入失敗，暫時不能儲存：{categories.error.message}</ErrorNote>
+      ) : null}
 
       {isNew || existing.data ? (
         <>
@@ -246,7 +260,14 @@ export default function IngredientForm() {
               <div className="space-y-1 sm:col-span-2">
                 <span className="text-sm font-medium text-text-muted">是哪種食材的品種</span>
                 {form.parent ? (
-                  <Picked label={form.parent.label} onClear={() => setField('parent', null)} clearLabel="移除" />
+                  <Picked
+                    label={form.parent.label}
+                    onClear={() => {
+                      setField('parent', null)
+                      setParentTyped('')
+                    }}
+                    clearLabel="移除"
+                  />
                 ) : (
                   <Typeahead
                     sources={['ingredient']}
@@ -254,6 +275,7 @@ export default function IngredientForm() {
                     placeholder="不是品種就留空"
                     exclude={{ ingredient: id ? [Number(id)] : [] }}
                     onSelect={(option) => setField('parent', { id: option.id, label: option.label })}
+                    onQueryChange={setParentTyped}
                   />
                 )}
               </div>
@@ -395,6 +417,7 @@ export default function IngredientForm() {
                         aria-label="溫度（°C）"
                         type="number"
                         min="1"
+                        step="1"
                         placeholder="°C"
                         value={row.temperature_c}
                         onChange={(event) => update({ temperature_c: event.target.value })}
@@ -483,6 +506,7 @@ export default function IngredientForm() {
 
           <FormActions
             saving={saving}
+            ready={vocabulariesReady}
             error={error}
             onCancel={() => navigate(isNew ? '/ingredients' : `/ingredients/${id}`)}
             onDelete={isNew ? null : () => setDeleting(true)}

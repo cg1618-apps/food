@@ -42,8 +42,13 @@ export function isUnderResource(url, prefix) {
  *
  * Call as `mutation.mutateAsync({ url, body })`; `body` is sent as JSON, or
  * as-is when it is FormData.
+ *
+ * `onSaved(data, variables)` runs with the response BEFORE the invalidation,
+ * for a write whose response is the new state of a read on screen (the
+ * recipe's status): put it in the cache, and the page shows it whether or not
+ * the refetch that follows succeeds.
  */
-export function useApiMutation({ method = 'POST', invalidate = [] } = {}) {
+export function useApiMutation({ method = 'POST', invalidate = [], onSaved } = {}) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ url, body }) => {
@@ -55,7 +60,10 @@ export function useApiMutation({ method = 'POST', invalidate = [] } = {}) {
             : jsonBody(body)
       return fetchJson(url, { method, ...payload })
     },
-    onSuccess: () => invalidateResources(queryClient, invalidate),
+    onSuccess: (data, variables) => {
+      onSaved?.(data, variables, queryClient)
+      return invalidateResources(queryClient, invalidate)
+    },
   })
 }
 

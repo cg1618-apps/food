@@ -1,7 +1,7 @@
 // The row reducer every list editor uses, and the small field helpers.
 import { describe, expect, it } from 'vitest'
 
-import { keyed, numberOrNull, rowsReducer, splitAliases } from './rowList'
+import { integerOrNull, keyed, numberOrNull, rowsReducer, splitAliases } from './rowList'
 
 const rows = (...names) => names.map((name) => keyed({ name }))
 const namesOf = (list) => list.map((row) => row.name)
@@ -55,6 +55,13 @@ describe('small field helpers', () => {
     expect(numberOrNull('')).toBeNull()
     expect(numberOrNull('  ')).toBeNull()
     expect(numberOrNull('180')).toBe(180)
+  })
+
+  it('reads an integer field as an integer, or null when blank or not a number', () => {
+    expect(integerOrNull('')).toBeNull()
+    expect(integerOrNull('abc')).toBeNull()
+    expect(integerOrNull('180')).toBe(180)
+    expect(integerOrNull('180.4')).toBe(180)
   })
 
   it('splits aliases on every comma the keyboard offers and drops repeats', () => {

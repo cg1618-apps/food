@@ -18,13 +18,13 @@ import { fixedLabel, useApiQuery, useFixedVocabularies } from '../../hooks/useAp
 import { useUrlFilters } from '../../hooks/useUrlFilters'
 
 const SPEC = {
-  course: { type: 'multi', api: 'course_id' },
+  course: { type: 'multi', api: 'course_id', id: true },
   status: { type: 'multi', api: 'status' },
   kind: { type: 'multi', api: 'kind' },
-  method: { type: 'multi', api: 'method_id' },
-  equipment: { type: 'multi', api: 'equipment_id' },
+  method: { type: 'multi', api: 'method_id', id: true },
+  equipment: { type: 'multi', api: 'equipment_id', id: true },
   creator: { type: 'multi', api: 'creator' },
-  label: { type: 'multi', api: 'label_id' },
+  label: { type: 'multi', api: 'label_id', id: true },
   written: { type: 'single', api: 'written_up' },
 }
 

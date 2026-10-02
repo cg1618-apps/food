@@ -36,12 +36,14 @@ import { blankToNull, keyed, splitAliases } from '../../lib/rowList'
 import { splitSteps } from '../../lib/steps'
 
 // A recipe save moves its own reads, the creators list, the ingredient
-// library (a 新增 line makes a stub; used-in counts move), and the usage
-// counts of every vocabulary and picture it names.
+// library (a 新增 line makes a stub; used-in counts move), the category tree
+// (the stub is filed in the fallback category, whose count moves), and the
+// usage counts of every vocabulary and picture it names.
 const INVALIDATE = [
   endpoints.recipes.list(),
   endpoints.recipes.creators(),
   endpoints.ingredients.list(),
+  endpoints.categories.tree(),
   endpoints.labels.list(),
   endpoints.courses.list(),
   endpoints.methods.list(),
@@ -84,6 +86,10 @@ const sourceRow = (entry = {}) =>
 const stepRow = (entry = {}) => keyed({ section: entry.section ?? '', body: entry.body ?? '' })
 
 const ids = (refs) => (refs ?? []).map((ref) => ref.id)
+
+// A source row with nothing typed - the platform always has a value - is an
+// "add" pressed once too often, as a blank line or step is.
+const isBlankSource = (row) => !blankToNull(row.creator) && !blankToNull(row.url) && !blankToNull(row.title)
 
 function fromRecipe(row) {
   return {
@@ -132,6 +138,9 @@ export default function RecipeForm() {
   const [error, setError] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [pasting, setPasting] = useState(false)
+  // Typed into the version-of box and not picked: refused on save, never
+  // dropped (Typeahead's onQueryChange).
+  const [variantTyped, setVariantTyped] = useState('')
 
   // Adjusting state to the loaded row during render, keyed on the id so a
   // background refetch never throws away what is being typed.
@@ -142,6 +151,15 @@ export default function RecipeForm() {
 
   const setField = (field, value) => setForm((previous) => ({ ...previous, [field]: value }))
   const set = (field) => (event) => setField(field, event.target.value)
+  // A line's typed-but-unpicked text, by the row's key and from the latest
+  // state: a pick calls onSelect and then reports '' in the same tick, and
+  // RowEditor's update() would build the second change from the rows the
+  // first had not yet replaced.
+  const setLinePending = (key, pending) =>
+    setForm((previous) => ({
+      ...previous,
+      lines: previous.lines.map((line) => (line._key === key ? { ...line, pending } : line)),
+    }))
   const sections = sectionsOf(form.lines, form.steps)
 
   function payload() {
@@ -157,7 +175,7 @@ export default function RecipeForm() {
       servings: blankToNull(form.servings),
       time: blankToNull(form.time),
       variant_of_id: form.variant_of?.id ?? null,
-      sources: form.sources.map((row) => ({
+      sources: form.sources.filter((row) => !isBlankSource(row)).map((row) => ({
         platform: row.platform,
         creator: blankToNull(row.creator),
         url: blankToNull(row.url),
@@ -181,6 +199,12 @@ export default function RecipeForm() {
   async function submit(event) {
     event.preventDefault()
     setError(null)
+    if (!form.variant_of && variantTyped.trim()) {
+      setError(
+        new Error(`「是哪道食譜的另一版」打了「${variantTyped.trim()}」，但還沒從清單選：選一道，或把文字清掉。`),
+      )
+      return
+    }
     try {
       const saved = await save({
         id,
@@ -271,7 +295,10 @@ export default function RecipeForm() {
                 {form.variant_of ? (
                   <Picked
                     label={form.variant_of.label}
-                    onClear={() => setField('variant_of', null)}
+                    onClear={() => {
+                      setField('variant_of', null)
+                      setVariantTyped('')
+                    }}
                     clearLabel="移除"
                   />
                 ) : (
@@ -281,6 +308,7 @@ export default function RecipeForm() {
                     placeholder="不是就留空"
                     exclude={{ recipe: id ? [Number(id)] : [] }}
                     onSelect={(option) => setField('variant_of', { id: option.id, label: option.label })}
+                    onQueryChange={setVariantTyped}
                   />
                 )}
               </div>
@@ -357,7 +385,7 @@ export default function RecipeForm() {
                         label={line.target.label}
                         stub={isStub(line.target)}
                         tag={line.target.type === 'recipe' ? '食譜' : null}
-                        onClear={() => update({ target: null })}
+                        onClear={() => update({ target: null, pending: '' })}
                       />
                     ) : (
                       <Typeahead
@@ -366,6 +394,7 @@ export default function RecipeForm() {
                         placeholder="食材或食譜…"
                         exclude={{ recipe: id ? [Number(id)] : [] }}
                         onSelect={(option) => update({ target: targetFromOption(option) })}
+                        onQueryChange={(text) => setLinePending(line._key, text)}
                       />
                     )}
                   </div>

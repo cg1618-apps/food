@@ -4,7 +4,7 @@
 // has nothing to count; a delete that has cascades to show uses the delete
 // dialog instead. `danger` styles the confirming button as destructive.
 // Escape and Cancel both cancel; while `busy`, neither button can be pressed
-// twice.
+// twice and neither Escape nor the backdrop dismisses it.
 import { Button } from '../ui/primitives'
 import Dialog from '../ui/Dialog'
 
@@ -22,6 +22,7 @@ export default function ConfirmModal({
     <Dialog
       title={title}
       onClose={onCancel}
+      busy={busy}
       footer={
         <>
           <Button onClick={onCancel} disabled={busy}>

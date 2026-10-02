@@ -36,6 +36,22 @@ describe('parseFilters', () => {
     ])
   })
 
+  // A hand-edited `?category=abc` would reach the API as a 422 and blank the
+  // library; an id key keeps only whole numbers.
+  it('ignores a value that is not an id on an id key', () => {
+    const spec = {
+      category: { type: 'single', api: 'category_id', id: true },
+      course: { type: 'multi', api: 'course_id', id: true },
+      creator: { type: 'multi', api: 'creator' },
+    }
+    expect(parseFilters(params('category=abc&course=2&course=x&course=1.5&creator=阿基師'), spec)).toEqual({
+      category: '',
+      course: ['2'],
+      creator: ['阿基師'],
+    })
+    expect(parseFilters(params('category=12'), spec).category).toBe('12')
+  })
+
   it('reads a switch as on unless it is absent or says off', () => {
     expect(parseFilters(params('stub=1'), SPEC).stub).toBe(true)
     expect(parseFilters(params('stub=true'), SPEC).stub).toBe(true)

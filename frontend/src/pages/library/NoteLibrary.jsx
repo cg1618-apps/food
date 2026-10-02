@@ -14,7 +14,7 @@ import { linkHost } from '../../lib/format'
 
 const SPEC = {
   kind: { type: 'multi', api: 'kind' },
-  label: { type: 'multi', api: 'label_id' },
+  label: { type: 'multi', api: 'label_id', id: true },
 }
 
 export default function NoteLibrary() {

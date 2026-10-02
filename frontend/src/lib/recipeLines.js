@@ -10,12 +10,14 @@
 //   { type: 'new', label }        - 「新增」: a stub made by the save
 //
 // so the form can show the choice (with 待補 for a stub, saved or not) and
-// the payload is derived from it in one place.
+// the payload is derived from it in one place. `pending` is what is typed in
+// the line's search box and not yet picked (Typeahead's onQueryChange): never
+// sent, but a line holding it is not blank.
 
 import { blankToNull, keyed } from './rowList'
 
 export function emptyLine(section = '') {
-  return keyed({ target: null, section, amount: '', note: '', is_optional: false })
+  return keyed({ target: null, pending: '', section, amount: '', note: '', is_optional: false })
 }
 
 /** A line as GET /api/recipes/{id} returns it -> a form row. */
@@ -38,6 +40,7 @@ export function lineFromResponse(line) {
   }
   return keyed({
     target,
+    pending: '',
     section: line.section ?? '',
     amount: line.amount ?? '',
     note: line.note ?? '',
@@ -66,21 +69,26 @@ export function newIngredientNames(text) {
 }
 
 function isBlank(line) {
-  return !line.target && !blankToNull(line.amount) && !blankToNull(line.note)
+  return !line.target && !blankToNull(line.pending) && !blankToNull(line.amount) && !blankToNull(line.note)
 }
 
 /**
  * The form's lines -> the `lines` payload. A line left entirely blank is
- * dropped (an "add" pressed once too often); a line with an amount or a note
- * but nothing chosen is an error, named by its number, rather than something
- * silently thrown away.
+ * dropped (an "add" pressed once too often); a line with an amount, a note or
+ * a typed name but nothing chosen is an error, named by its number, rather
+ * than something silently thrown away.
  */
 export function linesPayload(rows) {
   const out = []
   rows.forEach((line, index) => {
     if (isBlank(line)) return
     if (!line.target) {
-      throw new Error(`第 ${index + 1} 行材料還沒選食材或食譜。`)
+      const typed = blankToNull(line.pending)
+      throw new Error(
+        typed
+          ? `第 ${index + 1} 行材料打了「${typed}」，但還沒選食材或食譜：從清單選一個，或選「新增」。`
+          : `第 ${index + 1} 行材料還沒選食材或食譜。`,
+      )
     }
     const base = {
       section: blankToNull(line.section),

@@ -16,6 +16,10 @@
 //            the ABSENCE of the filter, never `false`: `needs_detail=false`
 //            would mean "only the finished ones", a different filter.
 //
+// `id: true` on a single or multi key whose API parameter is an integer id
+// keeps only whole numbers: a hand-edited `?category=abc` is ignored rather
+// than sent, where the API would refuse the whole list with a 422.
+//
 // The search term is the reserved key `q`, outside the spec, and is passed to
 // the API as `q`. The URL keys are short and readable rather than the API's
 // `_id` names, because a person reads and edits them.
@@ -26,18 +30,22 @@
 export const SEARCH_KEY = 'q'
 
 /** The URL query -> one value per spec key, each of its type's shape. */
+const ID = /^\d+$/
+
 export function parseFilters(searchParams, spec) {
   const values = {}
   for (const [key, def] of Object.entries(spec)) {
+    const valid = (value) => Boolean(value) && (!def.id || ID.test(value))
     if (def.type === 'multi') {
       // Repeated keys, de-duplicated, blanks dropped: a hand-edited
       // `?course=&course=2` means course 2.
-      values[key] = [...new Set(searchParams.getAll(key).filter(Boolean))]
+      values[key] = [...new Set(searchParams.getAll(key).filter(valid))]
     } else if (def.type === 'bool') {
       const raw = searchParams.get(key)
       values[key] = raw !== null && raw !== '' && raw !== '0' && raw !== 'false'
     } else {
-      values[key] = searchParams.get(key) ?? ''
+      const value = searchParams.get(key) ?? ''
+      values[key] = valid(value) ? value : ''
     }
   }
   return values

@@ -11,7 +11,9 @@
 // happens after cooking, standing at the stove with the page open, and a
 // round trip through the form for it would be the form's whole job. It is a
 // PATCH of `status` alone; the control shows the chosen value while the
-// request runs and goes back, with the server's sentence, if it fails.
+// request runs, then the recipe the PATCH answers with (put straight into the
+// detail read's cache), and goes back, with the server's sentence, if it
+// fails.
 import { Link, useParams } from 'react-router-dom'
 
 import { endpoints } from '../../api/endpoints'
@@ -31,7 +33,14 @@ const names = (refs) => (refs?.length ? refs.map((ref) => ref.display_name).join
 const STATUS_INVALIDATE = [endpoints.recipes.list()]
 
 function StatusControl({ recipe, statuses }) {
-  const mutation = useApiMutation({ method: 'PATCH', invalidate: STATUS_INVALIDATE })
+  const mutation = useApiMutation({
+    method: 'PATCH',
+    invalidate: STATUS_INVALIDATE,
+    // The PATCH answers with the whole recipe: shown at once, and kept if the
+    // refetch after it fails.
+    onSaved: (saved, _variables, queryClient) =>
+      queryClient.setQueryData([endpoints.recipes.detail(recipe.id), null], saved),
+  })
   const shown = mutation.isPending ? mutation.variables.body.status : recipe.status
 
   return (

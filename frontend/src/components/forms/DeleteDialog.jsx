@@ -86,6 +86,7 @@ export default function DeleteDialog({ kind, id, name, onClose, onDeleted }) {
     <Dialog
       title={`刪除${target.noun}「${name ?? ''}」？`}
       onClose={onClose}
+      busy={busy}
       footer={
         <>
           <Button onClick={onClose} disabled={busy}>

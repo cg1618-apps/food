@@ -62,11 +62,21 @@ export function blankToNull(value) {
   return text === '' ? null : text
 }
 
-/** A number input's string as an integer, or null when it is empty. */
+/** A number input's string as a number, or null when it is empty. */
 export function numberOrNull(value) {
   if (value === null || value === undefined || String(value).trim() === '') return null
   const n = Number(value)
   return Number.isFinite(n) ? n : null
+}
+
+/**
+ * A number input's string as an integer, or null when it is empty or not a
+ * number - for a column the server types `int`, which refuses 180.5 with a
+ * 422 about a field the browser let through.
+ */
+export function integerOrNull(value) {
+  const n = numberOrNull(value)
+  return n === null ? null : Math.round(n)
 }
 
 /**

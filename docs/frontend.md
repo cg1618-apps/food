@@ -71,7 +71,10 @@ words and its filters:
   or `bool` (on, or absent) - each mapped to its API parameter. A filter click
   pushes a history entry, so Back undoes it; typing replaces, debounced by
   300 ms. A switch that is off sends nothing: `needs_detail=false` would be a
-  different filter.
+  different filter. A key whose API parameter is an integer id is marked
+  `id: true` and keeps only whole numbers, so a hand-edited `?category=abc`
+  is ignored rather than sent - the API would refuse the whole list with a
+  422.
 - **封面 / 清單 is remembered per library** in `localStorage` under
   `cg1618:food:<library>-view` (`lib/libraryView.js`), every read and write in
   a try/catch, falling back to 封面.
@@ -152,7 +155,10 @@ empties.
 - **The status change** is `PATCH /api/edit/recipes/{id}` with `{status}`
   alone. The 想試 / 可煮 / 常煮 toggle shows the chosen value while the
   request runs and the stored one again, with the server's sentence, if it
-  fails; success invalidates every recipe read.
+  fails. On success the recipe the PATCH answers with goes straight into the
+  detail read's cache (`useApiMutation`'s `onSaved`), so the new status
+  stays on screen even if the refetch after it fails, and every recipe read
+  is invalidated.
 - **Ingredient**: category (`/ingredients?category=<id>`) and, for a
   variety, its parent; names, rating, 待補; aliases; how many recipes use it
   and how many varieties it has; labels. A stub adds a 待補 note linking to
@@ -171,7 +177,9 @@ empties.
 (ingredients, never itself); read the preview in words
 (`lib/mergePreview.js` - counts that move, names that become aliases, and in
 a warning block the storage rows and notes the target already has and so
-drops); 合併 posts `{into, fingerprint}`. If either ingredient changed since
+drops); 合併 posts `{into, fingerprint}`. Text typed in the picker and not
+picked is said under it (從清單選一個), since 合併 stays off until there is a
+target. If either ingredient changed since
 the preview, the server's 409 carries a fresh preview: it replaces the one
 shown, the dialog says it changed, and the button becomes 確認合併. On
 success the reads a merge moves are marked stale and the page goes to the
@@ -185,7 +193,11 @@ per entity, in sections on the reading column (`Section`), ending in
 `components/forms/FormActions.jsx`: the error, then 儲存 / 取消 / 刪除. **The
 error sits directly above the save button** with the server's own sentence -
 a 409's or a 422's `detail` - because that is where the eye is when a save
-did not work. A successful save goes to the detail page.
+did not work. A successful save goes to the detail page. A form whose
+required selects are drawn from a vocabulary passes `ready` false until it
+has loaded, and 儲存 reads 載入中… and stays off: the ingredient form waits
+for the category tree, the fixed lists and the cooking methods, and says so
+if the categories fail to load.
 
 - **Loading an existing row** sets the form's state during render, keyed on the
   row's id (React's "adjusting state when a prop changes"), so there is no
@@ -195,6 +207,13 @@ did not work. A successful save goes to the detail page.
   there is no id before it, and on an edit only when the gallery changed. If
   the row saved and the gallery did not, the new id is kept, so 儲存 again
   PATCHes it rather than creating a second row.
+- **Each save invalidates every read its write can move**, not only its own:
+  a recipe save also marks the ingredient library and the category tree
+  stale (a 新增 line files a stub in the fallback category, whose count
+  moves), the label, course, method and equipment counts and the image
+  library; an ingredient save, its delete and a merge move the category
+  tree, labels, methods (heating rows), recipes (line names, used-in) and
+  images; a note moves labels and images.
 - **Every list is `components/forms/RowEditor.jsx`**: controlled `rows` /
   `onChange`, each row with ▲ / ▼ (上移 / 下移) and ✕, an add button under
   the list, and a render prop for the row's cells (`children(row, { index,
@@ -217,12 +236,21 @@ picks: `onSelect(option)` hands the caller `{ type, id, label, needsDetail,
 kind }` and the box clears. `Picked`, from the same file, is how every caller
 shows the choice in its place, with 待補 for a stub and 更換 to search again.
 
+**Typed but not picked is never dropped.** `onQueryChange(text)` tells the
+caller what is in the box ('' after a pick), and every caller refuses to save
+over it: a recipe line holding text is not blank (below); the ingredient's
+品種 parent and the recipe's 另一版 refuse the save with a sentence naming
+the text (選一個，或把文字清掉); the merge picker says it under the box.
+
 **Recipe lines** hold a `target` - an ingredient, a recipe, or `{ type: 'new',
 label }` - from which `lib/recipeLines.js` builds exactly one of
 `ingredient_id`, `sub_recipe_id` or `new_ingredient` per line (a typed name in
 Han characters is `name_cn`, otherwise `name_en`). A 新增 line shows 待補 until
 the save creates the stub. An entirely blank line is dropped; one with an
-amount but nothing chosen is refused by number. Sections are free text with
+amount, a note or typed-but-unpicked text (the row's `pending`, never sent)
+and nothing chosen is refused by number - 「第 n 行材料…還沒選食材或食譜」.
+A source row with no creator, title or URL is dropped the same way, as is a
+blank step. Sections are free text with
 the recipe's own sections offered (a `datalist` shared by lines and steps); a
 new line or step starts in the section of the one above it.
 
@@ -235,6 +263,8 @@ page numbers steps itself.
 the i2storage migration's shape) keeps its min following the max until the
 min is edited itself - `pages/edit/storageDuration.js`'s rule, applied live.
 **Heating rows** show the °F beside the °C as it is typed (`lib/temperature.js`).
+Days and °C are whole numbers on the server: the inputs step by 1 and the
+payload reads them with `integerOrNull` (`lib/rowList.js`).
 
 **The gallery** (`components/forms/GalleryPicker.jsx`) is controlled and saves
 nothing itself: `value` is `[{ image_id, url, thumb_url, focus }]`, first is
@@ -343,13 +373,22 @@ rating with `value`), `Section` (a titled block on a ruled line) and `Toggle`
 `components/ui/Dialog.jsx` is the modal shell - Escape closes, and the
 backdrop closes only on a press that starts and ends on it -
 and `components/modals/ConfirmModal.jsx` the yes/no question drawn in it.
+The shell is drawn through a portal on `document.body`, so a dialog opened
+from a form is never inside its `<form>` (Enter in a dialog's input cannot
+submit the page); Tab is kept inside it, wrapping at both ends, and focus goes
+back to the opener when it closes. While `busy` - a delete, a merge, a
+confirmed action on its way - neither Escape nor the backdrop closes it.
 
 ## Images
 
 Every `<img>` lazy-loads (`lazy-images.test.js`), and every cropped
 (`object-cover`) one applies its focal point with `focusStyle()` from
 `lib/images.js` or opts out with `data-focus="none"`
-(`focus-images.test.js`). Both guards are media's.
+(`focus-images.test.js`). Both guards are media's, and both read a tag with
+one scanner that skips `{...}` expressions, strings and comments to find the
+`>` that closes it - a regex stopping at the first `>` would end the tag
+inside `onError={(e) => ...}` and never read an attribute written after it.
+Each proves its scanner on fixtures before scanning the source.
 
 ## Loading, error and empty
 

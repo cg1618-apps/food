@@ -17,6 +17,10 @@
 //   onSelect     (option) => void
 //   allowNew     offer 「新增 'xxx'」 when nothing matches exactly
 //   exclude      { ingredient: [ids], recipe: [ids] } never offered
+//   onQueryChange (text) => void - what is typed and not yet picked, '' after
+//                a pick. A caller that refuses to save over unpicked text
+//                (a line naming nothing, a parent nobody chose) needs it: the
+//                box is otherwise the only thing that knows the text is there.
 //   label        the input's accessible name
 //   placeholder, autoFocus, className
 import { keepPreviousData } from '@tanstack/react-query'
@@ -64,6 +68,7 @@ export function Picked({ label, stub = false, tag, onClear, clearLabel = '更換
 export default function Typeahead({
   sources = ['ingredient', 'recipe'],
   onSelect,
+  onQueryChange,
   allowNew = false,
   exclude,
   label = '搜尋',
@@ -105,9 +110,14 @@ export default function Typeahead({
   const showList = open && typed !== ''
   const activeIndex = active < options.length ? active : -1
 
+  function changeQuery(text) {
+    setQuery(text)
+    onQueryChange?.(text)
+  }
+
   function pick(option) {
     onSelect(option)
-    setQuery('')
+    changeQuery('')
     setOpen(false)
     setActive(-1)
   }
@@ -147,7 +157,7 @@ export default function Typeahead({
         placeholder={placeholder}
         value={query}
         onChange={(event) => {
-          setQuery(event.target.value)
+          changeQuery(event.target.value)
           setOpen(true)
           setActive(-1)
         }}

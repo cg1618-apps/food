@@ -22,8 +22,8 @@ import { formatDays } from '../../lib/format'
 import { flatten } from '../../lib/tree'
 
 const SPEC = {
-  category: { type: 'single', api: 'category_id' },
-  label: { type: 'single', api: 'label_id' },
+  category: { type: 'single', api: 'category_id', id: true },
+  label: { type: 'single', api: 'label_id', id: true },
   stub: { type: 'bool', api: 'needs_detail' },
   variety: { type: 'bool', api: 'has_parent' },
   rating: { type: 'single', api: 'rating' },
