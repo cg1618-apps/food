@@ -259,3 +259,27 @@ def test_a_current_delete_with_every_count_matching_succeeds(client, fallback_ca
         params={"aliases": 0, "preservation": 0, "heating": 1, "links": 0},
     )
     assert ok.status_code == 204
+
+
+def test_sort_order_is_not_accepted_on_a_heating_row_or_a_link(
+    client, fallback_category, air_fryer
+):
+    """Order is the list order; a field that is accepted and then overwritten is a lie."""
+    heating = client.post(
+        "/api/edit/ingredients",
+        json={
+            "name_cn": "雞翅",
+            "category_id": fallback_category.id,
+            "heating": [{"method_id": air_fryer.id, "sort_order": 5}],
+        },
+    )
+    assert heating.status_code == 422
+    link = client.post(
+        "/api/edit/ingredients",
+        json={
+            "name_cn": "雞翅",
+            "category_id": fallback_category.id,
+            "links": [{"url": "https://example.com", "sort_order": 5}],
+        },
+    )
+    assert link.status_code == 422

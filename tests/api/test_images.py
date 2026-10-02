@@ -243,3 +243,15 @@ def test_a_stored_image_is_served_and_a_missing_one_is_404_not_the_spa(client):
     assert served.status_code == 200
     assert served.headers["content-type"] == "image/jpeg"
     assert client.get("/images/library/does-not-exist.jpg").status_code == 404
+
+
+def test_a_failure_while_processing_an_opened_image_is_422_not_500(client, image_dir, monkeypatch):
+    from app.services import images
+
+    def broken(_image):
+        raise ValueError("malformed EXIF")
+
+    monkeypatch.setattr(images.ImageOps, "exif_transpose", broken)
+    response = _upload(client, _png())
+    assert response.status_code == 422
+    assert response.json()["detail"] == "That file is not an image this app can read."

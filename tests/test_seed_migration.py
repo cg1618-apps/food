@@ -128,7 +128,8 @@ def test_the_storage_migration_copies_the_old_duration_and_downgrades_lossily(sc
             text(
                 "INSERT INTO ingredient_preservation "
                 "(ingredient_id, state, method, duration_min_days, duration_max_days) "
-                "VALUES (:i, 'opened', '冷藏', 1, 2), (:i, 'unused', '冷凍', 30, NULL)"
+                "VALUES (:i, 'opened', '冷藏', 1, 2), (:i, 'unused', '冷凍', 30, NULL), "
+                "(:i, 'unused', '常溫', 1, 2)"
             ),
             {"i": ingredient},
         )
@@ -139,5 +140,6 @@ def test_the_storage_migration_copies_the_old_duration_and_downgrades_lossily(sc
             text("SELECT method, duration_days FROM ingredient_preservation ORDER BY id")
         ).all()
     # The opened row is gone (the old key cannot hold two states); the
-    # minimum-only row keeps its minimum.
-    assert rows == [("冷藏", 5), ("冷凍", 30)]
+    # minimum-only row keeps its minimum; a row with both ends keeps the
+    # maximum (1..2 downgrades to 2, not 1).
+    assert rows == [("冷藏", 5), ("冷凍", 30), ("常溫", 2)]
