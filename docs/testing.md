@@ -93,6 +93,29 @@ is load-bearing and says so. Some examples worth knowing about:
   `IMAGE_DIR` at the test's own `tmp_path`. It has to be: the `/images` mount is
   built when the app is, and the `client` fixture builds the app, so a test that
   chose its directory afterwards would have mounted the real one.
+- `soy` (`tests/api/test_ingredient_used_in.py`) is 醬油 with 生抽 and 老抽
+  under it, a dish naming **both** children, a base naming 生抽, and a dish that
+  uses only the base. Each piece is load-bearing for one claim: two children in
+  one dish is what makes "counts once on the parent" able to fail (one child
+  could only ever count once); the dish-through-a-base is what makes "depth
+  through sub-recipes is zero" able to fail; and the lines are what give the
+  delete refusal something to refuse.
+- `pair` (`tests/api/test_ingredient_merge.py`) gives the source and the target
+  something to **conflict** on: a shared label, a shared image, a storage row
+  with the same `(state, method)`, a description on both, and a source
+  `name_alt` that is the target's own English name in another case. A merge
+  over two ingredients with nothing in common moves everything and drops
+  nothing, so "the target wins" would pass against code that let the source
+  win.
+- The cycle tests come in a set: a self-reference, a two-recipe cycle, a
+  three-recipe cycle, and `test_a_chain_without_a_cycle_is_fine`. The last is
+  the mirror; without it a guard refusing every sub-recipe line would pass the
+  other three.
+- `test_re_sending_the_same_lists_unchanged_does_not_collide_with_itself` is the
+  test for the unit-of-work ordering trap: lines and steps have a unique
+  position per recipe, so a replace that inserts before it deletes collides
+  with itself on the first unchanged re-send. Module 1 shipped that defect for
+  aliases; this is what keeps recipes from repeating it.
 
 One more that is weaker than it looks unless read carefully:
 `test_uvicorns_own_loggers_are_taken_over` asserts the handler **by identity**
@@ -109,6 +132,12 @@ the entire failure.
 | `tests/api/test_ingredient_storage.py` | storage state and range, heating, links, rating, the new list filters, the delete counts and the 409 that names the moved one, `/api/vocabularies/fixed` |
 | `tests/api/test_vocabularies.py` | the three vocabularies, parametrised over one factory |
 | `tests/api/test_images.py` | upload, re-encode, deduplication, galleries, deletion, serving |
+| `tests/api/test_recipe_model.py` | every named recipe constraint, each refusal with its mirror; SET NULL on a version's parent; CASCADE and RESTRICT on delete |
+| `tests/api/test_recipe_crud.py` | the recipe round trip, `PATCH` list semantics, enums, sources, the version rule, delete refusals and stale counts |
+| `tests/api/test_recipe_lines.py` | line targets, the claimed-type refusal, the cycle guard, stub creation and reuse |
+| `tests/api/test_recipe_library.py` | the list's search and "any of" filters, creators, the recipe gallery, and the query count |
+| `tests/api/test_ingredient_used_in.py` | "used in" over descendants, the list filter agreeing with it, the delete refusal, the query count |
+| `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, refusals |
 | `tests/test_seed_migration.py` | the seeds, and the storage migration's copy and lossy downgrade, on a scratch database |
 | `tests/unit/test_prod_compose.py` | the production compose file, including the image bind mount |
 
