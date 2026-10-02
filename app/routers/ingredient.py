@@ -178,7 +178,10 @@ def merge_preview(ingredient_id: int, into: int = Query(...), db: Session = Depe
     Computed by the same function the merge executes, so the preview cannot
     describe a merge other than the one that runs.
     """
-    plan = ingredients.merge_plan(db, ingredient_id, into)
+    return _merge_preview(db, ingredients.merge_plan(db, ingredient_id, into))
+
+
+def _merge_preview(db: Session, plan: ingredients.MergePlan) -> schemas.MergePreview:
     counts = recipes.used_in_counts(db, [plan.source.id, plan.target.id])
     return schemas.MergePreview(
         source=_summary(plan.source, counts),
@@ -189,6 +192,7 @@ def merge_preview(ingredient_id: int, into: int = Query(...), db: Session = Depe
             {"state": r.state, "method": r.method} for r in plan.dropped_preservation
         ],
         prose=plan.prose,
+        fingerprint=plan.fingerprint(),
     )
 
 
@@ -281,8 +285,20 @@ def merge_ingredient(ingredient_id: int, payload: schemas.MergeIn, db: Session =
 
     The fix for a duplicate, rather than deleting one of the two: every line,
     child and note the duplicate carries survives on the row that stays.
+
+    `fingerprint` is the preview's. The plan is recomputed here and, if it is
+    no longer the one the user confirmed, the merge is refused with the fresh
+    preview on the body - the same stale-tab case `StaleCountError` guards on
+    delete, for an action that drops more.
     """
-    return _full(db, ingredients.merge(db, ingredient_id, payload.into))
+    plan = ingredients.merge_plan(db, ingredient_id, payload.into)
+    if plan.fingerprint() != payload.fingerprint:
+        raise AppError(
+            409,
+            "This merge has changed since the preview. Check it and confirm again.",
+            preview=_merge_preview(db, plan).model_dump(mode="json"),
+        )
+    return _full(db, ingredients.merge(db, plan))
 
 
 @edit.post("/{ingredient_id}/labels/{label_id}", status_code=204)

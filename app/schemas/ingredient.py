@@ -369,9 +369,16 @@ class IngredientResponse(BaseModel):
 
 
 class MergeIn(BaseModel):
+    """The target, and the fingerprint of the preview the user confirmed.
+
+    The fingerprint is required: a merge sent without one has not been
+    previewed, and a merge deletes a row and drops whatever collides.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     into: int
+    fingerprint: str
 
 
 class MergeMoves(BaseModel):
@@ -402,3 +409,5 @@ class MergePreview(BaseModel):
     # Only the prose fields the source has: "moved" when the target's is
     # empty, "dropped" when the target already has its own.
     prose: dict[str, Literal["moved", "dropped"]]
+    # Echoed back on the merge; a different plan by then is a 409.
+    fingerprint: str

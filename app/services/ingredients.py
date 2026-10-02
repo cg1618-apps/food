@@ -8,9 +8,12 @@ because they ask exactly the same question and two implementations of it would
 answer differently within a month.
 """
 
+import hashlib
+import json
 from dataclasses import dataclass
 
 from sqlalchemy import func, or_, select
+from sqlalchemy import inspect as inspect_row
 from sqlalchemy import update as update_rows
 from sqlalchemy.orm import Session, selectinload
 
@@ -352,6 +355,42 @@ class MergePlan:
             "preservation": len(self.preservation),
         }
 
+    def fingerprint(self) -> str:
+        """A hash of everything this merge would move or drop, row by row.
+
+        The preview hands it out and the merge requires it back: if any row
+        the plan touches has been added, removed or edited since the preview
+        was read, the hash differs and the merge refuses rather than doing
+        something the user was not shown. Whole rows rather than counts,
+        because an edited note moves different content under the same count.
+        """
+        canonical = {
+            "source": self.source.id,
+            "target": self.target.id,
+            "lines": sorted(self.line_ids),
+            "children": sorted(self.child_ids),
+            "links": [_columns(r) for r in self.links],
+            "labels": sorted(label.id for label in self.labels),
+            "images": [_columns(r) for r in self.images],
+            "heating": [_columns(r) for r in self.heating],
+            "preservation": [_columns(r) for r in self.preservation],
+            "dropped_preservation": [_columns(r) for r in self.dropped_preservation],
+            "new_aliases": self.new_aliases,
+            "prose": {
+                name: [outcome, getattr(self.source, name)]
+                for name, outcome in self.prose.items()
+            },
+        }
+        text_form = json.dumps(
+            canonical, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str
+        )
+        return hashlib.sha256(text_form.encode("utf-8")).hexdigest()
+
+
+def _columns(row) -> dict:
+    """Every mapped column of a row, by attribute name."""
+    return {attr.key: getattr(row, attr.key) for attr in inspect_row(row).mapper.column_attrs}
+
 
 def _answers_to(ingredient: Ingredient) -> list[str]:
     """Every string an ingredient answers to: its name slots, then its aliases."""
@@ -425,8 +464,11 @@ def _move_after(db: Session, model, rows, target_id: int, order: str, taken: lis
         )
 
 
-def merge(db: Session, source_id: int, target_id: int) -> Ingredient:
-    """Execute `merge_plan`, then delete the source. One transaction.
+def merge(db: Session, plan: MergePlan) -> Ingredient:
+    """Execute a `merge_plan`, then delete the source. One transaction.
+
+    The caller builds the plan, so it can compare its fingerprint with the
+    preview's first; nothing here re-reads what the plan already holds.
 
     Rows move by UPDATE rather than through the relationships: the source is
     deleted at the end with `cascade="all, delete-orphan"` on its collections,
@@ -435,8 +477,8 @@ def merge(db: Session, source_id: int, target_id: int) -> Ingredient:
     re-read and hold only what stayed behind - the dropped notes, the images
     the target already had, its aliases - which go with it.
     """
-    plan = merge_plan(db, source_id, target_id)
     target = plan.target
+    source_id, target_id = plan.source.id, target.id
 
     db.execute(
         update_rows(RecipeLine)
@@ -450,15 +492,12 @@ def merge(db: Session, source_id: int, target_id: int) -> Ingredient:
     )
     links = [r.sort_order for r in target.links]
     heating = [r.sort_order for r in target.heating]
+    kept = [r.sort_order for r in target.preservation]
     positions = [r.position for r in target.images]
     _move_after(db, IngredientLink, plan.links, target_id, "sort_order", links)
     _move_after(db, IngredientHeating, plan.heating, target_id, "sort_order", heating)
     _move_after(db, IngredientImage, plan.images, target_id, "position", positions)
-    db.execute(
-        update_rows(IngredientPreservation)
-        .where(IngredientPreservation.id.in_([r.id for r in plan.preservation]))
-        .values(ingredient_id=target_id)
-    )
+    _move_after(db, IngredientPreservation, plan.preservation, target_id, "sort_order", kept)
 
     target.labels.extend(plan.labels)
     target.aliases.extend(IngredientAlias(value=v) for v in plan.new_aliases)

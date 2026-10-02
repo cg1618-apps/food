@@ -395,7 +395,22 @@ What the branch after module 1 chose, and what it turned down.
   merging INTO the row whose values they want. The preview and the merge are
   one function's output, so the preview cannot describe a different merge
   from the one that runs. Merging into a descendant is refused, since the
-  source's children would move under their own descendant.
+  source's children would move under their own descendant. Moved links,
+  heating and preservation rows are numbered after the target's own, so a
+  merged list keeps the target's order and appends rather than tying.
+- **A merge carries its preview's fingerprint, and a changed plan is a 409.**
+  The preview and the merge being one function closes the gap between what
+  the code shows and what it runs; it does not close the gap between what the
+  user READ and what runs, because the preview can sit in a tab while the
+  source is edited elsewhere. That is the stale-tab case `StaleCountError`
+  guards on delete, and a merge is the more destructive of the two: it
+  deletes a row too, and drops every colliding note and prose field with
+  it. Counts were not enough - an edited note moves
+  different content under the same count - so the fingerprint is a SHA-256 of
+  the canonical JSON of the rows the plan moves and drops. The 409 carries
+  the fresh preview so the dialog can redraw without a reload, as the stale
+  delete carries `expected` and `actual`. Required rather than optional: an
+  optional guard is one a client forgets.
 - **A refused recipe save writes nothing**, because the service validates
   every name, id, version and cycle before its first write - the stubs - and
   touches the row only after them. Relying on the request's rollback alone

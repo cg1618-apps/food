@@ -106,7 +106,13 @@ is load-bearing and says so. Some examples worth knowing about:
   `name_alt` that is the target's own English name in another case. A merge
   over two ingredients with nothing in common moves everything and drops
   nothing, so "the target wins" would pass against code that let the source
-  win.
+  win. Both storage rows also sit at `sort_order` 0 on their own ingredient,
+  which is what lets the "numbered after the target's" test fail: a move that
+  kept the source's number would tie rather than sort wrong.
+- `test_a_source_edited_after_the_preview_is_409_and_changes_nothing` edits a
+  prose field the preview did not list, so its plan really differs; its mirror
+  merges with the fresh preview's fingerprint, so a guard refusing every merge
+  cannot pass it.
 - The cycle tests come in a set: a self-reference, a two-recipe cycle, a
   three-recipe cycle, and `test_a_chain_without_a_cycle_is_fine`. The last is
   the mirror; without it a guard refusing every sub-recipe line would pass the
@@ -137,7 +143,7 @@ the entire failure.
 | `tests/api/test_recipe_lines.py` | line targets, the claimed-type refusal, the cycle guard, stub creation and reuse |
 | `tests/api/test_recipe_library.py` | the list's search and "any of" filters, creators, the recipe gallery, and the query count |
 | `tests/api/test_ingredient_used_in.py` | "used in" over descendants, the list filter agreeing with it, the delete refusal, the query count |
-| `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, refusals |
+| `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, ordering after the target's rows, the fingerprint and its 409, refusals |
 | `tests/test_seed_migration.py` | the seeds, and the storage migration's copy and lossy downgrade, on a scratch database |
 | `tests/unit/test_prod_compose.py` | the production compose file, including the image bind mount |
 

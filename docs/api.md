@@ -171,8 +171,8 @@ children, recipes}`.** The first four are echoed back to the delete;
 `children` and `recipes` (distinct recipes with a line naming it directly)
 block the delete rather than being removed by it.
 
-**Merge.** `POST /api/edit/ingredients/{id}/merge` with `{"into": target}`
-moves everything the source has onto the target, deletes the source, and
+**Merge.** `POST /api/edit/ingredients/{id}/merge` with
+`{"into": target, "fingerprint": "<from the preview>"}` moves everything the source has onto the target, deletes the source, and
 answers the target's full row. `GET /api/ingredients/{id}/merge-preview?into=`
 answers what it would do, computed by the same function, without writing:
 
@@ -184,9 +184,24 @@ answers what it would do, computed by the same function, without writing:
             "images": 1, "heating": 1, "preservation": 1},
   "new_aliases": ["蔥花", "青蔥"],
   "dropped_preservation": [{"state": "unused", "method": "冷藏"}],
-  "prose": {"description": "dropped", "selection_notes": "moved"}
+  "prose": {"description": "dropped", "selection_notes": "moved"},
+  "fingerprint": "3f1c…"
 }
 ```
+
+`fingerprint` is a SHA-256 over every row the merge would move or drop — the
+rows themselves, not their counts — and the merge requires it back. The merge
+recomputes the plan; if anything it would move or drop has been added,
+removed or edited since the preview was read, it answers **409** and changes
+nothing:
+
+```json
+{"detail": "This merge has changed since the preview. Check it and confirm again.",
+ "preview": {"...": "the fresh preview, with its own fingerprint"}}
+```
+
+so the dialog can redraw from `preview` and confirm with its fingerprint. A
+body with no `fingerprint` is 422.
 
 The target wins every collision:
 
@@ -198,8 +213,9 @@ The target wins every collision:
 - the source's name slots and aliases become target **aliases**, never names,
   unless the target already answers to them (a name slot or an alias,
   ignoring case). `new_aliases` is sorted;
-- a preservation row moves unless the target has a note for that
-  `(state, method)`, in which case it is dropped and listed;
+- a preservation row moves, numbered after the target's own, unless the
+  target has a note for that `(state, method)`, in which case it is dropped
+  and listed;
 - each prose field the source has (`description`, `selection_notes`,
   `sourcing_notes`, `preservation_notes`) moves when the target's is empty and
   is dropped otherwise; `prose` lists only fields the source has;
@@ -208,7 +224,8 @@ The target wins every collision:
 
 Refused with 422: into itself, into one of its own descendants, and an `into`
 that names nothing. A missing source — the id in the URL — is 404. The body
-refuses unknown fields.
+refuses unknown fields. These are checked before the fingerprint, so a merge
+that could never run is a 422 or 404, not a 409.
 
 **`PUT /api/edit/ingredients/{id}/images`** takes a list of
 `{"image_id": 12, "focus": "50% 30%"}` and makes it the gallery, in that order;

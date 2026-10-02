@@ -104,8 +104,19 @@ def preview(client, source, into):
     return client.get(f"/api/ingredients/{source}/merge-preview", params={"into": into})
 
 
-def merge(client, source, into):
-    return client.post(f"/api/edit/ingredients/{source}/merge", json={"into": into})
+def merge(client, source, into, fingerprint=None):
+    """Merge as the dialog does: with the fingerprint of the preview it showed.
+
+    Where the preview itself is refused there is no fingerprint to echo, and a
+    placeholder stands in - the refusal comes before the comparison.
+    """
+    if fingerprint is None:
+        shown = preview(client, source, into)
+        fingerprint = shown.json()["fingerprint"] if shown.status_code == 200 else "none"
+    return client.post(
+        f"/api/edit/ingredients/{source}/merge",
+        json={"into": into, "fingerprint": fingerprint},
+    )
 
 
 def test_the_preview_describes_the_plan(client, pair):
@@ -201,8 +212,67 @@ def test_merging_a_missing_source_is_404(client, pair):
 
 
 def test_the_merge_body_refuses_extra_fields(client, pair):
+    fingerprint = preview(client, pair["source"], pair["target"]).json()["fingerprint"]
     response = client.post(
         f"/api/edit/ingredients/{pair['source']}/merge",
-        json={"into": pair["target"], "keep_source": True},
+        json={"into": pair["target"], "fingerprint": fingerprint, "keep_source": True},
     )
     assert response.status_code == 422
+
+
+def test_the_fingerprint_is_stable_while_nothing_changes(client, pair):
+    first = preview(client, pair["source"], pair["target"]).json()["fingerprint"]
+    second = preview(client, pair["source"], pair["target"]).json()["fingerprint"]
+    assert first == second
+
+
+def test_a_merge_with_the_previews_fingerprint_merges(client, pair):
+    fingerprint = preview(client, pair["source"], pair["target"]).json()["fingerprint"]
+    response = merge(client, pair["source"], pair["target"], fingerprint)
+    assert response.status_code == 200, response.text
+    assert client.get(f"/api/ingredients/{pair['source']}").status_code == 404
+
+
+def test_a_source_edited_after_the_preview_is_409_and_changes_nothing(client, pair):
+    """The stale tab: the preview was read, then the source gained a note."""
+    shown = preview(client, pair["source"], pair["target"]).json()
+    edited = client.patch(
+        f"/api/edit/ingredients/{pair['source']}", json={"sourcing_notes": "市場買"}
+    )
+    assert edited.status_code == 200, edited.text
+    before = client.get(f"/api/ingredients/{pair['target']}").json()
+
+    response = merge(client, pair["source"], pair["target"], shown["fingerprint"])
+    assert response.status_code == 409, response.text
+    body = response.json()
+    assert "preview" in body["detail"]
+    fresh = body["preview"]
+    assert fresh["fingerprint"] != shown["fingerprint"]
+    assert fresh["prose"]["sourcing_notes"] == "moved"
+
+    assert client.get(f"/api/ingredients/{pair['source']}").status_code == 200
+    assert client.get(f"/api/ingredients/{pair['target']}").json() == before
+
+    # The fresh preview's fingerprint is the one that now merges.
+    assert merge(client, pair["source"], pair["target"], fresh["fingerprint"]).status_code == 200
+
+
+def test_a_merge_without_a_fingerprint_is_422(client, pair):
+    response = client.post(
+        f"/api/edit/ingredients/{pair['source']}/merge", json={"into": pair["target"]}
+    )
+    assert response.status_code == 422
+    assert client.get(f"/api/ingredients/{pair['source']}").status_code == 200
+
+
+def test_moved_preservation_is_numbered_after_the_targets(client, db, pair):
+    # Both rows sit at sort_order 0 on their own ingredient, so a move that
+    # kept the source's number would tie with the target's note.
+    merge(client, pair["source"], pair["target"])
+    rows = (
+        db.query(IngredientPreservation)
+        .filter(IngredientPreservation.ingredient_id == pair["target"])
+        .all()
+    )
+    order = {row.method: row.sort_order for row in rows}
+    assert order == {"冷藏": 0, "冷凍": 1}
