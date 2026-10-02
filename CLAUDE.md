@@ -33,7 +33,7 @@ reference work.
 ## Status
 
 **Modules 1 and 2 are built, with kitchen notes.** The schema is at revision
-`k1notes` (the head).
+`i3import` (the head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
   parent, rating, labels, storage as a state x method grid with day ranges, a
@@ -52,9 +52,10 @@ reference work.
   (categories, labels, courses, cooking methods, equipment) and 圖片, the
   image library.
 
-**Next is the one-time ingredient import**: the ingredient names from the
-recipe doc's ingredient lists drafted as a CSV, reviewed by the owner, then
-loaded by a data migration as stubs.
+**The starting ingredient list is loaded by `i3import`**: 194 names from the
+recipe document's ingredient lists, approved by the owner, read from
+`alembic/import/ingredients.csv` and inserted as 待補 stubs, skipping any name
+already in the library.
 
 `docs/frontend.md` describes the pages, `docs/data-model.md` the schema,
 `docs/api.md` the routes and the error shape, `docs/testing.md` how the suite

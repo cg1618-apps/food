@@ -1,6 +1,6 @@
 # Data model
 
-What the database holds today: twenty-six tables, at revision `k1notes`.
+What the database holds today: twenty-six tables, at revision `i3import`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the three managed
 vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
@@ -180,6 +180,29 @@ them:**
 
 Seeded rows are ordinary rows. Every seed insert is `ON CONFLICT DO NOTHING`, so
 a database where the owner already typed 肉類 or 飯 keeps that row untouched.
+
+### The starting ingredient list
+
+**The first ingredients come from the owner's recipe document**, not from
+typing. `i3import` loads `alembic/import/ingredients.csv` — 194 names drawn
+from that document's ingredient lists and approved by the owner — as stubs:
+every row it inserts has `needs_detail` true and carries only its names, its
+aliases (120 across the file), its category and its parent. Notes, storage and
+pictures are filled in afterwards, through the 待補 backlog.
+
+The file's header is `name_cn,name_en,aliases,parent,category`. Aliases are
+`|`-separated; `parent` names another row of the file; `category` is one of the
+seeded top-level categories above, matched by name, and an empty one — or one
+the owner has since renamed — files the row in the fallback category 未分類.
+
+The load leaves what is already there alone. A row is skipped when its name_cn
+or name_en matches, case-insensitively, any existing ingredient's name slot or
+alias, and no existing row is modified. A skipped row's existing twin still
+becomes the parent of the file's rows beneath it. A parent link that would
+point at itself or close a cycle is not made.
+
+Once loaded, the rows are ordinary data; the CSV is not read again by anything
+but a fresh database's migration chain.
 
 **A value's usage count is the number of `RESTRICT` references to it** — the
 things that would stop it being deleted:
@@ -367,3 +390,49 @@ set `passive_deletes="all"`, because SQLAlchemy otherwise nulls the child's
 foreign key before issuing the DELETE and the database never gets to refuse.
 A delete the schema forbids then succeeds through the ORM and fails only
 through raw SQL.
+
+## Where the owner's references land
+
+The owner kept recipes in a Google Doc and kitchen knowledge in Google Sheets
+before this app existed. Every column in those references has a home here, so
+entering them is typing, not designing. Columns that were empty in every row
+are not listed. Nutrition (the 零食 sheet) and the weekly schedule (the Plan
+sheet) are later modules and are not modelled yet.
+
+Only the ingredient names were imported (`i3import`, above); recipes and the
+sheets' storage, selection, heating and fruit rows are entered through the
+pages.
+
+| Reference | Column / feature | Lands in |
+| --- | --- | --- |
+| Recipe doc | title, `(YT 詹姆士)` suffix | `recipe.name_cn`; source platform + creator |
+| Recipe doc | `Link:` (sometimes two) | `recipe_source` rows |
+| Recipe doc | `人數` | `recipe.servings` |
+| Recipe doc | ingredient list, amounts | `recipe_line` (ingredient link + `amount`) |
+| Recipe doc | ingredient groups (漢堡醬, 調味料, for soup) | `recipe_line.section` |
+| Recipe doc | `optional`, `自由添加`, `可省` | `recipe_line.is_optional` |
+| Recipe doc | `米酒or清酒`, `味醂可代替糖` | `recipe_line.note` |
+| Recipe doc | a sauce used inside a dish (蚵仔煎醬) | `recipe.kind = base`, nested via `recipe_line.sub_recipe_id` |
+| Recipe doc | `Steps for 備料 / 醬汁備料 / cooking / noodles` | `recipe_step.section` |
+| Recipe doc | `* tips`, `Notes:`, unit conversions inside a recipe | `recipe.notes` |
+| Recipe doc | `保存期限約3天`, `放涼再裝, 冰冰箱保存` | `recipe.storage_notes` |
+| Recipe doc | section headers 主食 / 配菜 / 湯 / 小吃 / 甜點 / 飲料 / 醬料 | `recipe.course_id` |
+| Recipe sheets | 品項 | `recipe.name_cn` |
+| Recipe sheets | first column (飯 / 麵 / 肉 / 麵包 …) | recipe labels |
+| Recipe sheets | 烹調方式 | `recipe_method` → `cooking_method` |
+| Recipe sheets | 器具 | `recipe_equipment` → `equipment` |
+| Recipe sheets | 來源 (YT / shorts / website / book), creator, URL | `recipe_source` |
+| Recipe sheets | 可當主食 / 可當配菜 / 可當點心 | `recipe_serves_as` → `recipe_course` |
+| Recipe sheets | Recipe O / X | derived: has lines or steps ("written up" vs 書籤) |
+| Recipe sheets | 備註, `冷藏: 1 week`, `包含醬` | `recipe.notes` / `recipe.storage_notes` / a nested base |
+| Recipe sheets | 語言 | not modelled — empty in every row |
+| 合輯, Tips sheets | title, creator, URL | `kitchen_note` (kind 合輯 / 技巧 / 參考) |
+| 可煮 sheet | dish, time | `recipe.status = can_cook`, `recipe.time` |
+| 保存期限 sheet | Unused / Opened × 常溫 / Fridge / Freeze, how-to, source | `ingredient_preservation` (state, method, range, notes) + `ingredient_link` |
+| 保存期限 sheet | 熟肉 rows | `ingredient_preservation.state = cooked` |
+| 挑選 sheet | criteria columns, source | `ingredient.selection_notes` + `ingredient_link` |
+| 加熱 sheet | Item, Method, 預熱, 翻面, °C, °F, Time | `ingredient_heating` (°F derived) |
+| Fruit sheet | Item / Specific Item | parent / child ingredient |
+| Fruit sheet | Rating (S / A / B) | `ingredient.rating` |
+| Fruit sheet | Buy Source, Remark | `ingredient.sourcing_notes`, `ingredient.description` |
+| — | photographs | image library + per-owner galleries |

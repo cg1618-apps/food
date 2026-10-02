@@ -159,6 +159,7 @@ the entire failure.
 | `tests/api/test_ingredient_used_in.py` | "used in" over descendants, the list filter agreeing with it, the delete refusal, the query count |
 | `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, ordering after the target's rows, the fingerprint and its 409, refusals |
 | `tests/test_seed_migration.py` | the seeds, and the storage migration's copy and lossy downgrade, on a scratch database |
+| `tests/test_ingredient_import.py` | `i3import`: the committed CSV passes validation, each validation refusal with a good mirror, and the load on a scratch database — stubs, aliases, parents, categories, the skip rule, the cycle guard, a second run, the no-op downgrade |
 | `tests/unit/test_prod_compose.py` | the production compose file, including the image bind mount |
 
 **The image tests never touch the real `data/images`.** `image_dir` redirects
@@ -170,6 +171,17 @@ real directory would mean that rule had broken.
 (`food_seed_test`, created and dropped by the test), because it is the one
 migration here that loses data on purpose. The test asserts what survives: rows
 in a state other than `unused` are gone, and the range collapses to its maximum.
+
+**The `i3import` load is tested against its own scratch database**
+(`food_import_test`). Its skip rule is only exercised by **pre-existing
+ingredients whose names match CSV rows** — 醬油 typed by hand, and an
+ingredient answering to `garlic` only through an alias. On an empty database
+every row inserts and the rule has nothing to skip, so those rows are the
+load-bearing fixture, and the test asserts the hand-typed row is unchanged and
+still becomes the parent of the file's 醬油 children. The validation function
+is imported straight from the migration file (by path, with `importlib`) and run
+on the committed CSV, so a defect in the file fails the suite before it fails a
+deploy.
 
 **The API test client rolls the shared session back after a refused request.**
 The real `get_db` opens a session per request, which discards a failed flush.
