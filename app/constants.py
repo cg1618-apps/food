@@ -42,6 +42,10 @@ SOURCE_PLATFORMS = {
     "other": "其他",
 }
 
+# What a kitchen note is: a compilation of many dishes, one technique, or
+# something to look up. How the notes library files a note, not a rule.
+KITCHEN_NOTE_KINDS = {"compilation": "合輯", "technique": "技巧", "reference": "參考"}
+
 # Every closed list the frontend renders, with its display label, served by
 # GET /api/vocabularies/fixed so no list is copied into a component.
 FIXED_VOCABULARIES = {
@@ -51,4 +55,5 @@ FIXED_VOCABULARIES = {
     "recipe_kinds": [{"value": k, "label": v} for k, v in RECIPE_KINDS.items()],
     "recipe_statuses": [{"value": k, "label": v} for k, v in RECIPE_STATUSES.items()],
     "source_platforms": [{"value": k, "label": v} for k, v in SOURCE_PLATFORMS.items()],
+    "kitchen_note_kinds": [{"value": k, "label": v} for k, v in KITCHEN_NOTE_KINDS.items()],
 }

@@ -44,8 +44,12 @@ name an ingredient, a sub-recipe or a new stub ingredient, steps, sources,
 versions, the recipe library with its filters, recipe galleries, "used in" for
 ingredients and base recipes, and ingredient merge.
 
+**Kitchen notes' backend is built**, at revision `k1notes` (the head): a
+small library of bookmarks - compilations, techniques, references - each with
+a title, a kind, a link, a body, labels and a gallery.
+
 **The pages lag the API.** They have only been kept compatible, and do not yet
-show recipes, or edit heating, links, rating, the three vocabularies or images.
+show recipes or kitchen notes, or edit heating, links, rating, the three vocabularies or images.
 The notebook UI redesign is what adds them.
 
 `docs/data-model.md` describes the schema, `docs/api.md` the routes and the

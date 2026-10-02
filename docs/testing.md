@@ -128,6 +128,13 @@ is load-bearing and says so. Some examples worth knowing about:
   position per recipe, so a replace that inserts before it deletes collides
   with itself on the first unchanged re-send. Module 1 shipped that defect for
   aliases; this is what keeps recipes from repeating it.
+- `labels` (`tests/api/test_kitchen_notes.py`) gives the unknown-label test a
+  real label to send beside `999999`, and the test asserts the id in
+  `detail`: with the service check removed, the foreign key still answers 422,
+  but with a generic sentence. The note-image delete test asserts `owners` on
+  the 409 for the same reason - the `RESTRICT` alone answers 409 too, with no
+  owners on the body. Both were proved to fail with their service check
+  removed.
 
 One more that is weaker than it looks unless read carefully:
 `test_uvicorns_own_loggers_are_taken_over` asserts the handler **by identity**
@@ -143,11 +150,12 @@ the entire failure.
 | `tests/api/test_category_crud.py`, `test_label_crud.py` | the same round trip for categories and labels |
 | `tests/api/test_ingredient_storage.py` | storage state and range, heating, links, rating, the new list filters, the delete counts and the 409 that names the moved one, `/api/vocabularies/fixed` |
 | `tests/api/test_vocabularies.py` | the three vocabularies, parametrised over one factory |
-| `tests/api/test_images.py` | upload, re-encode, deduplication, ingredient and recipe galleries, an image's owners, deletion, serving |
+| `tests/api/test_images.py` | upload, re-encode, deduplication, ingredient and recipe galleries (kitchen-note galleries are in `test_kitchen_notes.py`), an image's owners, deletion, serving |
 | `tests/api/test_recipe_model.py` | every named recipe constraint, each refusal with its mirror; SET NULL on a version's parent; CASCADE and RESTRICT on delete |
 | `tests/api/test_recipe_crud.py` | the recipe round trip, `PATCH` list semantics, enums, sources, the version rule, delete refusals and stale counts |
 | `tests/api/test_recipe_lines.py` | line targets, the claimed-type refusal, the cycle guard, stub creation and reuse |
 | `tests/api/test_recipe_library.py` | the list's search (wildcards literal) and "any of" filters, creators, and the query count |
+| `tests/api/test_kitchen_notes.py` | every named kitchen-note constraint with its mirror, CASCADE on delete, the round trip, title, kind, link and label refusals, newest-first order, `q` over title and body (wildcards literal), the "any of" filters, the query count, the gallery and the image 409 naming a note |
 | `tests/api/test_ingredient_used_in.py` | "used in" over descendants, the list filter agreeing with it, the delete refusal, the query count |
 | `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, ordering after the target's rows, the fingerprint and its 409, refusals |
 | `tests/test_seed_migration.py` | the seeds, and the storage migration's copy and lossy downgrade, on a scratch database |

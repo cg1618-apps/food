@@ -48,7 +48,7 @@ that automatically for exactly this reason: it would throw away every write
 since the dump in order to recover from a failure that usually did not touch
 data at all. So it freezes at tier 3, names the dump, and stops.
 
-**Rolling back across the later revisions loses data in two further ways.**
+**Rolling back across the later revisions loses data in further ways.**
 `i2storage`'s downgrade is lossy by design: it deletes every preservation row
 whose state is not `unused` and collapses each range to its maximum, or its
 minimum when there is no maximum, and it drops `ingredient.rating`, every
@@ -57,6 +57,8 @@ gallery tables but leaves the files under `data/images` where they are, so the
 pictures survive on disk and nothing in the database says which ingredient they
 belonged to. `r1recipes`'s downgrade drops every recipe table and every recipe
 in them; the pictures a recipe gallery attached stay in `image` and on disk.
+`k1notes`'s downgrade drops `kitchen_note`, its label links and its gallery,
+and every note with them; the pictures stay, as for recipes.
 
 **So there is no route that keeps the data.** The real choice is:
 
@@ -88,7 +90,8 @@ they ever do not, believe the box.
 | Vocabularies and their seeds | `v1ocabulary` |
 | Storage ranges, heating, links, rating | `i2storage` |
 | The image library | `m1images` — thirteen tables |
-| Recipes | `r1recipes` — twenty-three tables, the current head |
+| Recipes | `r1recipes` — twenty-three tables |
+| Kitchen notes | `k1notes` — twenty-six tables, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target
