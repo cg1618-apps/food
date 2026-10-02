@@ -46,8 +46,11 @@ def create_app(dist: Path = DIST) -> FastAPI:
 
     # Uploaded images. Public, like every read here, and safe to cache
     # forever: names are content hashes, so a replaced picture is a new URL.
-    # check_dir=False so a fresh machine without data/images still starts;
-    # the directory is created on first upload.
+    # The directory is created here, at start, so a fresh machine without
+    # data/images still starts and the mount has something to serve. Uploads
+    # create their own subdirectories (library/, library/thumbs/) as needed.
+    # check_dir=False is kept so a directory removed while the app runs is a
+    # 404 for the file rather than an error from the mount.
     from app import config as app_config
 
     image_root = Path(app_config.settings.image_dir)

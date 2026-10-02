@@ -32,10 +32,15 @@ reference work.
 
 ## Status
 
-**Module 1 is built.** The ingredient library — six tables at revision
-`i1ngredients`, the read and write API over them, and the pages: a library
-with search and filters, a detail page, add and edit forms, and a categories
-and labels editor.
+**Module 1 is built.** The ingredient library — thirteen tables at revision
+`m1images`, the read and write API over them, and the pages: a library with
+search and filters, a detail page, add and edit forms, and a categories and
+labels editor. Beyond the ingredients themselves it holds storage with a state
+and a range, a heating guide, links, a rating, the three managed vocabularies
+(recipe courses, cooking methods, equipment) with their seeds, and the image
+library with ingredient galleries. The API is complete for all of it; the
+pages have only been kept compatible, and do not yet edit heating, links,
+rating, the three new vocabularies or images.
 
 `docs/data-model.md` describes the schema, `docs/api.md` the routes and the
 error shape, `docs/testing.md` how the suite is arranged and which tests are

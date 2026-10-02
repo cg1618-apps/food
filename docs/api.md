@@ -23,7 +23,8 @@ their prefixes from it, `deploy/gated-paths` is generated from it, and
 - **`201` on create, `204` on delete**, uniformly.
 - **List endpoints return a bare array**, not `{items, total}`. No pagination:
   these are small catalogues, and list order is fixed per router rather than a
-  query parameter.
+  query parameter. The one exception is `GET /api/images`, which grows with
+  every upload and takes `limit` and `offset`.
 - **Sorting is by display name, done in Python**, because the display name is
   the first non-empty of three columns and no single `ORDER BY` expresses it.
 - **`PATCH` applies only what was sent.** Absent and explicitly null are
@@ -42,10 +43,12 @@ detail.** A stale delete answers:
 
 ```json
 {"detail": "This now removes 4 aliases, not 3. Check and confirm again.",
- "expected": 3, "actual": 4}
+ "field": "aliases", "expected": 3, "actual": 4}
 ```
 
-so the dialog can correct itself in place. Telling the user to reload is what a
+`field` names which count moved, in the delete's query-parameter names. Several
+counts can share a value, so a dialog matching `expected` against its own
+numbers would correct the wrong one. The dialog corrects itself in place. Telling the user to reload is what a
 prose-only body forces.
 
 **FastAPI's automatic validation error is the exception**: its `detail` is an
@@ -87,26 +90,141 @@ discipline was never tested.
 | `POST /api/edit/ingredients` | |
 | `PATCH /api/edit/ingredients/{id}` | |
 | `DELETE /api/edit/ingredients/{id}` | requires the confirmation counts |
+| `PUT /api/edit/ingredients/{id}/images` | replace the gallery, in order |
 | `POST /api/edit/ingredients/{id}/labels/{label_id}` | attach |
 | `DELETE /api/edit/ingredients/{id}/labels/{label_id}` | detach |
 
 **`GET /api/ingredients` is also module 2's typeahead.** The library search box
 and recipe-line completion ask the same question, and two implementations would
 answer differently within a month. Query parameters: `q`, `category_id`,
-`label_id`, `parent_id`, `needs_detail`.
+`label_id`, `parent_id`, `needs_detail`, `rating` (one grade), and `has_parent`
+(`true` for varieties, `false` for top-level ingredients).
+
+A list row is a summary: names, `category_id`, `parent_id`, `needs_detail`,
+`rating`, `cover` (the first gallery image's `thumb_url` and `focus`, or null)
+and `fridge`, the `{min, max}` of the unused, refrigerated preservation row or
+null when there is none.
+
+**The full row** adds `aliases`, `preservation`, `heating`, `links`, `labels`
+and `images`. A preservation entry is `state` (`unused`, `opened`, `cooked`;
+default `unused`), `method`, `duration_min_days`, `duration_max_days` and
+`notes`. A heating entry is `method` (`{id, display_name}`), `temperature_c`,
+`temperature_f` (computed, never sent), `duration`, `preheat`, `flip` and
+`notes`; a link is `url` and `title`. An image is `image_id`, `url`,
+`thumb_url`, `width`, `height` and `focus`.
+
+**`POST` and `PATCH` take `rating`, `preservation`, `heating` (each entry names
+a `method_id`) and `links`.** On `PATCH`, each list that is sent replaces the
+stored one and each that is absent is left alone. Aliases and preservation are
+*reconciled* rather than rewritten, so re-sending a row the ingredient already
+has changes nothing instead of colliding with its own unique key.
+
+Refused with 422: a `rating` outside S to D, an unknown `state` or `method`, a
+duration that is not positive, a minimum above the maximum, the same
+`(state, method)` twice, a link that is not `http` or `https`, and a heating
+entry naming no cooking method. A preservation row with only a maximum is valid.
 
 `q` matches any of the three name slots or any alias, case-insensitively, as a
 substring. The alias arm is a subquery rather than a join, so an ingredient
 matching two of its own aliases comes back once.
 
-**`DELETE` takes `aliases` and `preservation` as required query parameters** —
-the counts the confirmation dialog showed. If either has moved, the answer is
-409 carrying `expected` and `actual`. It is an optimistic check, not a lock:
+**`DELETE` takes `aliases`, `preservation`, `heating` and `links` as required
+query parameters** — the counts the confirmation dialog showed. If any has
+moved, the answer is 409 carrying `field`, `expected` and `actual`. It is an optimistic check, not a lock:
 nothing is held between the count and the delete, and what it guards is a tab
 left open rather than a second person.
 
 Children are not in the counts. They are `RESTRICT`, so an ingredient with
-children cannot be deleted at all — a refusal, not a number.
+children cannot be deleted at all — a refusal, not a number. Gallery rows are
+not in the counts either: the pictures survive, so nothing is removed that the
+user would miss.
+
+**`PUT /api/edit/ingredients/{id}/images`** takes a list of
+`{"image_id": 12, "focus": "50% 30%"}` and makes it the gallery, in that order;
+index 0 is the cover. `[]` clears it. An unknown `image_id` is 404, the same
+image twice is 422, and a `focus` that is not `"X% Y%"` with each between 0 and
+100 is 422. Putting the same list twice in a row succeeds. The answer is the
+full ingredient.
+
+## Vocabularies
+
+Three managed vocabularies share one shape, so one description covers them:
+
+| Route | |
+| --- | --- |
+| `GET /api/recipe-courses` | |
+| `GET /api/cooking-methods` | |
+| `GET /api/equipment` | |
+| `POST /api/edit/<same>` | |
+| `PATCH /api/edit/<same>/{id}` | |
+| `DELETE /api/edit/<same>/{id}` | |
+
+Each value is `id`, `display_name`, `name_cn`, `name_en`, `sort_order` and
+`usage_count`, listed by `sort_order` then name. A value needs at least one name
+and names are unique case-insensitively per slot.
+
+**Deleting a value that is in use is a 409 carrying `usage_count`**, answered
+before the database is asked; the `RESTRICT` foreign key is the backstop. Today
+only cooking methods have referents (ingredient heating rows). Courses and
+equipment report zero until recipes exist.
+
+**`GET /api/vocabularies/fixed`** serves every closed list the interface
+renders, as `{value, label}` pairs under `preservation_methods`,
+`preservation_states` and `ratings`, so no component keeps its own copy. These
+lists are constants in the code and are not editable through the API.
+
+## Images
+
+| Route | |
+| --- | --- |
+| `GET /api/images` | the library, newest first |
+| `GET /api/images/{id}` | one image and the rows that attach it |
+| `POST /api/edit/images` | upload, multipart field `file` |
+| `DELETE /api/edit/images/{id}` | |
+| `GET /images/{key}` | the file itself |
+
+An image is `id`, `url`, `thumb_url`, `width`, `height`, `byte_size`,
+`original_filename`, `uploaded_at` and `attachment_count`; the single-image read
+adds `owners`, a list of `{type, id, display_name}`.
+
+**`GET /api/images` takes `unused`, `limit` (default 60, at most 200) and
+`offset`.** `unused=true` returns only images nothing attaches, `false` only
+those something does. The filter runs in SQL before the page is cut, so a page
+is never short.
+
+**An upload is re-encoded, never stored as sent.** The filename extension and
+`Content-Type` are ignored. Pillow verifies the bytes; the image then has its
+EXIF rotation applied, is converted to RGB (transparency flattened onto white),
+scaled to at most 2000 px on its long edge and written as JPEG at quality 88,
+with a 400 px thumbnail beside it. The re-encode is the security control: it
+strips EXIF, GPS included, and anything riding in the file. The rotation is
+applied first because the re-encode discards the tag, and a portrait phone
+photograph would otherwise land sideways.
+
+The key is the SHA-256 of the normalised bytes, so **uploading the same picture
+twice answers 200 with the existing row** where a new one answers 201, and no
+second row is made. The files are written again either way, which is how a lost
+file comes back.
+
+| Status | Cause |
+| --- | --- |
+| 413 | over `MAX_IMAGE_UPLOAD_MB` (default 10) |
+| 422 | not an image Pillow can read |
+| 422 | over 50 megapixels once decoded — a decompression bomb |
+
+**The size cap bounds what is processed, not what is received.** The multipart
+body is spooled before the handler runs, so a larger body has already arrived
+when the 413 is answered. What bounds who can send one is Cloudflare Access on
+`/api/edit`.
+
+**Deleting an attached image is a 409** whose body carries `owners`, and its
+files stay. Deleting an unattached one is 204 and removes both files; a file
+already missing is not an error.
+
+**`/images/<key>` is public**, like every read. Keys are content hashes, so a
+URL never changes meaning and may be cached indefinitely. A key that does not
+exist is a 404, not the application shell: the bundle's catch-all refuses
+`/images` for the same reason it refuses `/api` and `/health`.
 
 ## Categories
 

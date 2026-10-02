@@ -1,6 +1,10 @@
 # Data model
 
-What the database holds today. Six tables, all of them module 1's.
+What the database holds today: thirteen tables, at revision `m1images`. Module
+1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
+`ingredient_preservation`, `label`, `ingredient_label`), the three managed
+vocabularies, `ingredient_heating`, `ingredient_link`, and the two image
+tables.
 
 ## Conventions shared by every table
 
@@ -43,6 +47,7 @@ One thing you cook with.
 | `sourcing_notes` | where to get it |
 | `preservation_notes` | keeping advice tied to no single method |
 | `needs_detail` | the to-do flag |
+| `rating` | optional grade, one of S, A, B, C, D |
 | `created_at`, `updated_at` | |
 
 **A parent ingredient is an ordinary ingredient.** 醬油 has 生抽 and 老抽
@@ -57,6 +62,10 @@ belongs in `ingredient_alias`. Without that line the two hold the same strings.
 
 **`needs_detail` is explicit, never derived from "has no notes".** Salt needs no
 selection guide and must be able to say so.
+
+**`rating` grades one variety**, mostly a child — 愛文芒果 under 芒果 — and is
+validated against `RATINGS` in `app/constants.py`. It is a `String`, like every
+closed list here, so the grades are a one-line edit.
 
 ## `ingredient_category`
 
@@ -97,13 +106,108 @@ refused.
 
 ## `ingredient_preservation`
 
-One row per *way* of keeping the thing: 冷藏 21 天, 冷凍 90 天, 乾燥 with no
-time given. Unique on `(ingredient_id, method)`.
+One row per *state* and *way* of keeping the thing: 未使用 冷藏 3–5 天, 已開封
+冷藏 1–2 天, 熟食 冷凍 2–3 個月, 乾燥 with no time given.
 
-`duration_days` is a single typical number and must be positive or null. A
-range goes in `notes` ("3–5 天, less once cut"): the integer is what a future
-"what is about to go off" view can compute with, the prose is what is actually
-true.
+`state` is `unused`, `opened` or `cooked` (`PRESERVATION_STATES`), defaulting to
+`unused`. It exists because the same method lasts different lengths depending on
+whether the thing has been opened, cut or cooked.
+
+**The time is a range, and both ends are optional.** `duration_min_days` and
+`duration_max_days` are each null or positive
+(`ck_ingredient_preservation_duration_positive`), and when both are set the
+minimum may not exceed the maximum (`ck_ingredient_preservation_duration_order`).
+A row with only a maximum is "up to 3 days"; a row with neither is a note such as
+"see the date".
+
+Module 1 stored one typical number and put a range in `notes`. That was
+reversed because the reference sheets state a range in almost every row, so a
+single number would have been invented. See `docs/notes/decisions.md`.
+
+**Unique on `(ingredient_id, state, method)`**
+(`uq_ingredient_preservation_state_method`). The same method may appear once per
+state; two 冷藏 rows for the same state are refused.
+
+## `ingredient_heating`
+
+How to heat or cook one ingredient quickly: a method, a temperature, a time.
+Many rows per ingredient, ordered by `sort_order`.
+
+| Column | Notes |
+| --- | --- |
+| `method_id` | `cooking_method`, **required**, `RESTRICT` |
+| `temperature_c` | optional, positive |
+| `duration` | free text — "8–10 分鐘" is not a number |
+| `preheat`, `flip` | booleans |
+| `notes` | |
+
+**Not unique on method**: a sausage may be air-fried two ways. **Temperature is
+stored in Celsius only**; Fahrenheit is computed in the response, because two
+stored temperatures can disagree and one cannot.
+
+## `ingredient_link`
+
+A reference link — where the advice came from. `url` is required and the API
+accepts `http` and `https` only, because a `javascript:` URL rendered as a link
+is script execution. `title` is optional; rows are ordered by `sort_order`.
+
+## The managed vocabularies
+
+`recipe_course`, `cooking_method` and `equipment` share one shape, declared once
+in `VocabularyMixin` (`app/models/vocabulary.py`): `name_cn`, `name_en`,
+`sort_order`, at least one name (`ck_<table>_has_a_name`) and a case-insensitive
+unique index per name slot with default null handling, as on `ingredient`.
+
+They are tables rather than lists in `app/constants.py` because the owner edits
+them: renaming 煮 to 水煮 is one row, not a deploy. The closed lists in
+constants are the ones the app's own logic branches on (storage state, rating);
+these are the ones it only displays and filters by.
+
+**The migration seeds them, and the ingredient categories and labels with
+them:**
+
+| Table | Seeded rows |
+| --- | --- |
+| `recipe_course` | 主食, 配菜, 湯, 小吃點心, 甜點, 飲料, 醬料 |
+| `cooking_method` | 煮, 壓力鍋煮, 煎, 炒, 炸, 氣炸, 烤, 蒸, 川燙, 涼拌, 微波, 混合 |
+| `equipment` | 鍋子, 壓力鍋, 平底鍋, 氣炸鍋, 烤箱, 油鍋, 果汁機, 電鍋, 微波爐, 保鮮盒, 碗 |
+| `ingredient_category` | 肉類, 海鮮, 蔬菜, 菇類, 水果, 蛋豆製品, 主食穀物, 調味料, 乳製品, 乾貨 (top level) |
+| `label` | 飯, 麵, 肉, 麵包, 馬鈴薯, 地瓜, 沙拉, 鍋 |
+
+Seeded rows are ordinary rows. Every seed insert is `ON CONFLICT DO NOTHING`, so
+a database where the owner already typed 肉類 or 飯 keeps that row untouched.
+
+`cooking_method` is referenced by `ingredient_heating` today. `recipe_course` and
+`equipment` have no referent until recipes exist, and report a usage count of
+zero.
+
+## `image` and `ingredient_image`
+
+`image` is the library: one row per stored picture. `checksum` is the SHA-256 of
+the *normalised* JPEG and is unique (`uq_image_checksum`), so identical pixels
+are one row. `storage_key` and `thumb_key` are paths under the image directory
+(`library/<sha256>.jpg`, `library/thumbs/<sha256>.jpg`), alongside
+`original_filename`, `byte_size`, `width`, `height` and `uploaded_at`. The
+pixels are on disk, not in the database.
+
+**A gallery is a join table per owner type, with real foreign keys.**
+`ingredient_image` is the first; recipes and kitchen notes will each add their
+own. Media has one polymorphic table with an `owner_type` and an `owner_id` that
+nothing constrains.
+
+| Column | Notes |
+| --- | --- |
+| `ingredient_id` | `CASCADE` |
+| `image_id` | `RESTRICT` |
+| `position` | 0 is the cover; unique per ingredient |
+| `focus` | `"X% Y%"` with each 0–100, or null for centred |
+
+Deleting an ingredient removes its gallery rows and never the pictures. An image
+that is still attached cannot be deleted: the API answers 409 naming the owners,
+and the foreign key is the backstop. `focus` is per attachment, because one
+picture may be cropped differently in two galleries. An image may appear once in
+a gallery (`uq_ingredient_image_once`) and a position once
+(`uq_ingredient_image_position`).
 
 ## `label` and `ingredient_label`
 
@@ -118,13 +222,17 @@ Labels have two name slots, not three; a tag has no formal alternative form.
 
 | Relationship | Behaviour |
 | --- | --- |
-| ingredient → its aliases, preservation rows, label links | `CASCADE` |
+| ingredient → its aliases, preservation rows, heating rows, links, label links, gallery rows | `CASCADE` |
 | ingredient → its children | `RESTRICT` |
 | category → its ingredients and child categories | `RESTRICT` |
+| cooking method → the heating rows that use it | `RESTRICT` |
+| image → the gallery rows that attach it | `RESTRICT` |
 
 The asymmetry is the point and it is the kind that reads as uniform: an alias
-has no life without its ingredient, but a child ingredient does, and a category
-full of ingredients is not something to empty by accident.
+has no life without its ingredient, but a child ingredient does, a category
+full of ingredients is not something to empty by accident, and a photograph
+outlives any one place it was shown. The cascade runs from the owner down to the
+gallery row and stops there; the picture and its file stay in the library.
 
 **The ORM must not undo this.** Relationships across a `RESTRICT` foreign key
 set `passive_deletes="all"`, because SQLAlchemy otherwise nulls the child's

@@ -271,6 +271,72 @@ It was written that way first and the model tests caught it immediately.
 `test_any_number_of_ingredients_may_leave_a_name_slot_empty` is what refuses
 the change if someone applies the lesson again.
 
+## Storage ranges, heating, images
+
+What the branch after module 1 chose, and what it turned down.
+
+- **A storage time is a range, which reverses module 1.** Module 1 held one
+  typical integer and said a range goes in `notes`, so a future "what is about
+  to go off" view would have a number to compute with. The owner's reference
+  sheets state a range in almost every row, so a single number would have been
+  invented, and a view that computed with it would have been computing with
+  something nobody said. Both ends are optional, so "up to 3 days" and "see the
+  date" are representable without a sentinel. The cost is that the computable
+  number is now a choice the view makes (the maximum, the minimum or the
+  midpoint) rather than one the data made. `fridge` on the list summary
+  returns both ends and leaves that choice to the caller.
+- **Storage gained a state, and the unique key gained it with it.** The sheets
+  separate unused from opened, and a cooked row is a different thing again, so
+  the key is `(ingredient_id, state, method)`. Rejected: encoding the state in
+  `notes`, which is the same mistake as encoding the range there.
+- **Heating stores Celsius only.** Fahrenheit is computed in the response. Two
+  stored temperatures can disagree and one cannot.
+- **A gallery table per owner type, not media's polymorphic table.** Media has
+  one attachment table keyed by `owner_type` and `owner_id`, which nothing
+  constrains, and records that nothing stops an attachment outliving its owner.
+  food has three owner types, so three small tables with real foreign keys
+  remove the whole class at the price of one shared module's worth of
+  repetition. `images.OWNER_TABLES` is the one list the library's usage counts
+  and owner listings read. The owner side cascades and the image side
+  restricts, so deleting an owner removes its gallery and never a picture, and
+  a picture still shown somewhere cannot be deleted.
+- **The upload pipeline is media's, plus two additions.** The re-encode to JPEG
+  is media's security control and is kept. Added: the EXIF orientation is
+  applied first, because the re-encode drops the tag and portrait phone photos
+  would otherwise be stored sideways; and a 50 megapixel ceiling, so a small PNG
+  declaring 30000 by 30000 pixels is a 422 and not a worker eating memory. Both
+  are tested.
+- **`IMAGE_DIR` is a setting, read from `settings` at call time.** Media binds
+  its directory at import, which is why patching it in a test does nothing
+  there. Reading it at call time is what lets a test point it at a temporary
+  directory. The `/images` mount is the exception: it is built with the app, so
+  the test client builds the app after the directory is set.
+- **The seeds live in a migration, with `ON CONFLICT DO NOTHING`.** A
+  production database receives the starting vocabulary on deploy with nobody on
+  the box, and a development database gets it from `alembic upgrade head` rather
+  than a script someone forgets. `DO NOTHING` is what lets it land on a database
+  where the owner already typed 肉類 or 飯, keeping their row as it is.
+  Rejected: a separate seed script, which two machines and a box would each have
+  to remember to run.
+- **The `v1ocabulary` downgrade is best-effort.** It deletes only seeded rows
+  that nothing references, identifying them by name, so an unreferenced row the
+  owner created with a seeded name goes too. A marker column on every row for a
+  downgrade nobody expects to run was the alternative, and was not worth it.
+- **The `i2storage` downgrade is lossy, deliberately.** The old key
+  `(ingredient_id, method)` cannot hold two states, so rows in any state but
+  `unused` are deleted, and the range collapses to its maximum, or its minimum
+  when there is no maximum. The alternative was to refuse to downgrade, which
+  makes the rollback tooling's contract false. A scratch-database test asserts
+  what survives. `m1images` is the opposite case: its downgrade drops the
+  tables and leaves the files under `IMAGE_DIR` alone, because a migration has
+  no business deleting the only copy of a photograph.
+- **A repeated `PATCH` of aliases and storage rows is reconciled, not
+  replaced.** Module 1 replaced the collection, and the unit of work `INSERT`s
+  before it `DELETE`s, so re-sending a row the ingredient already had collided
+  with its own unique key and answered 409. Aliases are now matched by value and storage rows by
+  `(state, method)`. Gallery replacement clears and flushes before it assigns,
+  for the same reason.
+
 ## Rules with no referent yet
 
 Written down where the next person will look rather than where they were
