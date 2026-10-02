@@ -109,7 +109,23 @@ def client(db):
     from app.main import create_app
 
     app = create_app()
-    app.dependency_overrides[get_db] = lambda: db
+
+    def request_session():
+        """Hand out the test's session, and clean up after a refused request.
+
+        The real `get_db` opens a session per request and closes it, which
+        discards a failed flush. This shared session has no such end, so a
+        request that the database refuses (an IntegrityError answered 409)
+        would leave it needing a rollback and fail the NEXT request with a 500
+        that has nothing to do with it.
+        """
+        try:
+            yield db
+        finally:
+            if not db.is_active:
+                db.rollback()
+
+    app.dependency_overrides[get_db] = request_session
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
     app.dependency_overrides.clear()
