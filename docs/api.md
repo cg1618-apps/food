@@ -56,6 +56,14 @@ Telling the user to reload is what a prose-only body forces.
 treating it as a string renders `[object Object]`, which is exactly what a
 malformed body produces.
 
+### An id in the body that names nothing is 422
+
+**A missing row named by the URL is 404; an id inside the request body that
+names no row is 422**, everywhere — a parent, a label, a cooking method, a
+course, a version's original, a line's ingredient or sub-recipe, a gallery's
+`image_id`. The URL resolved; it is the payload that is wrong. The detail
+names the id.
+
 ### Which status a constraint violation answers
 
 Classified by SQLSTATE, not by constraint name, and decided once with every
@@ -86,10 +94,12 @@ discipline was never tested.
 | --- | --- |
 | `GET /api/ingredients` | list, search and filter |
 | `GET /api/ingredients/{id}` | the full row |
-| `GET /api/ingredients/{id}/cascade` | what a delete would remove |
+| `GET /api/ingredients/{id}/cascade` | what a delete would remove, and what blocks it |
+| `GET /api/ingredients/{id}/merge-preview?into={target}` | what a merge would do |
 | `POST /api/edit/ingredients` | |
 | `PATCH /api/edit/ingredients/{id}` | |
 | `DELETE /api/edit/ingredients/{id}` | requires the confirmation counts |
+| `POST /api/edit/ingredients/{id}/merge` | merge into another, then delete |
 | `PUT /api/edit/ingredients/{id}/images` | replace the gallery, in order |
 | `POST /api/edit/ingredients/{id}/labels/{label_id}` | attach |
 | `DELETE /api/edit/ingredients/{id}/labels/{label_id}` | detach |
@@ -102,11 +112,20 @@ answer differently within a month. Query parameters: `q`, `category_id`,
 
 A list row is a summary: names, `category_id`, `parent_id`, `needs_detail`,
 `rating`, `cover` (the first gallery image's `thumb_url` and `focus`, or null)
-and `fridge`, the `{min, max}` of the unused, refrigerated preservation row or
-null when there is none.
+`fridge`, the `{min, max}` of the unused, refrigerated preservation row or
+null when there is none, and `used_in_count`.
 
-**The full row** adds `aliases`, `preservation`, `heating`, `links`, `labels`
-and `images`. A preservation entry is `state` (`unused`, `opened`, `cooked`;
+**"Used in" is distinct recipes with a line naming the ingredient or any
+ingredient below it**, at any depth of `parent_id`. A recipe naming both 生抽
+and 老抽 counts once on 醬油. Depth through sub-recipes is zero: a dish using a
+base that uses the ingredient is not counted. `used_in_count` on a summary,
+`used_in` on the full row and the recipe list's `ingredient_id` filter all read
+one query, so they cannot disagree; the list computes every row's count in a
+fixed number of queries.
+
+**The full row** adds `aliases`, `preservation`, `heating`, `links`, `labels`,
+`images` and `used_in` (`{id, display_name, kind}` recipes, sorted by display
+name). Its `parent` and `children` are summaries, `used_in_count` included. A preservation entry is `state` (`unused`, `opened`, `cooked`;
 default `unused`), `method`, `duration_min_days`, `duration_max_days` and
 `notes`. A heating entry is `method` (`{id, display_name}`), `temperature_c`,
 `temperature_f` (computed, never sent), `duration`, `preheat`, `flip` and
@@ -127,7 +146,8 @@ duration that is not positive, a minimum above the maximum, the same
 entry naming no cooking method. A preservation row with only a maximum is valid.
 
 `q` matches any of the three name slots or any alias, case-insensitively, as a
-substring. The alias arm is a subquery rather than a join, so an ingredient
+substring. It is literal text: `%`, `_` and `\` match themselves, not any
+character (`app/services/search.py`). The alias arm is a subquery rather than a join, so an ingredient
 matching two of its own aliases comes back once.
 
 **`DELETE` takes `aliases`, `preservation`, `heating` and `links` as required
@@ -141,12 +161,197 @@ children cannot be deleted at all — a refusal, not a number. Gallery rows are
 not in the counts either: the pictures survive, so nothing is removed that the
 user would miss.
 
+**An ingredient a recipe line names is refused with 409 first**, before the
+database is asked, with `used_in: [{id, display_name}]` on the body — the
+recipes naming it **directly**. A line naming one of its children does not
+block it; the child does that on its own. Merging is the way out of a
+duplicate that recipes use.
+
+**`GET .../cascade` answers `{aliases, preservation, heating, links, labels,
+children, recipes}`.** The first four are echoed back to the delete;
+`children` and `recipes` (distinct recipes with a line naming it directly)
+block the delete rather than being removed by it.
+
+**Merge.** `POST /api/edit/ingredients/{id}/merge` with
+`{"into": target, "fingerprint": "<from the preview>"}` moves everything the source has onto the target, deletes the source, and
+answers the target's full row. `GET /api/ingredients/{id}/merge-preview?into=`
+answers what it would do, computed by the same function, without writing:
+
+```json
+{
+  "source": {"...": "summary"},
+  "target": {"...": "summary"},
+  "moves": {"lines": 2, "children": 1, "links": 1, "labels": 1,
+            "images": 1, "heating": 1, "preservation": 1},
+  "new_aliases": ["蔥花", "青蔥"],
+  "dropped_preservation": [{"state": "unused", "method": "冷藏"}],
+  "prose": {"description": "dropped", "selection_notes": "moved"},
+  "fingerprint": "3f1c…"
+}
+```
+
+`fingerprint` is a SHA-256 over every row the merge would move or drop — the
+rows themselves, not their counts — and the merge requires it back. The merge
+recomputes the plan; if anything it would move or drop has been added,
+removed or edited since the preview was read, it answers **409** and changes
+nothing:
+
+```json
+{"detail": "This merge has changed since the preview. Check it and confirm again.",
+ "preview": {"...": "the fresh preview, with its own fingerprint"}}
+```
+
+so the dialog can redraw from `preview` and confirm with its fingerprint. A
+body with no `fingerprint` is 422.
+
+The target wins every collision:
+
+- recipe lines naming the source, its children, links and heating rows all
+  move; links and heating are numbered after the target's own;
+- labels are the union — `moves.labels` counts those the target lacked;
+- images are appended after the target's gallery, skipping any the target
+  already carries;
+- the source's name slots and aliases become target **aliases**, never names,
+  unless the target already answers to them (a name slot or an alias,
+  ignoring case). `new_aliases` is sorted;
+- a preservation row moves, numbered after the target's own, unless the
+  target has a note for that `(state, method)`, in which case it is dropped
+  and listed;
+- each prose field the source has (`description`, `selection_notes`,
+  `sourcing_notes`, `preservation_notes`) moves when the target's is empty and
+  is dropped otherwise; `prose` lists only fields the source has;
+- names, category, parent, rating and `needs_detail` are the target's and are
+  not touched.
+
+Refused with 422: into itself, into one of its own descendants, and an `into`
+that names nothing. A missing source — the id in the URL — is 404. The body
+refuses unknown fields. These are checked before the fingerprint, so a merge
+that could never run is a 422 or 404, not a 409.
+
 **`PUT /api/edit/ingredients/{id}/images`** takes a list of
 `{"image_id": 12, "focus": "50% 30%"}` and makes it the gallery, in that order;
-index 0 is the cover. `[]` clears it. An unknown `image_id` is 404, the same
-image twice is 422, and a `focus` that is not `"X% Y%"` with each between 0 and
+index 0 is the cover. `[]` clears it. An unknown `image_id` is 422 naming the
+id (see "An id in the body that names nothing is 422"), the same image twice
+is 422, and a `focus` that is not `"X% Y%"` with each between 0 and
 100 is 422. Putting the same list twice in a row succeeds. The answer is the
 full ingredient.
+
+## Recipes
+
+| Route | |
+| --- | --- |
+| `GET /api/recipes` | list, search and filter |
+| `GET /api/recipes/{id}` | the full recipe |
+| `GET /api/recipes/{id}/cascade` | what a delete would remove, and what blocks it |
+| `POST /api/edit/recipes` | |
+| `PATCH /api/edit/recipes/{id}` | also the in-place status change |
+| `DELETE /api/edit/recipes/{id}` | requires the confirmation counts |
+| `PUT /api/edit/recipes/{id}/images` | replace the gallery, in order |
+| `GET /api/recipe-creators` | every distinct source creator |
+
+**`GET /api/recipes`** is the library: a bare array of summaries sorted by
+display name. A summary is the name slots and `display_name`, `kind`,
+`status`, `course` (`{id, display_name}` or null), `methods`
+(`{id, display_name}` list), `creators` (the distinct creators of its sources,
+in source order, skipping sources with none), `time`, `written_up` and `cover`
+(the first gallery image's `thumb_url` and `focus`, or null).
+
+Query parameters:
+
+- `q` — any name slot or any alias, case-insensitively, as a substring, with
+  `%`, `_` and `\` matched literally as on the ingredient list. The alias arm is a subquery, so a recipe matching two of its aliases comes back
+  once;
+- `course_id`, `status`, `kind`, `label_id`, `method_id`, `equipment_id`,
+  `creator`, `ingredient_id` — each may repeat, and a repeated parameter means
+  **any of** its values (`?status=can_cook&status=regular`). Different
+  parameters narrow each other. `course_id` is the course a recipe is filed
+  under, not one it serves as; `creator` matches a source's creator exactly;
+  `ingredient_id` matches recipes using that ingredient as "used in" defines
+  it — a line naming it or anything below it, depth zero through sub-recipes;
+- `written_up` — `true` for recipes with at least one line or step, `false`
+  for the rest.
+
+**`GET /api/recipe-creators`** is every distinct creator any source names,
+sorted, as a bare array of strings — for suggestions while typing a source and
+for the `creator` filter.
+
+**`PUT /api/edit/recipes/{id}/images`** replaces the gallery exactly as an
+ingredient's does, and answers the full recipe.
+
+**The full recipe** is the name slots and `display_name`, `kind` (`dish` or
+`base`), `status` (`want_to_try`, `can_cook`, `regular`), `course`
+(`{id, display_name}` or null), `servings`, `time`, `description`,
+`storage_notes`, `notes`, and:
+
+- `aliases` — sorted strings;
+- `sources` — `{id, platform, creator, url, title, sort_order}`;
+- `lines` — `{id, position, section, ingredient, sub_recipe, amount, note,
+  is_optional}`, where exactly one of `ingredient`
+  (`{id, display_name, needs_detail}`) and `sub_recipe`
+  (`{id, display_name, kind}`) is set;
+- `steps` — `{id, position, section, body}`;
+- `serves_as`, `labels`, `methods`, `equipment` — `{id, display_name}` lists;
+- `images` — as an ingredient's;
+- `variant_of` — the original this is a version of, `{id, display_name,
+  kind}` or null;
+- `versions` — the other recipes in its version family: an original's
+  versions, or a version's siblings (its original is `variant_of`);
+- `used_in` — recipes with a line naming this one **directly**. A dish using a
+  base that uses this base is not listed;
+- `written_up` — true when it has at least one line or step. Derived, never
+  sent.
+
+**`POST` takes the whole recipe; `PATCH` takes any subset.** Defaults on create
+are `kind: dish` and `status: want_to_try`. The lists are `aliases`, `sources`,
+`lines`, `steps`, `serves_as_ids`, `label_ids`, `method_ids` and
+`equipment_ids`: on `PATCH` each one sent replaces the stored list and each one
+absent is left alone. Sources, lines and steps take their order from the list —
+a request naming `sort_order` or `position` is a 422 — and re-sending the same
+lines and steps succeeds. A `PATCH` carrying only `status` is the status
+change; nothing else is needed for it.
+
+A source is `{platform, creator, url, title}` with at least one of the last
+three; `url` must be `http` or `https`. A step is `{section, body}` with a
+non-blank `body`.
+
+**A line names exactly one of `ingredient_id`, `sub_recipe_id` or
+`new_ingredient`** (`{name_cn, name_en}`, at least one), plus `section`,
+`amount`, `note` and `is_optional`. There is no type field, and a payload
+sending one is a 422: the stored kind of line is whichever column is set.
+
+`new_ingredient` reuses an ingredient whose name slot or alias equals a typed
+name, ignoring case; otherwise it creates a stub in the fallback category with
+`needs_detail` set. Names resolved earlier in the same save count, so one new
+name typed into two lines is one stub. A near match is not reused — the
+typeahead (`GET /api/ingredients?q=`) is where a near match is offered.
+
+Refused with 422, and a refused save writes nothing — not even a stub an
+earlier line asked for:
+
+- a `kind`, `status` or `platform` outside its list, including an explicit
+  null for `kind` or `status`;
+- no name left on the merged row;
+- **an id inside the body that names nothing** — `course_id`, `variant_of_id`,
+  any of the four id lists, `ingredient_id` or `sub_recipe_id` in a line. The
+  detail names the id. The URL's own recipe missing is 404;
+- a line whose recipe is reachable from its `sub_recipe_id` through sub-recipe
+  lines, at any depth — itself included;
+- **the version rule**: `variant_of_id` naming the recipe itself, naming a
+  recipe that is itself a version, or set on a recipe that has versions of its
+  own. Versions are one level deep.
+
+**`GET .../cascade` answers `{aliases, sources, lines, steps, used_in}`.** The
+first four are what the delete removes and are echoed back; `used_in` is a
+count of the recipes naming this one, and blocks the delete rather than being
+removed by it.
+
+**`DELETE` takes `aliases`, `sources`, `lines` and `steps` as required query
+parameters**, and a moved count is the 409 with `field`, `expected` and
+`actual` that an ingredient's is. A recipe another recipe's line names is
+refused with 409 first, before the database is asked, with
+`used_in: [{id, display_name}]` on the body. Its versions survive with
+`variant_of` null. Label, method, equipment and serves-as links and gallery
+rows go with it uncounted; the images themselves stay.
 
 ## Vocabularies
 
@@ -166,13 +371,16 @@ Each value is `id`, `display_name`, `name_cn`, `name_en`, `sort_order` and
 and names are unique case-insensitively per slot.
 
 **Deleting a value that is in use is a 409 carrying `usage_count`**, answered
-before the database is asked; the `RESTRICT` foreign key is the backstop. Today
-only cooking methods have referents (ingredient heating rows). Courses and
-equipment report zero until recipes exist.
+before the database is asked; the `RESTRICT` foreign key is the backstop. The
+count is the number of `RESTRICT` references: for a course, the recipes filed
+in it (a recipe that only serves as that course does not count, and its link
+goes with the course); for a cooking method, ingredient heating rows plus
+recipes using it; for equipment, recipes using it.
 
 **`GET /api/vocabularies/fixed`** serves every closed list the interface
 renders, as `{value, label}` pairs under `preservation_methods`,
-`preservation_states` and `ratings`, so no component keeps its own copy. These
+`preservation_states`, `ratings`, `recipe_kinds`, `recipe_statuses` and
+`source_platforms`, so no component keeps its own copy. These
 lists are constants in the code and are not editable through the API.
 
 ## Images

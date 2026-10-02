@@ -1,10 +1,13 @@
 # Data model
 
-What the database holds today: thirteen tables, at revision `m1images`. Module
-1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
+What the database holds today: twenty-three tables, at revision `r1recipes`.
+Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the three managed
-vocabularies, `ingredient_heating`, `ingredient_link`, and the two image
-tables.
+vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
+its two galleries (`image`, `ingredient_image`, `recipe_image`), and the
+recipe family's nine (`recipe`, `recipe_alias`, `recipe_serves_as`,
+`recipe_label`, `recipe_method`, `recipe_equipment`, `recipe_source`,
+`recipe_line`, `recipe_step`).
 
 ## Conventions shared by every table
 
@@ -177,11 +180,16 @@ them:**
 Seeded rows are ordinary rows. Every seed insert is `ON CONFLICT DO NOTHING`, so
 a database where the owner already typed 肉類 or 飯 keeps that row untouched.
 
-`cooking_method` is referenced by `ingredient_heating` today. `recipe_course` and
-`equipment` have no referent until recipes exist, and report a usage count of
-zero.
+**A value's usage count is the number of `RESTRICT` references to it** — the
+things that would stop it being deleted:
 
-## `image` and `ingredient_image`
+| Vocabulary | Counted |
+| --- | --- |
+| `recipe_course` | recipes filed in it (`recipe.course_id`); serves-as links `CASCADE` and do not count |
+| `cooking_method` | `ingredient_heating` rows plus `recipe_method` links |
+| `equipment` | `recipe_equipment` links |
+
+## `image`, `ingredient_image` and `recipe_image`
 
 `image` is the library: one row per stored picture. `checksum` is the SHA-256 of
 the *normalised* JPEG and is unique (`uq_image_checksum`), so identical pixels
@@ -191,25 +199,115 @@ are one row. `storage_key` and `thumb_key` are paths under the image directory
 pixels are on disk, not in the database.
 
 **A gallery is a join table per owner type, with real foreign keys.**
-`ingredient_image` is the first; recipes and kitchen notes will each add their
-own. Media has one polymorphic table with an `owner_type` and an `owner_id` that
+`ingredient_image` and `recipe_image` exist; kitchen notes will add their own. Media has one polymorphic table with an `owner_type` and an `owner_id` that
 nothing constrains.
 
 | Column | Notes |
 | --- | --- |
-| `ingredient_id` | `CASCADE` |
+| `ingredient_id` / `recipe_id` | the owner, `CASCADE` |
 | `image_id` | `RESTRICT` |
-| `position` | 0 is the cover; unique per ingredient |
+| `position` | 0 is the cover; unique per owner |
 | `focus` | `"X% Y%"` with each 0–100, or null for centred |
 
-Deleting an ingredient removes its gallery rows and never the pictures. An image
+The two gallery tables have the same shape. Deleting an owner removes its
+gallery rows and never the pictures. An image
 that is still attached cannot be deleted: the API answers 409 naming the owners,
 and the foreign key is the backstop. `focus` is per attachment, because one
 picture may be cropped differently in two galleries. An image may appear once in
-a gallery (`uq_ingredient_image_once`) and a position once
-(`uq_ingredient_image_position`).
+a gallery (`uq_<owner>_image_once`) and a position once
+(`uq_<owner>_image_position`).
 
-## `label` and `ingredient_label`
+## `recipe`
+
+One recipe: a dish, or a base — a sauce, a stock, a dough — cooked to be used
+inside other recipes.
+
+| Column | Notes |
+| --- | --- |
+| `id` | |
+| `name_cn`, `name_en`, `name_alt` | at least one required (`ck_recipe_has_a_name`); **not unique** |
+| `kind` | `dish` or `base` (`RECIPE_KINDS`), default `dish` |
+| `course_id` | optional, → `recipe_course`, `RESTRICT` |
+| `variant_of_id` | optional, → `recipe`, `SET NULL` |
+| `status` | `want_to_try` / `can_cook` / `regular` (`RECIPE_STATUSES`), shown 想試 / 可煮 / 常煮, default `want_to_try` |
+| `servings`, `time` | free text — `2-3 人`, `1hr` |
+| `description`, `storage_notes`, `notes` | |
+| `created_at`, `updated_at` | |
+
+**Names are not unique**, unlike every other named table here, and there is no
+name index: versions of one dish share its name.
+
+**`variant_of_id` makes a recipe a version of another.** A recipe may not be a
+version of itself (`ck_recipe_not_its_own_version`). Versions are one level
+deep — a version has no versions and does not point at one — which needs
+another row to check and so lives on the write path. Deleting the original
+leaves its versions standing with `variant_of_id` cleared, because each is a
+complete recipe in its own right.
+
+**"Written up" is derived, never stored**: a recipe with at least one line or
+step.
+
+## `recipe_alias`
+
+As `ingredient_alias`: anything you might type to find a recipe, never
+displayed, unique per recipe (`uq_recipe_alias`) and looked up on
+`lower(value)`.
+
+## `recipe_serves_as`, `recipe_label`, `recipe_method`, `recipe_equipment`
+
+Link tables, each a composite primary key of the recipe and the other side.
+The key leads with `recipe_id`, so the other side's column carries its own
+index (`ix_<table>_<column>`) for "which recipes use this" and for the
+`CASCADE` or `RESTRICT` check when that row is deleted. The recipe side always
+`CASCADE`s. The other side differs:
+
+| Table | Other side |
+| --- | --- |
+| `recipe_serves_as` | `recipe_course`, `CASCADE` — the other courses a dish can stand in for |
+| `recipe_label` | `label`, `CASCADE`, as `ingredient_label` |
+| `recipe_method` | `cooking_method`, `RESTRICT` |
+| `recipe_equipment` | `equipment`, `RESTRICT` |
+
+A serves-as link may repeat the recipe's own course.
+
+## `recipe_source`
+
+Where the recipe came from. `platform` is required (`SOURCE_PLATFORMS`:
+`youtube`, `shorts`, `website`, `book`, `other`); `creator`, `url` and `title`
+are each optional — a book has no URL — but at least one must be set
+(`ck_recipe_source_has_content`). Ordered by `sort_order`.
+
+## `recipe_line`
+
+One ingredient line.
+
+| Column | Notes |
+| --- | --- |
+| `recipe_id` | the owner, `CASCADE` |
+| `position` | required, unique per recipe (`uq_recipe_line_position`) |
+| `section` | optional heading the line sits under — 醬汁, 醃料 |
+| `ingredient_id` | → `ingredient`, `RESTRICT` |
+| `sub_recipe_id` | → `recipe`, `RESTRICT` — another recipe used as an ingredient, usually a base; any `kind` is accepted |
+| `amount`, `note` | free text |
+| `is_optional` | default false |
+
+**A line names exactly one of `ingredient_id` and `sub_recipe_id`**
+(`ck_recipe_line_one_target`). Which kind of line it is comes from which column
+is set; there is no stored discriminator to disagree with them.
+
+**A line may not name its own recipe** (`ck_recipe_line_not_itself`). Longer
+cycles through nested recipes need a recursive query and are refused on
+the write path.
+
+The same ingredient may appear on two lines — once for the meat, once for the
+sauce — so nothing is unique on it.
+
+## `recipe_step`
+
+One step of the method: `position` (unique per recipe,
+`uq_recipe_step_position`), an optional `section`, and a required `body`.
+
+## `label`, `ingredient_label` and `recipe_label`
 
 Cross-cutting tags — 辛, 素, 常備, 貴. A label is not a category: a category
 says where a thing sits in one taxonomy and every ingredient has exactly one, a
@@ -224,8 +322,15 @@ Labels have two name slots, not three; a tag has no formal alternative form.
 | --- | --- |
 | ingredient → its aliases, preservation rows, heating rows, links, label links, gallery rows | `CASCADE` |
 | ingredient → its children | `RESTRICT` |
+| ingredient → the recipe lines that name it | `RESTRICT` |
 | category → its ingredients and child categories | `RESTRICT` |
-| cooking method → the heating rows that use it | `RESTRICT` |
+| recipe → its aliases, sources, lines, steps, gallery rows, and serves-as, label, method and equipment links | `CASCADE` |
+| recipe → the lines in other recipes that name it as a base | `RESTRICT` |
+| recipe → its versions | `SET NULL` |
+| course → the recipes filed in it | `RESTRICT` |
+| course → its serves-as links; label → any link | `CASCADE` |
+| cooking method → the heating rows and recipe links that use it | `RESTRICT` |
+| equipment → the recipe links that use it | `RESTRICT` |
 | image → the gallery rows that attach it | `RESTRICT` |
 
 The asymmetry is the point and it is the kind that reads as uniform: an alias

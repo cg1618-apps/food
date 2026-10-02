@@ -32,6 +32,15 @@ as they bind this app:
   regardless, and doing it at the edge means no password is stored and no auth
   code is written. This requires the URL layout to separate reads from writes
   from the first route, which is cheap now and invasive later.
+- **An id inside a request body that names no row is 422, everywhere; a
+  missing row named by the URL is 404.** Owner decision, 2026-10-02. The URL
+  resolved, so the resource exists; it is the payload that is wrong. This
+  covers a parent, a label, a cooking method, a course, a version's original,
+  a line's ingredient or sub-recipe, and a gallery's `image_id` - the last
+  was 404 until recipes added a third case and one convention had to cover
+  all of them. The detail names the id. Rejected: 404 for body ids, which
+  reads as "the thing you addressed is gone" when the thing addressed is
+  fine.
 
 ## The skeleton
 
@@ -165,7 +174,9 @@ than now — a spec written months ahead describes a system that was imagined.
   says so; it can be cooked alone and appear as a line inside others. The graph
   needs a cycle guard, and "what can I cook" resolves *through* a nested recipe
   rather than treating it as an opaque item. Rejected: a separate table for
-  bases, which would duplicate ingredients, steps and notes.
+  bases, which would duplicate ingredients, steps and notes. A line may nest a
+  `dish` as well as a `base`: `kind` is how the library files a recipe, not a
+  permission, and a dish served inside another (rice under a curry) is real.
 - **Inventory is presence, not stock.** `in_stock` with a free-text quantity and
   notes. Rejected: quantities decremented as you cook, which demands that every
   meal, snack and spill be recorded or the numbers silently stop being true —
@@ -337,6 +348,81 @@ What the branch after module 1 chose, and what it turned down.
   `(state, method)`. Gallery replacement clears and flushes before it assigns,
   for the same reason.
 
+## Recipes
+
+- **Versions are one level deep, and an original's delete leaves them.** A
+  version points at its original through `variant_of_id`; a version may not
+  have versions, nor point at one, so a family is one original and its
+  versions and `versions` on the response is a flat list. The foreign key is
+  `SET NULL` rather than `RESTRICT` because each version is a complete recipe
+  in its own right - refusing to delete an original until its versions went
+  first would make the user destroy what they meant to keep. Rejected: a tree
+  of versions, which nothing here would read and which needs a cycle guard of
+  its own.
+- **"Written up" is derived** - at least one line or step - and never stored.
+  A stored flag disagrees with the content the first time somebody forgets to
+  tick it.
+- **A new ingredient typed into a line reuses an exact match.** Equal to a
+  name slot or an alias, ignoring case, means the existing row; anything else
+  is a stub in the fallback category with `needs_detail`. Names already
+  resolved in the same save count, so one new name in two lines is one stub
+  rather than a unique violation. A near match is not guessed at: the
+  typeahead shows it before the user chooses "new", which is the one moment a
+  person is there to decide.
+- **"Used in" for a recipe is depth zero through sub-recipes.** A dish using a
+  base that uses this base is not listed; only lines naming this recipe
+  directly. An ingredient's "used in" takes the same depth through
+  sub-recipes, so the two cannot disagree about what "uses" means.
+- **"Used in" for an ingredient goes all the way DOWN its own tree and not at
+  all through sub-recipes.** It counts distinct recipes with a line naming the
+  ingredient or any ingredient below it, so 生抽 in one line and 老抽 in
+  another is one recipe using 醬油. It is a recursive CTE over
+  `ingredient.parent_id` (UNION, so a cycle a hand-written UPDATE made ends the
+  walk rather than hanging it), and it is the only definition: the recipe
+  list's `ingredient_id` filter, `used_in` and `used_in_count` all read it.
+  The plan was a Python walk over a fetched parent map for the counts; one
+  grouped query over the same CTE is as fixed in cost and leaves no second
+  implementation to drift.
+- **The delete refusal is direct lines only**, unlike "used in". It is the
+  foreign key's question, and a parent whose child a recipe names is already
+  refused for having a child.
+- **Merge: the target wins.** Whatever only the source has moves - lines,
+  children, links, heating, labels it lacked, images it lacked (after its
+  own), preservation rows for a `(state, method)` it lacked, prose fields it
+  left empty. Whatever collides is the target's and the source's is dropped,
+  and the preview lists every drop. The source's name slots become aliases on
+  the target, never names: the target's names are what the user chose to
+  keep, and a second name_cn has nowhere to go. Category, parent, rating and
+  `needs_detail` are not merged at all - each is one value, and the user is
+  merging INTO the row whose values they want. The preview and the merge are
+  one function's output, so the preview cannot describe a different merge
+  from the one that runs. Merging into a descendant is refused, since the
+  source's children would move under their own descendant. Moved links,
+  heating and preservation rows are numbered after the target's own, so a
+  merged list keeps the target's order and appends rather than tying.
+- **A merge carries its preview's fingerprint, and a changed plan is a 409.**
+  The preview and the merge being one function closes the gap between what
+  the code shows and what it runs; it does not close the gap between what the
+  user READ and what runs, because the preview can sit in a tab while the
+  source is edited elsewhere. That is the stale-tab case `StaleCountError`
+  guards on delete, and a merge is the more destructive of the two: it
+  deletes a row too, and drops every colliding note and prose field with
+  it. Counts were not enough - an edited note moves
+  different content under the same count - so the fingerprint is a SHA-256 of
+  the canonical JSON of the rows the plan moves and drops. The 409 carries
+  the fresh preview so the dialog can redraw without a reload, as the stale
+  delete carries `expected` and `actual`. Required rather than optional: an
+  optional guard is one a client forgets.
+- **A refused recipe save writes nothing**, because the service validates
+  every name, id, version and cycle before its first write - the stubs - and
+  touches the row only after them. Relying on the request's rollback alone
+  would hold in production and not in a session that is never rolled back,
+  which is where a half-written row would be noticed last.
+- **The cycle guard walks the stored graph breadth first**, one query per
+  level, refusing past `MAX_DEPTH` rather than stopping short - a walk that
+  gave up early would let a cycle through. A recursive CTE would be one query
+  instead of a few, for a graph a person builds by hand.
+
 ## Rules with no referent yet
 
 Written down where the next person will look rather than where they were
@@ -362,7 +448,9 @@ it is about — which is exactly when nobody will remember it.
 ## What module 1 hands module 2
 
 - **A recipe line's discriminator resolves three ways** — ingredient, recipe,
-  or neither — and "neither" is a 404, not a 422. The stored type comes from
+  or neither — and "neither" is a 422, by the owner's ruling for module 2 that
+  an id inside a body naming no row is 422 everywhere (module 1 handed over
+  "404"; the URL resolved, the payload was wrong). The stored type comes from
   the row, never from the payload. Media shipped that corruption three times,
   and there an authorization helper was incidentally the only thing resolving
   a type from an id. food has no such helper, so nothing would catch it.

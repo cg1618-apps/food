@@ -32,22 +32,25 @@ reference work.
 
 ## Status
 
-**Module 1 is built.** The ingredient library — thirteen tables at revision
-`m1images`, the read and write API over them, and the pages: a library with
-search and filters, a detail page, add and edit forms, and a categories and
-labels editor. Beyond the ingredients themselves it holds storage with a state
-and a range, a heating guide, links, a rating, the three managed vocabularies
-(recipe courses, cooking methods, equipment) with their seeds, and the image
-library with ingredient galleries. The API is complete for all of it; the
-pages have only been kept compatible, and do not yet edit heating, links,
-rating, the three new vocabularies or images.
+**Module 1 is built.** The ingredient library: the read and write API, and the
+pages — a library with search and filters, a detail page, add and edit forms,
+and a categories and labels editor. It also holds storage with a state and a
+range, a heating guide, links, a rating, the three managed vocabularies (recipe
+courses, cooking methods, equipment) with their seeds, and the image library
+with ingredient galleries.
+
+**Module 2's backend is built.** Recipes, at revision `r1recipes`: lines that
+name an ingredient, a sub-recipe or a new stub ingredient, steps, sources,
+versions, the recipe library with its filters, recipe galleries, "used in" for
+ingredients and base recipes, and ingredient merge.
+
+**The pages lag the API.** They have only been kept compatible, and do not yet
+show recipes, or edit heating, links, rating, the three vocabularies or images.
+The notebook UI redesign is what adds them.
 
 `docs/data-model.md` describes the schema, `docs/api.md` the routes and the
 error shape, `docs/testing.md` how the suite is arranged and which tests are
-load-bearing.
-
-Module 2, recipes, is next. `docs/notes/decisions.md` records what module 1
-hands it.
+load-bearing, and `docs/notes/decisions.md` why.
 
 ## The contract this app owes the platform
 

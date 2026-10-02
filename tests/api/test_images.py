@@ -172,17 +172,79 @@ def test_a_malformed_focus_is_refused(client, fallback_category, focus):
     assert response.status_code == 422
 
 
-def test_attaching_an_unknown_image_is_404_and_a_repeat_is_422(client, fallback_category):
+def test_attaching_an_unknown_image_is_422_and_a_repeat_is_422(client, fallback_category):
+    # An id inside the body naming no row is 422, as everywhere else: the URL
+    # resolved, the payload was wrong. The library holds an image, so the
+    # lookup had something to find.
     image = _upload(client, _png()).json()
     ingredient = client.post(
         "/api/edit/ingredients", json={"name_cn": "芒果", "category_id": fallback_category.id}
     ).json()
     url = f"/api/edit/ingredients/{ingredient['id']}/images"
-    assert client.put(url, json=[{"image_id": 999999}]).status_code == 404
+    unknown = client.put(url, json=[{"image_id": 999999}])
+    assert unknown.status_code == 422
+    assert "999999" in unknown.json()["detail"]
     assert (
         client.put(url, json=[{"image_id": image["id"]}, {"image_id": image["id"]}]).status_code
         == 422
     )
+    # Mirror: the image that exists attaches.
+    assert client.put(url, json=[{"image_id": image["id"]}]).status_code == 200
+
+
+def _recipe(client, name="番茄炒蛋"):
+    response = client.post("/api/edit/recipes", json={"name_cn": name})
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_a_recipe_gallery_is_set_in_order_and_its_first_image_is_the_cover(client):
+    first = _upload(client, _png(colour=(1, 2, 3, 255))).json()
+    second = _upload(client, _png(colour=(9, 8, 7, 255))).json()
+    recipe = _recipe(client)
+    url = f"/api/edit/recipes/{recipe['id']}/images"
+    response = client.put(
+        url, json=[{"image_id": second["id"], "focus": "50% 30%"}, {"image_id": first["id"]}]
+    )
+    assert response.status_code == 200, response.text
+    assert [i["image_id"] for i in response.json()["images"]] == [second["id"], first["id"]]
+    [summary] = client.get("/api/recipes").json()
+    assert summary["cover"] == {"thumb_url": second["thumb_url"], "focus": "50% 30%"}
+    # Reusing the positions in a reorder must not collide with the old rows.
+    swapped = client.put(url, json=[{"image_id": first["id"]}, {"image_id": second["id"]}])
+    assert swapped.status_code == 200, swapped.text
+    assert [i["image_id"] for i in swapped.json()["images"]] == [first["id"], second["id"]]
+    assert client.put(url, json=[]).json()["images"] == []
+
+
+def test_a_recipe_gallery_refuses_an_unknown_image_and_an_unknown_recipe(client):
+    image = _upload(client, _png()).json()
+    recipe = _recipe(client)
+    url = f"/api/edit/recipes/{recipe['id']}/images"
+    # The foreign key would answer 422 as well; the id in the detail is what
+    # proves the service refused it. The real image is the mirror.
+    unknown = client.put(url, json=[{"image_id": image["id"]}, {"image_id": 999999}])
+    assert unknown.status_code == 422
+    assert "999999" in unknown.json()["detail"]
+    assert client.put(url, json=[{"image_id": image["id"]}]).status_code == 200
+    assert (
+        client.put("/api/edit/recipes/999999/images", json=[{"image_id": image["id"]}])
+    ).status_code == 404
+
+
+def test_an_image_lists_the_recipes_that_attach_it(client, fallback_category):
+    image = _upload(client, _png()).json()
+    recipe = _recipe(client, "芒果布丁")
+    ingredient = client.post(
+        "/api/edit/ingredients", json={"name_cn": "芒果", "category_id": fallback_category.id}
+    ).json()
+    client.put(f"/api/edit/recipes/{recipe['id']}/images", json=[{"image_id": image["id"]}])
+    client.put(f"/api/edit/ingredients/{ingredient['id']}/images", json=[{"image_id": image["id"]}])
+    owners = client.get(f"/api/images/{image['id']}").json()["owners"]
+    assert sorted((o["type"], o["id"], o["display_name"]) for o in owners) == [
+        ("ingredient", ingredient["id"], "芒果"),
+        ("recipe", recipe["id"], "芒果布丁"),
+    ]
 
 
 def test_an_attached_image_cannot_be_deleted_and_its_file_survives(

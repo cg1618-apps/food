@@ -17,6 +17,11 @@ from sqlalchemy import create_engine, inspect, text
 
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
+
+# Imported for its side effect: every model registers on Base.metadata. Without
+# it the comparison below sees an empty metadata whenever this file runs on its
+# own, and reports every table and index as one to remove.
+from app import models  # noqa: F401
 from app.config import settings
 from app.database import Base
 
@@ -75,7 +80,7 @@ def test_upgrade_head_runs_against_an_empty_database(scratch_database):
     engine = create_engine(scratch_database)
     with engine.connect() as conn:
         stamped = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert stamped == "m1images"
+        assert stamped == "r1recipes"
 
         # No longer vacuous: it bites from i1ngredients onwards, and a
         # revision that declares a model without creating its table fails
@@ -95,7 +100,7 @@ def test_there_is_exactly_one_head():
     assert result.returncode == 0, result.stderr
     lines = [line for line in result.stdout.splitlines() if line.strip()]
     assert len(lines) == 1, result.stdout
-    assert "m1images" in lines[0], result.stdout
+    assert "r1recipes" in lines[0], result.stdout
 
 
 def test_the_migrated_schema_matches_the_models(scratch_database):

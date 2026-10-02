@@ -55,7 +55,8 @@ minimum when there is no maximum, and it drops `ingredient.rating`, every
 heating row and every link outright. `m1images`'s downgrade drops the `image` and
 gallery tables but leaves the files under `data/images` where they are, so the
 pictures survive on disk and nothing in the database says which ingredient they
-belonged to.
+belonged to. `r1recipes`'s downgrade drops every recipe table and every recipe
+in them; the pictures a recipe gallery attached stay in `image` and on disk.
 
 **So there is no route that keeps the data.** The real choice is:
 
@@ -86,7 +87,8 @@ they ever do not, believe the box.
 | After it | `i1ngredients` — six tables |
 | Vocabularies and their seeds | `v1ocabulary` |
 | Storage ranges, heating, links, rating | `i2storage` |
-| The image library | `m1images` — thirteen tables, the current head |
+| The image library | `m1images` — thirteen tables |
+| Recipes | `r1recipes` — twenty-three tables, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

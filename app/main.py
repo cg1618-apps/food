@@ -8,7 +8,15 @@ from fastapi.staticfiles import StaticFiles
 
 from app import errors, logging_config
 from app.request_context import RequestIdMiddleware
-from app.routers import health, image, ingredient, ingredient_category, label, vocabulary
+from app.routers import (
+    health,
+    image,
+    ingredient,
+    ingredient_category,
+    label,
+    recipe,
+    vocabulary,
+)
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 DIST = BASE_DIR / "frontend_dist"
@@ -39,6 +47,9 @@ def create_app(dist: Path = DIST) -> FastAPI:
     app.include_router(ingredient_category.edit)
     app.include_router(label.router)
     app.include_router(label.edit)
+    app.include_router(recipe.router)
+    app.include_router(recipe.edit)
+    app.include_router(recipe.creators)
     app.include_router(image.router)
     app.include_router(image.edit)
     for vocabulary_router in vocabulary.ROUTERS:

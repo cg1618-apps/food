@@ -36,6 +36,12 @@ def _walk_to_root(db: Session, model, start_id: int | None):
         current = db.query(model.parent_id).filter(model.id == current).scalar()
 
 
+def is_descendant(db: Session, model, row_id: int, ancestor_id: int) -> bool:
+    """True when `row_id` sits somewhere below `ancestor_id` (not itself)."""
+    row = db.query(model.parent_id).filter(model.id == row_id).scalar()
+    return ancestor_id in set(_walk_to_root(db, model, row))
+
+
 def check_parent(db: Session, model, row_id: int | None, new_parent_id: int | None, what: str):
     """Refuse a parent that would make a cycle, or that does not exist.
 
@@ -70,8 +76,8 @@ def build_tree(rows, counts: dict[int, int], node_schema):
     """Assemble a flat list of category rows into a nested structure.
 
     In Python, from one query, because the tree is a few dozen rows. A
-    recursive CTE would be correct and would also be the only recursive query
-    in the codebase, for a result that fits on a screen.
+    recursive CTE would be correct, as the recipe service's are for "used in",
+    but buys nothing for a result that fits on a screen.
 
     Rows whose parent is missing from `rows` become roots rather than
     vanishing. That cannot happen through the API - the foreign key is
