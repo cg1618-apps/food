@@ -51,7 +51,8 @@ data at all. So it freezes at tier 3, names the dump, and stops.
 **Rolling back across the later revisions loses data in two further ways.**
 `i2storage`'s downgrade is lossy by design: it deletes every preservation row
 whose state is not `unused` and collapses each range to its maximum, or its
-minimum when there is no maximum. `m1images`'s downgrade drops the `image` and
+minimum when there is no maximum, and it drops `ingredient.rating`, every
+heating row and every link outright. `m1images`'s downgrade drops the `image` and
 gallery tables but leaves the files under `data/images` where they are, so the
 pictures survive on disk and nothing in the database says which ingredient they
 belonged to.

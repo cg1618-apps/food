@@ -12,3 +12,35 @@ re-fetched, unlike a cover image an API supplies again. media solves the same
 problem with its own rclone-to-R2 timer; whether food copies that or the
 platform defines one file-backup contract for every app is a platform decision,
 raised with the manager session.
+
+## A failed commit after an upload leaves orphan files
+
+`store_upload` writes the full image and its thumbnail to `data/images` before
+it inserts the `image` row. If that commit fails, the files stay on disk with
+no row naming them, and nothing sweeps them. The reverse order would leave a
+row pointing at no file, which is worse; the fix is a sweep that removes files
+under `library/` whose checksum has no row.
+
+## Two identical uploads at once share one temporary file name
+
+The temporary name is the final key plus `.part`, so two concurrent uploads of
+the same picture write the same `.part` file. Both write identical bytes, so
+the likely outcome is harmless, but one `os.replace` can find the file already
+moved and fail the request. A unique temporary name per write closes it.
+
+## The decompression-bomb check changes a process-wide warning filter
+
+`_open` escalates Pillow's `DecompressionBombWarning` to an error inside
+`warnings.catch_warnings()`, which mutates global state and is not
+thread-safe. FastAPI runs the sync upload handler in a thread pool, so two
+uploads at once can see each other's filter. An explicit `width * height`
+check against the ceiling after opening would be deterministic and need no
+filter at all.
+
+## `ingredient.updated_at` does not move when only child rows change
+
+Editing only aliases, storage, heating, links, labels or the gallery leaves
+the ingredient's `updated_at` where it was, because no column on `ingredient`
+itself changed. Anything that sorts or reports by "recently edited" will miss
+those edits. The service would have to touch the timestamp whenever a list it
+replaces was sent.
