@@ -1,7 +1,8 @@
 import { Link, useParams } from 'react-router-dom'
 
 import { endpoints } from '../../api/endpoints'
-import { Card, Empty, ErrorNote, Loading, Pill } from '../../components/ui'
+import { Card, Chip } from '../../components/ui/primitives'
+import { Empty, ErrorNote, Loading } from '../../components/ui/states'
 import { useApiQuery } from '../../hooks/useApi'
 
 const STATE_LABELS = { opened: '已開封', cooked: '熟食' }
@@ -43,7 +44,7 @@ export default function IngredientDetail() {
       <header className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold">{data.display_name}</h1>
-          {data.needs_detail ? <Pill tone="warn">needs detail</Pill> : null}
+          {data.needs_detail ? <Chip tone="warn">needs detail</Chip> : null}
         </div>
         <p className="text-sm text-text-muted">
           {[data.name_cn, data.name_en, data.name_alt].filter(Boolean).join(' · ')}
@@ -51,7 +52,7 @@ export default function IngredientDetail() {
         <p className="text-sm">
           {data.category ? (
             <Link
-              to={`/library/ingredient?category=${data.category.id}`}
+              to={`/ingredients?category=${data.category.id}`}
               className="text-brand"
             >
               {data.category.display_name}
@@ -60,7 +61,7 @@ export default function IngredientDetail() {
           {data.parent ? (
             <>
               {' · a kind of '}
-              <Link to={`/ingredient/${data.parent.id}`} className="text-brand">
+              <Link to={`/ingredients/${data.parent.id}`} className="text-brand">
                 {data.parent.display_name}
               </Link>
             </>
@@ -69,7 +70,7 @@ export default function IngredientDetail() {
         {data.labels.length ? (
           <div className="flex flex-wrap gap-1 pt-1">
             {data.labels.map((label) => (
-              <Pill key={label.id}>{label.display_name}</Pill>
+              <Chip key={label.id}>{label.display_name}</Chip>
             ))}
           </div>
         ) : null}
@@ -81,7 +82,7 @@ export default function IngredientDetail() {
           <ul className="flex flex-wrap gap-2 text-sm">
             {data.children.map((child) => (
               <li key={child.id}>
-                <Link to={`/ingredient/${child.id}`} className="text-brand">
+                <Link to={`/ingredients/${child.id}`} className="text-brand">
                   {child.display_name}
                 </Link>
               </li>
@@ -127,7 +128,7 @@ export default function IngredientDetail() {
         <p className="text-xs text-text-muted">Also found as: {data.aliases.join(', ')}</p>
       ) : null}
 
-      <Link to={`/edit/ingredient/${data.id}`} className="inline-block text-sm text-brand">
+      <Link to={`/edit/ingredients/${data.id}`} className="inline-block text-sm text-brand">
         Edit this
       </Link>
     </article>

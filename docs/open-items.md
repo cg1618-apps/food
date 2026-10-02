@@ -48,10 +48,3 @@ notes too: a `PATCH` sending only `label_ids`, and the gallery `PUT`, leave
 `kitchen_note.updated_at` where it was. Anything that sorts or reports by "recently edited" will miss
 those edits. The service would have to touch the timestamp whenever a list it
 replaces was sent.
-
-## The detail page and category counts are stale after a save
-
-After an ingredient is saved, its detail page and the category counts keep
-showing the values from before the save until the page is reloaded. The
-form's create and update mutations invalidate only the ingredient list, not
-the detail query or the category tree.

@@ -2,22 +2,21 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { endpoints } from '../../api/endpoints'
-import {
-  Button,
-  Card,
-  ErrorNote,
-  Field,
-  Input,
-  Loading,
-  Select,
-  TextArea,
-} from '../../components/ui'
-import { useApiMutation, useApiQuery } from '../../hooks/useApi'
+import { Button, Card, Field, Input, Select, TextArea } from '../../components/ui/primitives'
+import { ErrorNote, Loading } from '../../components/ui/states'
+import { useApiMutation, useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
 import { reconcileMinDays } from './storageDuration'
 import { flatten } from '../../lib/tree'
 import DeleteIngredientDialog from './DeleteIngredientDialog'
 
-const METHODS = ['常溫', '冷藏', '冷凍', '乾燥', '醃漬', '油封', '真空']
+// An ingredient save moves more than the ingredient's own reads: category and
+// label counts, and every recipe line that names it.
+const INVALIDATE = [
+  endpoints.ingredients.list(),
+  endpoints.categories.tree(),
+  endpoints.labels.list(),
+  endpoints.recipes.list(),
+]
 
 const EMPTY = {
   name_cn: '',
@@ -44,6 +43,9 @@ export default function IngredientForm() {
   const categories = useApiQuery(endpoints.categories.tree())
   const labels = useApiQuery(endpoints.labels.list())
   const allIngredients = useApiQuery(endpoints.ingredients.list())
+  // The preservation methods come from the backend's closed list, not a copy.
+  const fixed = useFixedVocabularies()
+  const methods = fixed.data?.preservation_methods ?? []
 
   const [form, setForm] = useState(EMPTY)
   const [loadedFor, setLoadedFor] = useState(null)
@@ -93,8 +95,8 @@ export default function IngredientForm() {
     })
   }
 
-  const create = useApiMutation({ method: 'POST', invalidate: [endpoints.ingredients.list()] })
-  const update = useApiMutation({ method: 'PATCH', invalidate: [endpoints.ingredients.list()] })
+  const create = useApiMutation({ method: 'POST', invalidate: INVALIDATE })
+  const update = useApiMutation({ method: 'PATCH', invalidate: INVALIDATE })
 
   const set = (field) => (event) =>
     setForm((previous) => ({ ...previous, [field]: event.target.value }))
@@ -151,7 +153,7 @@ export default function IngredientForm() {
       const saved = isNew
         ? await create.mutateAsync({ url: endpoints.ingredients.create(), body })
         : await update.mutateAsync({ url: endpoints.ingredients.update(id), body })
-      navigate(`/ingredient/${saved.id}`)
+      navigate(`/ingredients/${saved.id}`)
     } catch (caught) {
       setError(caught)
     }
@@ -237,9 +239,9 @@ export default function IngredientForm() {
               onChange={(event) => setEntry(index, { method: event.target.value })}
             >
               <option value="">—</option>
-              {METHODS.map((method) => (
-                <option key={method} value={method}>
-                  {method}
+              {methods.map((method) => (
+                <option key={method.value} value={method.value}>
+                  {method.label}
                 </option>
               ))}
             </Select>
@@ -307,14 +309,14 @@ export default function IngredientForm() {
       </Card>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" variant="primary">
+        <Button type="submit" kind="primary">
           Save
         </Button>
         <Button type="button" onClick={() => navigate(-1)}>
           Cancel
         </Button>
         {!isNew ? (
-          <Button type="button" variant="danger" onClick={() => setDeleting(true)}>
+          <Button type="button" kind="danger" onClick={() => setDeleting(true)}>
             Delete
           </Button>
         ) : null}
@@ -325,7 +327,7 @@ export default function IngredientForm() {
           id={id}
           name={existing.data?.display_name}
           onClose={() => setDeleting(false)}
-          onDeleted={() => navigate('/library/ingredient')}
+          onDeleted={() => navigate('/ingredients')}
         />
       ) : null}
     </form>

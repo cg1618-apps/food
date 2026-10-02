@@ -6,17 +6,39 @@ is specific to food.
 
 ## Pages
 
+Navigation is 食譜 · 食材 · 筆記 · 設定: a top bar on a desktop, a bar fixed to
+the bottom of the screen on a phone (`components/layout/Layout.jsx`). The
+section a page belongs to - its edit pages included - is marked with
+`aria-current="page"`; `lib/nav.js` holds that match.
+
 | Page | Route | Gate |
 | --- | --- | --- |
-| Ingredient library | `/library/ingredient` | public |
-| Ingredient detail | `/ingredient/:id` | public |
-| Add an ingredient | `/edit/ingredient/new` | Access |
-| Edit an ingredient | `/edit/ingredient/:id` | Access |
-| Categories and labels | `/edit/vocabularies` | Access |
+| Recipe library (the front page; `/` redirects here) | `/recipes` | public |
+| Recipe | `/recipes/:id` | public |
+| Ingredient library | `/ingredients` | public |
+| Ingredient | `/ingredients/:id` | public |
+| Kitchen-note library | `/notes` | public |
+| Kitchen note | `/notes/:id` | public |
+| Add / edit a recipe | `/edit/recipes/new`, `/edit/recipes/:id` | Access |
+| Add / edit an ingredient | `/edit/ingredients/new`, `/edit/ingredients/:id` | Access |
+| Add / edit a note | `/edit/notes/new`, `/edit/notes/:id` | Access |
+| 設定 (`/settings` redirects here) | `/edit/settings` | Access |
+| Image library | `/edit/images` | Access |
+
+The recipe and note pages, the recipe and note forms and the image library
+render a heading and an empty note until their real versions land; 設定 hosts
+the categories-and-labels editor. Any other path is a "page not found" page,
+not a redirect.
+
+**The first release's paths redirect**, query string included, so bookmarks
+survive: `/library/ingredient` → `/ingredients`, `/ingredient/:id` →
+`/ingredients/:id`, `/edit/ingredient/...` → `/edit/ingredients/...`,
+`/edit/vocabularies` → `/edit/settings`. `routes.test.jsx` pins every route
+and every redirect.
 
 Media's detail route is `/<type>/:publicId/:slug?`; the cosmetic slug and the
 second id went with the integer-primary-key decision, so ours is
-`/ingredient/:id`.
+`/ingredients/:id`.
 
 **The detail page is the one this app exists for.** It is what gets opened on a
 phone in a shop, signed out: selection notes, the preservation methods with
@@ -50,25 +72,61 @@ button. Asking for a reload is what a prose-only error body forces.
   renders `[object Object]`, for the one error a malformed body produces — and
   it attaches `status` and `body` to the thrown error so a caller can branch on
   409 without re-implementing fetch.
-- **`api/endpoints.js` is the single source of URL truth.** Its test asserts
-  every mutation URL sits under the gated prefix, which is the same invariant
-  the backend asserts over its route table, on the side where the URL is
-  chosen.
+  It leaves the `Content-Type` alone for a `FormData` body, so the browser
+  writes the multipart boundary itself.
+- **`api/endpoints.js` is the single source of URL truth.** Each group's
+  `list()` doubles as the resource's read prefix. Its test asserts every
+  mutation URL sits under `/api/edit` - the invariant the backend asserts over
+  its route table, on the side where the URL is chosen - and walks the whole
+  object, so a new endpoint must be classified as a read or a write before the
+  suite passes.
 - **`hooks/useApi.js`** wraps TanStack Query so no component builds a cache key
-  by hand.
+  by hand. `useApiMutation({ method, invalidate })` invalidates **by
+  resource**: `invalidate` is a list of read prefixes, and every cached query
+  whose URL sits under one of them (whole path segments) is refreshed - a save
+  refreshes the detail page and the cascade counts, not only the list.
+  `useFixedVocabularies()` reads every closed list once per page load;
+  `useUpload()` posts one image file as multipart.
 
-## Colour
+## Colour and type
 
-**Semantic tokens only** — `bg-surface`, `text-text-muted`, `border-danger`.
-They are declared in `index.css` and redeclared once for dark mode. A numbered
-grey or a raw hex in a component fails `theme-tokens.test.js`, which is what
-keeps dark mode from rotting one component at a time and keeps the four apps
-looking like one product.
+**The direction is a kitchen notebook**: warm paper, brown-black ink, one
+terracotta accent for the thing a page points at, and a warm-brown dark mode
+rather than a grey one. Headings are Noto Serif TC (loaded in `index.html`
+with `display=swap`, system serifs behind it); metadata and controls use the
+system sans.
+
+**Semantic tokens only** - `canvas`, `surface`, `surface-2`, `border`,
+`border-strong`, `text`, `text-muted`, `text-faint`, `brand`, `brand-hover`,
+`brand-soft`, `on-brand`, `danger`, `ok`, `warn`, `warn-soft`, `scrim`, plus
+`font-display` and `font-sans`. As in media, each Tailwind token points at a
+runtime `--c-*` variable and the light and dark palettes in `index.css`
+redefine only those. A numbered grey or a raw hex in a component fails
+`theme-tokens.test.js`, which is what keeps dark mode from rotting one
+component at a time and keeps the four apps looking like one product.
+
+## Primitives
+
+`components/ui/primitives.jsx`: `Button` and `LinkButton` (`kind` primary /
+outline / danger / ghost, `size` sm / md), `Field`, `Input`, `TextArea`,
+`Select`, `Card`, `Chip` (`tone`), `Badge` (`kind` bookmark 書籤 / stub 待補 /
+rating with `value`), `Section` (a titled block on a ruled line) and `Toggle`
+(封面 / 清單). **`className` extends the base classes, never replaces them.**
+`components/ui/Dialog.jsx` is the modal shell - Escape closes, and the
+backdrop closes only on a press that starts and ends on it -
+and `components/modals/ConfirmModal.jsx` the yes/no question drawn in it.
+
+## Images
+
+Every `<img>` lazy-loads (`lazy-images.test.js`), and every cropped
+(`object-cover`) one applies its focal point with `focusStyle()` from
+`lib/images.js` or opts out with `data-focus="none"`
+(`focus-images.test.js`). Both guards are media's.
 
 ## Loading, error and empty
 
-Three states every list and detail page owes the reader, as named components in
-`components/ui.jsx`, so that forgetting one is visible rather than rendering a
+Three states every list and detail page owes the reader, as named components
+in `components/ui/states.jsx`, so that forgetting one is visible rather than rendering a
 page that looks broken while it is merely empty.
 
 ## How the built bundle is served

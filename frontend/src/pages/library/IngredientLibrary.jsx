@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { endpoints } from '../../api/endpoints'
-import { Card, Empty, ErrorNote, Input, Loading, Pill, Select } from '../../components/ui'
+import { Card, Chip, Input, Select } from '../../components/ui/primitives'
+import { Empty, ErrorNote, Loading } from '../../components/ui/states'
 import { useApiQuery } from '../../hooks/useApi'
 import { flatten } from '../../lib/tree'
 
@@ -36,8 +37,8 @@ export default function IngredientLibrary() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Ingredients</h1>
         <Link
-          to="/edit/ingredient/new"
-          className="rounded border border-brand bg-brand px-3 py-1.5 text-sm text-canvas"
+          to="/edit/ingredients/new"
+          className="rounded border border-brand bg-brand px-3 py-1.5 text-sm text-on-brand"
         >
           Add an ingredient
         </Link>
@@ -78,7 +79,7 @@ export default function IngredientLibrary() {
             onChange={(event) => setStubsOnly(event.target.checked)}
           />
           Needs detail
-          {stubs.data?.length ? <Pill tone="warn">{stubs.data.length}</Pill> : null}
+          {stubs.data?.length ? <Chip tone="warn">{stubs.data.length}</Chip> : null}
         </label>
       </Card>
 
@@ -91,11 +92,11 @@ export default function IngredientLibrary() {
       <ul className="grid gap-2 sm:grid-cols-2">
         {(ingredients.data ?? []).map((row) => (
           <li key={row.id}>
-            <Link to={`/ingredient/${row.id}`} className="block">
+            <Link to={`/ingredients/${row.id}`} className="block">
               <Card className="hover:border-brand">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium">{row.display_name}</span>
-                  {row.needs_detail ? <Pill tone="warn">needs detail</Pill> : null}
+                  {row.needs_detail ? <Chip tone="warn">needs detail</Chip> : null}
                 </div>
                 {row.name_en && row.name_en !== row.display_name ? (
                   <span className="text-sm text-text-muted">{row.name_en}</span>

@@ -1,9 +1,11 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
 import { buildUrl, fetchJson } from '../../api/client'
 import { endpoints } from '../../api/endpoints'
-import { Button, Card, ErrorNote, Loading } from '../../components/ui'
-import { useApiQuery } from '../../hooks/useApi'
+import { Button, Card } from '../../components/ui/primitives'
+import { ErrorNote, Loading } from '../../components/ui/states'
+import { invalidateResources, useApiQuery } from '../../hooks/useApi'
 
 // Deliberately not window.confirm: this dialog has to show counts, and it has
 // to be able to CORRECT itself when the server says they have moved.
@@ -18,6 +20,7 @@ import { useApiQuery } from '../../hooks/useApi'
 // what media's equivalent message has to ask for.
 export default function DeleteIngredientDialog({ id, name, onClose, onDeleted }) {
   const counts = useApiQuery(endpoints.ingredients.cascade(id))
+  const queryClient = useQueryClient()
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
   const [confirmed, setConfirmed] = useState(null)
@@ -36,6 +39,14 @@ export default function DeleteIngredientDialog({ id, name, onClose, onDeleted })
           links: live.links,
         }),
         { method: 'DELETE' },
+      )
+      // The deleted row must leave the list, and the counts it was in move.
+      // Marked stale, not refetched: this dialog's own cascade read would
+      // refetch and 404 before the page navigates away.
+      invalidateResources(
+        queryClient,
+        [endpoints.ingredients.list(), endpoints.categories.tree(), endpoints.labels.list()],
+        { refetchType: 'none' },
       )
       onDeleted()
     } catch (caught) {
@@ -73,7 +84,7 @@ export default function DeleteIngredientDialog({ id, name, onClose, onDeleted })
       {error ? <ErrorNote error={error} /> : null}
 
       <div className="flex gap-2">
-        <Button variant="danger" onClick={remove} disabled={busy || live.children > 0}>
+        <Button kind="danger" onClick={remove} disabled={busy || live.children > 0}>
           {busy ? 'Deleting…' : 'Delete it'}
         </Button>
         <Button onClick={onClose}>Keep it</Button>

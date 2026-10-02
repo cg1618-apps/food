@@ -1,7 +1,8 @@
 import { useState } from 'react'
 
 import { endpoints } from '../../api/endpoints'
-import { Button, Card, Empty, ErrorNote, Input, Loading, Select } from '../../components/ui'
+import { Button, Card, Input, Select } from '../../components/ui/primitives'
+import { Empty, ErrorNote, Loading } from '../../components/ui/states'
 import { useApiMutation, useApiQuery } from '../../hooks/useApi'
 import { flatten } from '../../lib/tree'
 
@@ -19,9 +20,9 @@ export default function Vocabularies() {
 
 function Categories() {
   const tree = useApiQuery(endpoints.categories.tree())
-  const create = useApiMutation({ method: 'POST', invalidate: [endpoints.categories.tree()] })
-  const update = useApiMutation({ method: 'PATCH', invalidate: [endpoints.categories.tree()] })
-  const remove = useApiMutation({ method: 'DELETE', invalidate: [endpoints.categories.tree()] })
+  const create = useApiMutation({ method: 'POST', invalidate: [endpoints.categories.tree(), endpoints.ingredients.list()] })
+  const update = useApiMutation({ method: 'PATCH', invalidate: [endpoints.categories.tree(), endpoints.ingredients.list()] })
+  const remove = useApiMutation({ method: 'DELETE', invalidate: [endpoints.categories.tree(), endpoints.ingredients.list()] })
 
   const [nameCn, setNameCn] = useState('')
   const [nameEn, setNameEn] = useState('')
@@ -41,7 +42,7 @@ function Categories() {
 
   return (
     <section className="space-y-3">
-      <h1 className="text-xl font-semibold">Categories</h1>
+      <h2 className="text-xl font-semibold">Categories</h2>
       <p className="text-sm text-text-muted">
         Every ingredient is filed in exactly one. New ones start in the fallback category, which
         cannot be deleted or renamed away.
@@ -62,7 +63,7 @@ function Categories() {
           ))}
         </Select>
         <Button
-          variant="primary"
+          kind="primary"
           onClick={() =>
             run(async () => {
               await create.mutateAsync({
@@ -122,7 +123,7 @@ function Categories() {
                   button. */}
               {node.is_fallback ? null : (
                 <Button
-                  variant="danger"
+                  kind="danger"
                   onClick={() =>
                     run(() => remove.mutateAsync({ url: endpoints.categories.remove(node.id) }))
                   }
@@ -140,8 +141,8 @@ function Categories() {
 
 function Labels() {
   const labels = useApiQuery(endpoints.labels.list())
-  const create = useApiMutation({ method: 'POST', invalidate: [endpoints.labels.list()] })
-  const remove = useApiMutation({ method: 'DELETE', invalidate: [endpoints.labels.list()] })
+  const create = useApiMutation({ method: 'POST', invalidate: [endpoints.labels.list(), endpoints.ingredients.list()] })
+  const remove = useApiMutation({ method: 'DELETE', invalidate: [endpoints.labels.list(), endpoints.ingredients.list()] })
 
   const [nameCn, setNameCn] = useState('')
   const [nameEn, setNameEn] = useState('')
@@ -170,7 +171,7 @@ function Labels() {
         <Input placeholder="中文名" value={nameCn} onChange={(e) => setNameCn(e.target.value)} />
         <Input placeholder="English" value={nameEn} onChange={(e) => setNameEn(e.target.value)} />
         <Button
-          variant="primary"
+          kind="primary"
           onClick={() =>
             run(async () => {
               await create.mutateAsync({
@@ -196,7 +197,7 @@ function Labels() {
               <span>{label.display_name}</span>
               <span className="text-xs text-text-muted">{label.ingredient_count}</span>
               <Button
-                variant="danger"
+                kind="danger"
                 onClick={() =>
                   run(() => remove.mutateAsync({ url: endpoints.labels.remove(label.id) }))
                 }

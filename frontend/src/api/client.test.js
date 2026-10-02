@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { buildUrl, errorMessage } from './client'
+import { buildUrl, errorMessage, fetchJson, jsonBody } from './client'
 
 describe('errorMessage', () => {
   it('reads a plain detail string', () => {
@@ -40,5 +40,45 @@ describe('buildUrl', () => {
     expect(buildUrl('/api/ingredients', { needs_detail: false })).toBe(
       '/api/ingredients?needs_detail=false',
     )
+  })
+})
+
+describe('fetchJson request headers', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  function stubFetch() {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ id: 1 }), { status: 201 }))
+    vi.stubGlobal('fetch', fetchMock)
+    return fetchMock
+  }
+
+  it('sends JSON with a JSON content type', async () => {
+    const fetchMock = stubFetch()
+    await fetchJson('/api/edit/labels', { method: 'POST', ...jsonBody({ name_cn: '辣' }) })
+    expect(fetchMock.mock.calls[0][1].headers['Content-Type']).toBe('application/json')
+  })
+
+  // An upload with a forced JSON content type is a body the server cannot
+  // parse; the browser has to write the multipart boundary itself.
+  it('leaves the content type to the browser for FormData', async () => {
+    const fetchMock = stubFetch()
+    const form = new FormData()
+    form.append('file', new Blob(['x']), 'x.jpg')
+    await fetchJson('/api/edit/images', { method: 'POST', body: form })
+    const { headers, body } = fetchMock.mock.calls[0][1]
+    expect(body).toBe(form)
+    expect(Object.keys(headers).map((k) => k.toLowerCase())).not.toContain('content-type')
+  })
+
+  it('attaches status and body to a failure', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ detail: 'In use.', usage_count: 3 }), { status: 409 })),
+    )
+    await expect(fetchJson('/api/edit/equipment/1', { method: 'DELETE' })).rejects.toMatchObject({
+      message: 'In use.',
+      status: 409,
+      body: { usage_count: 3 },
+    })
   })
 })

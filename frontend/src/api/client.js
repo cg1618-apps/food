@@ -47,10 +47,19 @@ export function errorMessage(body, fallback) {
   return fallback
 }
 
+// A multipart body must go out with NO Content-Type of ours: the browser
+// writes `multipart/form-data; boundary=...` itself, and a forced
+// application/json (or a multipart type without the boundary) is a body the
+// server cannot parse - an upload that fails with a 422 about a missing field.
+function requestHeaders(body, headers) {
+  if (typeof FormData !== 'undefined' && body instanceof FormData) return { ...(headers || {}) }
+  return { 'Content-Type': 'application/json', ...(headers || {}) }
+}
+
 export async function fetchJson(url, options = {}) {
   const response = await fetch(url, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers: requestHeaders(options.body, options.headers),
   })
 
   if (response.status === 204) return null
