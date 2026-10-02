@@ -16,12 +16,18 @@
 //   re-implement fetch by hand, and a documented 409 contract becomes
 //   unreachable without anything saying so.
 
+// An array value repeats its key - `{ course_id: [1, 2] }` is
+// `course_id=1&course_id=2` - which is how FastAPI reads a `list[int]` query
+// parameter, and what the recipe and note lists mean by "any of". Joining it
+// with commas would send one value FastAPI cannot parse as an integer.
 export function buildUrl(url, params) {
   if (!params) return url
   const search = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === null || value === '') continue
-    search.append(key, String(value))
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item === undefined || item === null || item === '') continue
+      search.append(key, String(item))
+    }
   }
   const query = search.toString()
   return query ? `${url}?${query}` : url
@@ -47,10 +53,19 @@ export function errorMessage(body, fallback) {
   return fallback
 }
 
+// A multipart body must go out with NO Content-Type of ours: the browser
+// writes `multipart/form-data; boundary=...` itself, and a forced
+// application/json (or a multipart type without the boundary) is a body the
+// server cannot parse - an upload that fails with a 422 about a missing field.
+function requestHeaders(body, headers) {
+  if (typeof FormData !== 'undefined' && body instanceof FormData) return { ...(headers || {}) }
+  return { 'Content-Type': 'application/json', ...(headers || {}) }
+}
+
 export async function fetchJson(url, options = {}) {
   const response = await fetch(url, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers: requestHeaders(options.body, options.headers),
   })
 
   if (response.status === 204) return null

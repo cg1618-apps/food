@@ -37,6 +37,23 @@ uploads at once can see each other's filter. An explicit `width * height`
 check against the ceiling after opening would be deterministic and need no
 filter at all.
 
+## Labels cannot be reordered in 設定
+
+A label has no `sort_order` column, so the API lists labels by name and the
+設定 page draws their rows without the ▲ / ▼ the other vocabularies have.
+Every other vocabulary is ordered by hand. If an order other than the
+alphabet is wanted, the label table needs the column (a migration), its
+`PATCH` the field, and `NameRow` the arrows it already draws elsewhere.
+
+## The image library reads one detail per tile to show owners
+
+`GET /api/images` carries only `attachment_count`, not who the image is
+attached to, so `/edit/images` fetches `GET /api/images/{id}` for each tile
+that has any attachment - up to 30 requests for a page. It is fine at a
+kitchen's scale and slow over the tunnel on a phone. The list could return
+the owners itself (one query joining the three gallery tables), and the page
+would drop the per-tile reads.
+
 ## `updated_at` does not move when only child rows change
 
 Editing only an ingredient's aliases, storage, heating, links, labels or
@@ -48,10 +65,3 @@ notes too: a `PATCH` sending only `label_ids`, and the gallery `PUT`, leave
 `kitchen_note.updated_at` where it was. Anything that sorts or reports by "recently edited" will miss
 those edits. The service would have to touch the timestamp whenever a list it
 replaces was sent.
-
-## The detail page and category counts are stale after a save
-
-After an ingredient is saved, its detail page and the category counts keep
-showing the values from before the save until the page is reloaded. The
-form's create and update mutations invalidate only the ingredient list, not
-the detail query or the category tree.

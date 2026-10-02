@@ -1,0 +1,320 @@
+// 設定 and 圖片 through the real routes: what each section sends for add,
+// rename, reorder and delete, the refusals explained inline with their
+// counts, the error state, and the image library's owners, filter, paging
+// and delete.
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { MemoryRouter, useLocation } from 'react-router-dom'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import AppRoutes from '../../routes'
+import { PAGE_SIZE } from './ImageLibrary'
+
+let calls
+let handler
+
+function json(body, status = 200) {
+  return new Response(body === null ? null : JSON.stringify(body), { status })
+}
+
+function LocationProbe() {
+  const { pathname, search } = useLocation()
+  return <output data-testid="location">{`${pathname}${search}`}</output>
+}
+
+function renderAt(path) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[path]}>
+        <AppRoutes />
+        <LocationProbe />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
+const location = () => screen.getByTestId('location').textContent
+const writes = () => calls.filter((call) => call.method !== 'GET')
+
+beforeEach(() => {
+  calls = []
+  handler = () => null
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url, options = {}) => {
+      const call = {
+        url: decodeURIComponent(url),
+        method: options.method ?? 'GET',
+        body: typeof options.body === 'string' ? JSON.parse(options.body) : undefined,
+      }
+      calls.push(call)
+      return handler(call) ?? json([])
+    }),
+  )
+})
+
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
+
+const COURSES = [
+  { id: 1, display_name: '主菜', name_cn: '主菜', name_en: null, sort_order: 1, usage_count: 3 },
+  { id: 2, display_name: '湯', name_cn: '湯', name_en: null, sort_order: 2, usage_count: 0 },
+  { id: 3, display_name: '甜點', name_cn: '甜點', name_en: null, sort_order: 3, usage_count: 0 },
+]
+
+const TREE = [
+  {
+    id: 1,
+    display_name: '未分類',
+    name_cn: '未分類',
+    parent_id: null,
+    sort_order: 0,
+    is_fallback: true,
+    ingredient_count: 2,
+    children: [],
+  },
+  {
+    id: 2,
+    display_name: '蔬菜',
+    name_cn: '蔬菜',
+    parent_id: null,
+    sort_order: 1,
+    is_fallback: false,
+    ingredient_count: 4,
+    children: [
+      {
+        id: 3,
+        display_name: '葉菜',
+        name_cn: '葉菜',
+        parent_id: 2,
+        sort_order: 0,
+        is_fallback: false,
+        ingredient_count: 0,
+        children: [],
+      },
+    ],
+  },
+]
+
+const LABELS = [
+  {
+    id: 7,
+    display_name: '常備',
+    name_cn: '常備',
+    name_en: null,
+    ingredient_count: 1,
+    recipe_count: 2,
+    note_count: 0,
+    usage_count: 3,
+  },
+]
+
+function settingsData({ url, method }) {
+  if (method !== 'GET') return null
+  if (url === '/api/recipe-courses') return json(COURSES)
+  if (url === '/api/ingredient-categories') return json(TREE)
+  if (url === '/api/labels') return json(LABELS)
+  return null
+}
+
+const section = (name) => screen.getByRole('list', { name })
+
+describe('設定', () => {
+  beforeEach(() => {
+    handler = settingsData
+  })
+
+  it('shows each vocabulary with its counts, and labels with every owner', async () => {
+    renderAt('/edit/settings')
+    const courses = await screen.findByRole('list', { name: '類別' })
+    expect(within(courses).getByRole('listitem', { name: '主菜' }).textContent).toContain('用在 3 個地方')
+    const labels = await screen.findByRole('list', { name: '標籤' })
+    expect(labels.textContent).toContain('食材 1 · 食譜 2 · 筆記 0')
+    // Labels have no order to move by.
+    expect(within(labels).queryByRole('button', { name: /上移/ })).toBeNull()
+  })
+
+  it('renames in place', async () => {
+    handler = (call) =>
+      call.method === 'PATCH' ? json({ ...COURSES[1], name_en: 'soup' }) : settingsData(call)
+    renderAt('/edit/settings')
+    fireEvent.click(await screen.findByRole('button', { name: '改名「湯」' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '湯 的英文名' }), { target: { value: 'soup' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() =>
+      expect(writes()).toEqual([
+        { url: '/api/edit/recipe-courses/2', method: 'PATCH', body: { name_cn: '湯', name_en: 'soup' } },
+      ]),
+    )
+  })
+
+  it('moves a value by swapping sort_order with its neighbour', async () => {
+    handler = (call) => (call.method === 'PATCH' ? json({}) : settingsData(call))
+    renderAt('/edit/settings')
+    fireEvent.click(await screen.findByRole('button', { name: '上移「甜點」' }))
+    await waitFor(() => expect(writes()).toHaveLength(2))
+    expect(writes()).toEqual(
+      expect.arrayContaining([
+        { url: '/api/edit/recipe-courses/3', method: 'PATCH', body: { sort_order: 2 } },
+        { url: '/api/edit/recipe-courses/2', method: 'PATCH', body: { sort_order: 3 } },
+      ]),
+    )
+    expect(screen.getByRole('button', { name: '上移「主菜」' }).disabled).toBe(true)
+  })
+
+  it('adds a value after the last one', async () => {
+    handler = (call) => (call.method === 'POST' ? json({}, 201) : settingsData(call))
+    renderAt('/edit/settings')
+    const add = await screen.findByRole('form', { name: '新增類別' })
+    fireEvent.change(within(add).getByRole('textbox', { name: '新增類別：中文名' }), {
+      target: { value: '前菜' },
+    })
+    fireEvent.click(within(add).getByRole('button', { name: '＋ 新增類別' }))
+    await waitFor(() =>
+      expect(writes()).toEqual([
+        {
+          url: '/api/edit/recipe-courses',
+          method: 'POST',
+          body: { name_cn: '前菜', name_en: null, sort_order: 4 },
+        },
+      ]),
+    )
+  })
+
+  it("explains a refused delete inline with the server's count", async () => {
+    // The page says 3; the server knows 5, and its number wins.
+    handler = (call) =>
+      call.method === 'DELETE'
+        ? json({ detail: 'still used', usage_count: 5 }, 409)
+        : settingsData(call)
+    renderAt('/edit/settings')
+    fireEvent.click(await screen.findByRole('button', { name: '刪除「主菜」' }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.textContent).toContain('還用在 3 個地方')
+    fireEvent.click(within(dialog).getByRole('button', { name: '刪除' }))
+    const row = section('類別').querySelector('[aria-label="主菜"]')
+    await waitFor(() =>
+      expect(within(row).getByRole('alert').textContent).toBe('「主菜」還用在 5 個地方，先改掉那些再刪。'),
+    )
+  })
+
+  it('draws the category tree, offers no delete for the fallback, and explains a refusal', async () => {
+    handler = (call) =>
+      call.method === 'DELETE' ? json({ detail: 'referenced' }, 409) : settingsData(call)
+    renderAt('/edit/settings')
+    await screen.findByRole('list', { name: '食材分類' })
+    expect(screen.queryByRole('button', { name: '刪除「未分類」' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '刪除「蔬菜」' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '刪除' }))
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toBe('「蔬菜」底下還有 4 種食材、1 個子分類，先移走再刪。'),
+    )
+  })
+
+  it('adds a child under the node it was asked for, after its siblings', async () => {
+    handler = (call) => (call.method === 'POST' ? json({}, 201) : settingsData(call))
+    renderAt('/edit/settings')
+    fireEvent.click(await screen.findByRole('button', { name: '在「蔬菜」下新增子分類' }))
+    const add = screen.getByRole('form', { name: '蔬菜的子分類' })
+    fireEvent.change(within(add).getByRole('textbox', { name: '蔬菜的子分類：中文名' }), {
+      target: { value: '根莖' },
+    })
+    fireEvent.click(within(add).getByRole('button', { name: '＋ 蔬菜的子分類' }))
+    await waitFor(() =>
+      expect(writes()).toEqual([
+        {
+          url: '/api/edit/ingredient-categories',
+          method: 'POST',
+          body: { name_cn: '根莖', name_en: null, parent_id: 2, sort_order: 1 },
+        },
+      ]),
+    )
+  })
+
+  it('shows an error state per section, leaving the others', async () => {
+    handler = (call) =>
+      call.url === '/api/equipment' ? json({ detail: '資料庫連不上' }, 503) : settingsData(call)
+    renderAt('/edit/settings')
+    expect((await screen.findByRole('alert')).textContent).toBe('資料庫連不上')
+    expect(await screen.findByRole('list', { name: '類別' })).toBeTruthy()
+  })
+})
+
+const image = (id, attachment_count = 0) => ({
+  id,
+  url: `/images/${id}.jpg`,
+  thumb_url: `/images/${id}-t.jpg`,
+  width: 800,
+  height: 600,
+  byte_size: 14540,
+  original_filename: `photo-${id}.jpg`,
+  uploaded_at: null,
+  attachment_count,
+})
+
+describe('圖片', () => {
+  it("lists each image with its owners as links, and delete only for the unused", async () => {
+    handler = ({ url }) => {
+      if (url.startsWith('/api/images?')) return json([image(1, 2), image(2)])
+      if (url === '/api/images/1')
+        return json({
+          ...image(1, 2),
+          owners: [
+            { type: 'recipe', id: 5, display_name: '麻婆豆腐' },
+            { type: 'kitchen_note', id: 8, display_name: '油溫' },
+          ],
+        })
+      return null
+    }
+    renderAt('/edit/images')
+    const used = await screen.findByRole('listitem', { name: 'photo-1.jpg' })
+    expect((await within(used).findByRole('link', { name: '麻婆豆腐' })).getAttribute('href')).toBe('/recipes/5')
+    expect(within(used).getByRole('link', { name: '油溫' }).getAttribute('href')).toBe('/notes/8')
+    expect(within(used).queryByRole('button', { name: '刪除' })).toBeNull()
+    const unused = screen.getByRole('listitem', { name: 'photo-2.jpg' })
+    expect(within(unused).getByRole('button', { name: '刪除' })).toBeTruthy()
+    // The unused image's owners are never asked for.
+    expect(calls.some((call) => call.url === '/api/images/2')).toBe(false)
+  })
+
+  it('puts the unused filter and the page in the URL and the request', async () => {
+    const full = Array.from({ length: PAGE_SIZE + 1 }, (_, i) => image(i + 1))
+    handler = ({ url }) => (url.startsWith('/api/images?') ? json(full) : null)
+    renderAt('/edit/images')
+    fireEvent.click(await screen.findByRole('button', { name: '只看未使用' }))
+    expect(location()).toBe('/edit/images?unused=1')
+    fireEvent.click(await screen.findByRole('button', { name: '下一頁' }))
+    expect(location()).toBe('/edit/images?unused=1&page=2')
+    await waitFor(() =>
+      expect(calls.at(-1).url).toBe(`/api/images?unused=true&limit=${PAGE_SIZE + 1}&offset=${PAGE_SIZE}`),
+    )
+    expect(await screen.findAllByRole('listitem', { name: /^photo-/ })).toHaveLength(PAGE_SIZE)
+  })
+
+  it('deletes an unused image after asking, and shows the owners when the server refuses', async () => {
+    handler = ({ url, method }) => {
+      if (method === 'DELETE')
+        return json(
+          { detail: 'attached', owners: [{ type: 'ingredient', id: 3, display_name: '番茄' }] },
+          409,
+        )
+      if (url.startsWith('/api/images?')) return json([image(2)])
+      return null
+    }
+    renderAt('/edit/images')
+    const tile = await screen.findByRole('listitem', { name: 'photo-2.jpg' })
+    fireEvent.click(within(tile).getByRole('button', { name: '刪除' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '刪除' }))
+    await waitFor(() => expect(writes()).toEqual([{ url: '/api/edit/images/2', method: 'DELETE', body: undefined }]))
+    expect((await within(tile).findByRole('link', { name: '番茄' })).getAttribute('href')).toBe('/ingredients/3')
+    expect(within(tile).queryByRole('button', { name: '刪除' })).toBeNull()
+  })
+
+  it('says why the list is empty', async () => {
+    renderAt('/edit/images?unused=1')
+    expect(await screen.findByText('沒有未使用的圖片。')).toBeTruthy()
+  })
+})

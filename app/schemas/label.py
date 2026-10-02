@@ -50,4 +50,9 @@ class LabelResponse(BaseModel):
     display_name: str = ""
     name_cn: str | None = None
     name_en: str | None = None
+    # Links per owner, and their total. `usage_count` is the name the other
+    # vocabularies use for "how many things carry this".
     ingredient_count: int = 0
+    recipe_count: int = 0
+    note_count: int = 0
+    usage_count: int = 0

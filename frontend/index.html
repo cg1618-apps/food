@@ -1,11 +1,22 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f2ece1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1f1813" media="(prefers-color-scheme: dark)" />
     <title>food</title>
+    <!-- Headings are Noto Serif TC. display=swap: a phone in a shop reads the
+         page in the system serif first rather than waiting on a font. Only the
+         serif is fetched - controls and metadata use the system sans. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <div id="root"></div>

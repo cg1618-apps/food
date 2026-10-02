@@ -125,7 +125,9 @@ fixed number of queries.
 
 **The full row** adds `aliases`, `preservation`, `heating`, `links`, `labels`,
 `images` and `used_in` (`{id, display_name, kind}` recipes, sorted by display
-name). Its `parent` and `children` are summaries, `used_in_count` included. A preservation entry is `state` (`unused`, `opened`, `cooked`;
+name). Its `parent` and `children` are summaries, `used_in_count` included,
+plus `sourcing_notes` - the page lists varieties with where each is bought;
+a list row does not carry it. A preservation entry is `state` (`unused`, `opened`, `cooked`;
 default `unused`), `method`, `duration_min_days`, `duration_max_days` and
 `notes`. A heating entry is `method` (`{id, display_name}`), `temperature_c`,
 `temperature_f` (computed, never sent), `duration`, `preheat`, `flip` and
@@ -511,15 +513,22 @@ so nothing cascades and the answer is a refusal rather than a number.
 
 | Route | |
 | --- | --- |
-| `GET /api/labels` | with `ingredient_count` |
+| `GET /api/labels` | every label, by name, with its counts |
 | `POST /api/edit/labels` | |
 | `PATCH /api/edit/labels/{id}` | |
 | `DELETE /api/edit/labels/{id}` | |
 
-**Deleting a label detaches it from every ingredient carrying it**, and that is
-intended — removing a tag from the vocabulary means removing it from the things
-tagged. No confirmation count: no ingredient is touched, and re-tagging is
-typing the label again.
+**A label counts every owner that carries it**: `ingredient_count`,
+`recipe_count` and `note_count` (kitchen notes), and `usage_count`, their sum —
+the name the other vocabularies use for the same question. A library's label
+filter shows its own owner's count; the settings page shows the total.
+
+Labels have no `sort_order`: they are listed by name, case-insensitively.
+
+**Deleting a label detaches it from every ingredient, recipe and note carrying
+it**, and that is intended — removing a tag from the vocabulary means removing
+it from the things tagged. No confirmation count: no owner is touched, and
+re-tagging is typing the label again.
 
 ## Health
 

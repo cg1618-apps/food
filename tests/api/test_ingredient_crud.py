@@ -144,3 +144,30 @@ def test_resending_existing_aliases_and_storage_notes_on_update_keeps_them(clien
     assert len(body["preservation"]) == 1
     assert body["preservation"][0]["duration_min_days"] == 1
     assert body["preservation"][0]["duration_max_days"] == 5
+
+
+def test_a_variety_on_its_parent_carries_where_to_get_it(client, fallback_category):
+    """The ingredient page lists varieties with where each is bought, so a
+    child summary on the full row carries `sourcing_notes`; a list row does
+    not."""
+    parent = client.post(
+        "/api/edit/ingredients", json={"name_cn": "芒果", "category_id": fallback_category.id}
+    ).json()
+    child = client.post(
+        "/api/edit/ingredients",
+        json={
+            "name_cn": "愛文芒果",
+            "category_id": fallback_category.id,
+            "parent_id": parent["id"],
+            "rating": "S",
+            "sourcing_notes": "屏東果菜市場",
+        },
+    ).json()
+
+    body = client.get(f"/api/ingredients/{parent['id']}").json()
+    assert [(c["id"], c["rating"], c["sourcing_notes"]) for c in body["children"]] == [
+        (child["id"], "S", "屏東果菜市場")
+    ]
+    assert client.get(f"/api/ingredients/{child['id']}").json()["parent"]["sourcing_notes"] is None
+    rows = {r["id"]: r for r in client.get("/api/ingredients").json()}
+    assert "sourcing_notes" not in rows[child["id"]]
