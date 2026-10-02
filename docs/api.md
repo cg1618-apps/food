@@ -148,6 +148,91 @@ image twice is 422, and a `focus` that is not `"X% Y%"` with each between 0 and
 100 is 422. Putting the same list twice in a row succeeds. The answer is the
 full ingredient.
 
+## Recipes
+
+| Route | |
+| --- | --- |
+| `GET /api/recipes/{id}` | the full recipe |
+| `GET /api/recipes/{id}/cascade` | what a delete would remove, and what blocks it |
+| `POST /api/edit/recipes` | |
+| `PATCH /api/edit/recipes/{id}` | also the in-place status change |
+| `DELETE /api/edit/recipes/{id}` | requires the confirmation counts |
+
+**The full recipe** is the name slots and `display_name`, `kind` (`dish` or
+`base`), `status` (`want_to_try`, `can_cook`, `regular`), `course`
+(`{id, display_name}` or null), `servings`, `time`, `description`,
+`storage_notes`, `notes`, and:
+
+- `aliases` — sorted strings;
+- `sources` — `{id, platform, creator, url, title, sort_order}`;
+- `lines` — `{id, position, section, ingredient, sub_recipe, amount, note,
+  is_optional}`, where exactly one of `ingredient`
+  (`{id, display_name, needs_detail}`) and `sub_recipe`
+  (`{id, display_name, kind}`) is set;
+- `steps` — `{id, position, section, body}`;
+- `serves_as`, `labels`, `methods`, `equipment` — `{id, display_name}` lists;
+- `images` — as an ingredient's;
+- `variant_of` — the original this is a version of, `{id, display_name,
+  kind}` or null;
+- `versions` — the other recipes in its version family: an original's
+  versions, or a version's siblings (its original is `variant_of`);
+- `used_in` — recipes with a line naming this one **directly**. A dish using a
+  base that uses this base is not listed;
+- `written_up` — true when it has at least one line or step. Derived, never
+  sent.
+
+**`POST` takes the whole recipe; `PATCH` takes any subset.** Defaults on create
+are `kind: dish` and `status: want_to_try`. The lists are `aliases`, `sources`,
+`lines`, `steps`, `serves_as_ids`, `label_ids`, `method_ids` and
+`equipment_ids`: on `PATCH` each one sent replaces the stored list and each one
+absent is left alone. Sources, lines and steps take their order from the list —
+a request naming `sort_order` or `position` is a 422 — and re-sending the same
+lines and steps succeeds. A `PATCH` carrying only `status` is the status
+change; nothing else is needed for it.
+
+A source is `{platform, creator, url, title}` with at least one of the last
+three; `url` must be `http` or `https`. A step is `{section, body}` with a
+non-blank `body`.
+
+**A line names exactly one of `ingredient_id`, `sub_recipe_id` or
+`new_ingredient`** (`{name_cn, name_en}`, at least one), plus `section`,
+`amount`, `note` and `is_optional`. There is no type field, and a payload
+sending one is a 422: the stored kind of line is whichever column is set.
+
+`new_ingredient` reuses an ingredient whose name slot or alias equals a typed
+name, ignoring case; otherwise it creates a stub in the fallback category with
+`needs_detail` set. Names resolved earlier in the same save count, so one new
+name typed into two lines is one stub. A near match is not reused — the
+typeahead (`GET /api/ingredients?q=`) is where a near match is offered.
+
+Refused with 422, and a refused save writes nothing — not even a stub an
+earlier line asked for:
+
+- a `kind`, `status` or `platform` outside its list, including an explicit
+  null for `kind` or `status`;
+- no name left on the merged row;
+- **an id inside the body that names nothing** — `course_id`, `variant_of_id`,
+  any of the four id lists, `ingredient_id` or `sub_recipe_id` in a line. The
+  detail names the id. The URL's own recipe missing is 404;
+- a line whose recipe is reachable from its `sub_recipe_id` through sub-recipe
+  lines, at any depth — itself included;
+- **the version rule**: `variant_of_id` naming the recipe itself, naming a
+  recipe that is itself a version, or set on a recipe that has versions of its
+  own. Versions are one level deep.
+
+**`GET .../cascade` answers `{aliases, sources, lines, steps, used_in}`.** The
+first four are what the delete removes and are echoed back; `used_in` is a
+count of the recipes naming this one, and blocks the delete rather than being
+removed by it.
+
+**`DELETE` takes `aliases`, `sources`, `lines` and `steps` as required query
+parameters**, and a moved count is the 409 with `field`, `expected` and
+`actual` that an ingredient's is. A recipe another recipe's line names is
+refused with 409 first, before the database is asked, with
+`used_in: [{id, display_name}]` on the body. Its versions survive with
+`variant_of` null. Label, method, equipment and serves-as links and gallery
+rows go with it uncounted; the images themselves stay.
+
 ## Vocabularies
 
 Three managed vocabularies share one shape, so one description covers them:

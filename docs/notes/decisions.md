@@ -337,6 +337,41 @@ What the branch after module 1 chose, and what it turned down.
   `(state, method)`. Gallery replacement clears and flushes before it assigns,
   for the same reason.
 
+## Recipes
+
+- **Versions are one level deep, and an original's delete leaves them.** A
+  version points at its original through `variant_of_id`; a version may not
+  have versions, nor point at one, so a family is one original and its
+  versions and `versions` on the response is a flat list. The foreign key is
+  `SET NULL` rather than `RESTRICT` because each version is a complete recipe
+  in its own right - refusing to delete an original until its versions went
+  first would make the user destroy what they meant to keep. Rejected: a tree
+  of versions, which nothing here would read and which needs a cycle guard of
+  its own.
+- **"Written up" is derived** - at least one line or step - and never stored.
+  A stored flag disagrees with the content the first time somebody forgets to
+  tick it.
+- **A new ingredient typed into a line reuses an exact match.** Equal to a
+  name slot or an alias, ignoring case, means the existing row; anything else
+  is a stub in the fallback category with `needs_detail`. Names already
+  resolved in the same save count, so one new name in two lines is one stub
+  rather than a unique violation. A near match is not guessed at: the
+  typeahead shows it before the user chooses "new", which is the one moment a
+  person is there to decide.
+- **"Used in" for a recipe is depth zero through sub-recipes.** A dish using a
+  base that uses this base is not listed; only lines naming this recipe
+  directly. An ingredient's "used in", when it lands, takes the same depth
+  through sub-recipes, so the two cannot disagree about what "uses" means.
+- **A refused recipe save writes nothing**, because the service validates
+  every name, id, version and cycle before its first write - the stubs - and
+  touches the row only after them. Relying on the request's rollback alone
+  would hold in production and not in a session that is never rolled back,
+  which is where a half-written row would be noticed last.
+- **The cycle guard walks the stored graph breadth first**, one query per
+  level, refusing past `MAX_DEPTH` rather than stopping short - a walk that
+  gave up early would let a cycle through. A recursive CTE would be one query
+  instead of a few, for a graph a person builds by hand.
+
 ## Rules with no referent yet
 
 Written down where the next person will look rather than where they were
@@ -362,7 +397,9 @@ it is about — which is exactly when nobody will remember it.
 ## What module 1 hands module 2
 
 - **A recipe line's discriminator resolves three ways** — ingredient, recipe,
-  or neither — and "neither" is a 404, not a 422. The stored type comes from
+  or neither — and "neither" is a 422, by the owner's ruling for module 2 that
+  an id inside a body naming no row is 422 everywhere (module 1 handed over
+  "404"; the URL resolved, the payload was wrong). The stored type comes from
   the row, never from the payload. Media shipped that corruption three times,
   and there an authorization helper was incidentally the only thing resolving
   a type from an id. food has no such helper, so nothing would catch it.
