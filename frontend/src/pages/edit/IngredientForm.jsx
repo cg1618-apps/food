@@ -13,6 +13,7 @@ import {
   TextArea,
 } from '../../components/ui'
 import { useApiMutation, useApiQuery } from '../../hooks/useApi'
+import { reconcileMinDays } from './storageDuration'
 import { flatten } from '../../lib/tree'
 import DeleteIngredientDialog from './DeleteIngredientDialog'
 
@@ -82,6 +83,7 @@ export default function IngredientForm() {
         // either, and dropping them would rewrite stored data on every save.
         state: entry.state,
         duration_min_days: entry.duration_min_days,
+        loaded_max_days: entry.duration_max_days,
         method: entry.method,
         duration_max_days: entry.duration_max_days ?? '',
         notes: entry.notes ?? '',
@@ -124,7 +126,11 @@ export default function IngredientForm() {
         .filter((entry) => entry.method)
         .map((entry) => ({
           state: entry.state,
-          duration_min_days: entry.duration_min_days,
+          duration_min_days: reconcileMinDays({
+            loadedMin: entry.duration_min_days,
+            loadedMax: entry.loaded_max_days,
+            editedMax: entry.duration_max_days,
+          }),
           method: entry.method,
           // An empty number input means "unknown", which is null - not 0,
           // which the CHECK constraint refuses and which would surface as a
