@@ -17,6 +17,11 @@ from sqlalchemy import create_engine, inspect, text
 
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
+
+# Imported for its side effect: every model registers on Base.metadata. Without
+# it the comparison below sees an empty metadata whenever this file runs on its
+# own, and reports every table and index as one to remove.
+from app import models  # noqa: F401
 from app.config import settings
 from app.database import Base
 

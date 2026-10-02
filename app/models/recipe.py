@@ -164,7 +164,7 @@ class RecipeServesAs(Base):
 
     recipe_id = Column(Integer, ForeignKey("recipe.id", ondelete="CASCADE"), primary_key=True)
     course_id = Column(
-        Integer, ForeignKey("recipe_course.id", ondelete="CASCADE"), primary_key=True
+        Integer, ForeignKey("recipe_course.id", ondelete="CASCADE"), primary_key=True, index=True
     )
 
 
@@ -175,7 +175,11 @@ class RecipeLabel(Base):
     __tablename__ = "recipe_label"
 
     recipe_id = Column(Integer, ForeignKey("recipe.id", ondelete="CASCADE"), primary_key=True)
-    label_id = Column(Integer, ForeignKey("label.id", ondelete="CASCADE"), primary_key=True)
+    # Indexed on its own: the composite key leads with recipe_id, so it cannot
+    # serve "which recipes carry this label" - nor the cascade from the label.
+    label_id = Column(
+        Integer, ForeignKey("label.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
 
 
 class RecipeMethod(Base):
@@ -186,7 +190,7 @@ class RecipeMethod(Base):
 
     recipe_id = Column(Integer, ForeignKey("recipe.id", ondelete="CASCADE"), primary_key=True)
     method_id = Column(
-        Integer, ForeignKey("cooking_method.id", ondelete="RESTRICT"), primary_key=True
+        Integer, ForeignKey("cooking_method.id", ondelete="RESTRICT"), primary_key=True, index=True
     )
 
 
@@ -197,7 +201,7 @@ class RecipeEquipment(Base):
 
     recipe_id = Column(Integer, ForeignKey("recipe.id", ondelete="CASCADE"), primary_key=True)
     equipment_id = Column(
-        Integer, ForeignKey("equipment.id", ondelete="RESTRICT"), primary_key=True
+        Integer, ForeignKey("equipment.id", ondelete="RESTRICT"), primary_key=True, index=True
     )
 
 

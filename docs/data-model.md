@@ -256,7 +256,10 @@ displayed, unique per recipe (`uq_recipe_alias`) and looked up on
 ## `recipe_serves_as`, `recipe_label`, `recipe_method`, `recipe_equipment`
 
 Link tables, each a composite primary key of the recipe and the other side.
-The recipe side always `CASCADE`s. The other side differs:
+The key leads with `recipe_id`, so the other side's column carries its own
+index (`ix_<table>_<column>`) for "which recipes use this" and for the
+`CASCADE` or `RESTRICT` check when that row is deleted. The recipe side always
+`CASCADE`s. The other side differs:
 
 | Table | Other side |
 | --- | --- |

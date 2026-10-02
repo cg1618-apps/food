@@ -115,6 +115,12 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["recipe_id"], ["recipe.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["equipment_id"], ["equipment.id"], ondelete="RESTRICT"),
     )
+    # The composite keys lead with recipe_id; the other side needs its own
+    # index for "which recipes use this" and for the cascade or RESTRICT check.
+    op.create_index("ix_recipe_serves_as_course_id", "recipe_serves_as", ["course_id"])
+    op.create_index("ix_recipe_label_label_id", "recipe_label", ["label_id"])
+    op.create_index("ix_recipe_method_method_id", "recipe_method", ["method_id"])
+    op.create_index("ix_recipe_equipment_equipment_id", "recipe_equipment", ["equipment_id"])
 
     op.create_table(
         "recipe_source",
@@ -205,9 +211,13 @@ def downgrade() -> None:
     op.drop_table("recipe_line")
     op.drop_index("ix_recipe_source_recipe_id", "recipe_source")
     op.drop_table("recipe_source")
+    op.drop_index("ix_recipe_equipment_equipment_id", "recipe_equipment")
     op.drop_table("recipe_equipment")
+    op.drop_index("ix_recipe_method_method_id", "recipe_method")
     op.drop_table("recipe_method")
+    op.drop_index("ix_recipe_label_label_id", "recipe_label")
     op.drop_table("recipe_label")
+    op.drop_index("ix_recipe_serves_as_course_id", "recipe_serves_as")
     op.drop_table("recipe_serves_as")
     op.drop_index("ix_recipe_alias_lookup", "recipe_alias")
     op.drop_index("ix_recipe_alias_recipe_id", "recipe_alias")
