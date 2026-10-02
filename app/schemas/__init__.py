@@ -15,6 +15,12 @@ from app.schemas.ingredient_category import (
     CategoryUpdate,
 )
 from app.schemas.label import LabelCreate, LabelResponse, LabelUpdate
+from app.schemas.vocabulary import (
+    VocabRef,
+    VocabularyCreate,
+    VocabularyResponse,
+    VocabularyUpdate,
+)
 
 __all__ = [
     "CategoryCreate",
@@ -30,4 +36,8 @@ __all__ = [
     "LabelUpdate",
     "PreservationIn",
     "PreservationResponse",
+    "VocabRef",
+    "VocabularyCreate",
+    "VocabularyResponse",
+    "VocabularyUpdate",
 ]

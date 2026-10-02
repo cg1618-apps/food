@@ -17,12 +17,16 @@ from app.models.ingredient import (
     IngredientPreservation,
 )
 from app.models.label import IngredientLabel, Label
+from app.models.vocabulary import CookingMethod, Equipment, RecipeCourse
 
 __all__ = [
+    "CookingMethod",
+    "Equipment",
     "Ingredient",
     "IngredientAlias",
     "IngredientCategory",
     "IngredientLabel",
     "IngredientPreservation",
     "Label",
+    "RecipeCourse",
 ]

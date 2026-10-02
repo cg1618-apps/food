@@ -52,6 +52,15 @@ CONSTRAINT_MESSAGES = {
     "ck_ingredient_has_a_name": "An ingredient needs at least one name.",
     "ck_ingredient_category_has_a_name": "A category needs at least one name.",
     "ck_label_has_a_name": "A label needs at least one name.",
+    "ck_recipe_course_has_a_name": "A course needs at least one name.",
+    "uq_recipe_course_name_cn": "Another course already has that Chinese name.",
+    "uq_recipe_course_name_en": "Another course already has that English name.",
+    "ck_cooking_method_has_a_name": "A cooking method needs at least one name.",
+    "uq_cooking_method_name_cn": "Another cooking method already has that Chinese name.",
+    "uq_cooking_method_name_en": "Another cooking method already has that English name.",
+    "ck_equipment_has_a_name": "A piece of equipment needs at least one name.",
+    "uq_equipment_name_cn": "Another piece of equipment already has that Chinese name.",
+    "uq_equipment_name_en": "Another piece of equipment already has that English name.",
     "ck_ingredient_preservation_duration_positive": (
         "A preservation time has to be a positive number of days, or left empty."
     ),
