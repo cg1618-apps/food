@@ -60,6 +60,12 @@ in them; the pictures a recipe gallery attached stay in `image` and on disk.
 `k1notes`'s downgrade drops `kitchen_note`, its label links and its gallery,
 and every note with them; the pictures stay, as for recipes.
 
+**`i3import`'s downgrade is a deliberate no-op.** It loaded the starting
+ingredient list, and downgrading past it leaves every imported ingredient in
+place: the owner may have filled them in since, and deleting them is worse
+than keeping them. Re-running its upgrade inserts nothing that is already
+there, so a downgrade and upgrade round trip is harmless.
+
 **So there is no route that keeps the data.** The real choice is:
 
 - **roll back**, and lose everything entered since the release, or
@@ -91,7 +97,8 @@ they ever do not, believe the box.
 | Storage ranges, heating, links, rating | `i2storage` |
 | The image library | `m1images` — thirteen tables |
 | Recipes | `r1recipes` — twenty-three tables |
-| Kitchen notes | `k1notes` — twenty-six tables, the current head |
+| Kitchen notes | `k1notes` — twenty-six tables |
+| The starting ingredient list | `i3import` — no new table, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

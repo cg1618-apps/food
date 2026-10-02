@@ -1,6 +1,6 @@
 # Data model
 
-What the database holds today: twenty-six tables, at revision `k1notes`.
+What the database holds today: twenty-six tables, at revision `i3import`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the three managed
 vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
@@ -180,6 +180,29 @@ them:**
 
 Seeded rows are ordinary rows. Every seed insert is `ON CONFLICT DO NOTHING`, so
 a database where the owner already typed 肉類 or 飯 keeps that row untouched.
+
+### The starting ingredient list
+
+**The first ingredients come from the owner's recipe document**, not from
+typing. `i3import` loads `alembic/import/ingredients.csv` — 194 names drawn
+from that document's ingredient lists and approved by the owner — as stubs:
+every row it inserts has `needs_detail` true and carries only its names, its
+aliases (120 across the file), its category and its parent. Notes, storage and
+pictures are filled in afterwards, through the 待補 backlog.
+
+The file's header is `name_cn,name_en,aliases,parent,category`. Aliases are
+`|`-separated; `parent` names another row of the file; `category` is one of the
+seeded top-level categories above, matched by name, and an empty one — or one
+the owner has since renamed — files the row in the fallback category 未分類.
+
+The load leaves what is already there alone. A row is skipped when its name_cn
+or name_en matches, case-insensitively, any existing ingredient's name slot or
+alias, and no existing row is modified. A skipped row's existing twin still
+becomes the parent of the file's rows beneath it. A parent link that would
+point at itself or close a cycle is not made.
+
+Once loaded, the rows are ordinary data; the CSV is not read again by anything
+but a fresh database's migration chain.
 
 **A value's usage count is the number of `RESTRICT` references to it** — the
 things that would stop it being deleted:

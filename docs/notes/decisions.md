@@ -500,6 +500,36 @@ What the branch after module 1 chose, and what it turned down.
 - **Search reads the title and the body.** A note's body is where the
   reason it was kept is written, which is the part worth finding it by.
 
+## The starting ingredient list
+
+- **Loaded by a migration, not by a script or the API.** Production receives
+  the same starting list on deploy with nobody touching the box, the same
+  reason the vocabularies are seeded by `v1ocabulary`. It runs once per
+  database, and Alembic's version table is what records that it has.
+- **The CSV lives at `alembic/import/ingredients.csv`, not under `data/`.**
+  The design first put it at `data/import/`, but `.dockerignore` excludes
+  `data/` (and `.gitignore` excludes `data/images/`), so a file there would
+  never reach the image the migration runs in on the box — the upgrade would
+  pass locally and fail on deploy. Beside the migrations, it ships with them;
+  the migration reads it by a path relative to its own file.
+- **The file is validated in full before anything is written.** A parent not
+  in the file, an unknown category, a repeated name_cn or name_en, a row with
+  no name, and an alias that repeats or equals a row name all stop the
+  migration. Half a list, with the unknown remainder failing on the box, is
+  worse than none.
+- **Skipped, not merged, when a name is already taken.** A row matching any
+  existing name slot or alias is left out, and the existing row is never
+  modified — it is the owner's, and may hold more than the stub would. That
+  also makes a second run insert nothing. A file cycle is not refused by
+  validation; the load declines the link that would close it, as the write
+  path's guard does.
+- **Downgrade is a no-op.** The rows become ordinary data on landing. Telling
+  "still an untouched stub" from "edited since" would need a marker column
+  every ingredient carries forever, for a downgrade nobody expects to run.
+- **No ORM.** The migration writes SQL through the bind and copies the seeded
+  category names rather than importing them, because a revision must not
+  depend on today's models or on another revision's module.
+
 ## Rules with no referent yet
 
 Written down where the next person will look rather than where they were
