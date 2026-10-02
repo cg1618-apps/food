@@ -126,21 +126,38 @@ def _apply_labels(db: Session, ingredient: Ingredient, label_ids: list[int]) -> 
 
 
 def _apply_aliases(ingredient: Ingredient, values: list[str]) -> None:
-    ingredient.aliases = [IngredientAlias(value=value) for value in values]
+    """Make the alias rows match `values`, keeping the rows already there.
+
+    Replacing the whole collection looks equivalent and is not: the unit of
+    work INSERTs the new rows before it DELETEs the orphaned ones, so re-sending
+    an alias the ingredient already has trips uq_ingredient_alias, and a PATCH
+    that keeps any existing alias is a 409. Reconciling by value touches only
+    what changed.
+    """
+    wanted = list(dict.fromkeys(values))
+    ingredient.aliases = [row for row in ingredient.aliases if row.value in wanted]
+    kept = {row.value for row in ingredient.aliases}
+    ingredient.aliases.extend(IngredientAlias(value=v) for v in wanted if v not in kept)
 
 
 def _apply_preservation(ingredient: Ingredient, entries) -> None:
-    ingredient.preservation = [
-        IngredientPreservation(
-            method=entry.method,
-            state=entry.state,
-            duration_min_days=entry.duration_min_days,
-            duration_max_days=entry.duration_max_days,
-            notes=entry.notes,
-            sort_order=entry.sort_order,
+    """Reconcile by (state, method), for the reason `_apply_aliases` gives.
+
+    uq_ingredient_preservation_state_method makes a wholesale replace fail the
+    moment a PATCH re-sends a note the ingredient already has.
+    """
+    existing = {(row.state, row.method): row for row in ingredient.preservation}
+    rows = []
+    for entry in entries:
+        row = existing.get((entry.state, entry.method)) or IngredientPreservation(
+            method=entry.method, state=entry.state
         )
-        for entry in entries
-    ]
+        row.duration_min_days = entry.duration_min_days
+        row.duration_max_days = entry.duration_max_days
+        row.notes = entry.notes
+        row.sort_order = entry.sort_order
+        rows.append(row)
+    ingredient.preservation = rows
 
 
 def _apply_heating(db: Session, ingredient: Ingredient, entries) -> None:
