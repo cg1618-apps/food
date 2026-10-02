@@ -281,6 +281,14 @@ so a later reader can tell a decision from an accident. These are food's.
   have up to eight filter groups and are used on a phone at the shop; a
   permanent column suits the desk, and the drawer (the shared `Dialog`, a
   bottom sheet on a phone) keeps the list on screen until it is asked for.
+- **A bar fixed to the bottom of the screen on a phone**, where media's
+  navigation folds below `lg` into a menu button that opens a full-screen
+  drawer. media has a catalogue of sections and sub-pages to fold away;
+  food has four destinations - 食譜 · 食材 · 筆記 · 設定 - which fit in one
+  row under a thumb, and the app is opened one-handed in a shop or at the
+  stove, where a menu button and a drawer are two taps and a screen covered
+  for every move. Pages are padded at the bottom so the bar never covers
+  content.
 - **The 封面 / 清單 choice is remembered per library**, where media's library
   view resets to the grid on every visit (only its dashboard remembers, in
   `lib/dashboardView.js`, whose shape food's `lib/libraryView.js` copies). The

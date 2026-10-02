@@ -32,29 +32,34 @@ reference work.
 
 ## Status
 
-**Module 1 is built.** The ingredient library: the read and write API, and the
-pages — a library with search and filters, a detail page, add and edit forms,
-and a categories and labels editor. It also holds storage with a state and a
-range, a heating guide, links, a rating, the three managed vocabularies (recipe
-courses, cooking methods, equipment) with their seeds, and the image library
-with ingredient galleries.
+**Modules 1 and 2 are built, with kitchen notes.** The schema is at revision
+`k1notes` (the head).
 
-**Module 2's backend is built.** Recipes, at revision `r1recipes`: lines that
-name an ingredient, a sub-recipe or a new stub ingredient, steps, sources,
-versions, the recipe library with its filters, recipe galleries, "used in" for
-ingredients and base recipes, and ingredient merge.
+- **Ingredients** - names and aliases, a category tree, varieties under a
+  parent, rating, labels, storage as a state x method grid with day ranges, a
+  heating guide, links, galleries, the 待補 (`needs_detail`) stub backlog,
+  and merge.
+- **Recipes** - lines naming an ingredient, a sub-recipe or a new stub made
+  by the save, steps in sections, sources, versions, a status, courses,
+  methods, equipment, labels, galleries, and "used in" for ingredients and
+  base recipes.
+- **Kitchen notes** - bookmarks with a title, a kind, a link, a body, labels
+  and a gallery.
+- **The notebook UI** - 食譜 · 食材 · 筆記 · 設定: the three libraries
+  (search and filters in the URL, a sidebar or a phone drawer, covers or a
+  table), their detail pages, their add and edit forms with the gallery
+  picker, one delete dialog, ingredient merge, 設定 for every vocabulary
+  (categories, labels, courses, cooking methods, equipment) and 圖片, the
+  image library.
 
-**Kitchen notes' backend is built**, at revision `k1notes` (the head): a
-small library of bookmarks - compilations, techniques, references - each with
-a title, a kind, a link, a body, labels and a gallery.
+**Next is the one-time ingredient import**: the ingredient names from the
+recipe doc's ingredient lists drafted as a CSV, reviewed by the owner, then
+loaded by a data migration as stubs.
 
-**The pages lag the API.** They have only been kept compatible, and do not yet
-show recipes or kitchen notes, or edit heating, links, rating, the three vocabularies or images.
-The notebook UI redesign is what adds them.
-
-`docs/data-model.md` describes the schema, `docs/api.md` the routes and the
-error shape, `docs/testing.md` how the suite is arranged and which tests are
-load-bearing, and `docs/notes/decisions.md` why.
+`docs/frontend.md` describes the pages, `docs/data-model.md` the schema,
+`docs/api.md` the routes and the error shape, `docs/testing.md` how the suite
+is arranged and which tests are load-bearing, and `docs/notes/decisions.md`
+why.
 
 ## The contract this app owes the platform
 
