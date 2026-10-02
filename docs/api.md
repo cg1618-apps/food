@@ -125,7 +125,9 @@ fixed number of queries.
 
 **The full row** adds `aliases`, `preservation`, `heating`, `links`, `labels`,
 `images` and `used_in` (`{id, display_name, kind}` recipes, sorted by display
-name). Its `parent` and `children` are summaries, `used_in_count` included. A preservation entry is `state` (`unused`, `opened`, `cooked`;
+name). Its `parent` and `children` are summaries, `used_in_count` included,
+plus `sourcing_notes` - the page lists varieties with where each is bought;
+a list row does not carry it. A preservation entry is `state` (`unused`, `opened`, `cooked`;
 default `unused`), `method`, `duration_min_days`, `duration_max_days` and
 `notes`. A heating entry is `method` (`{id, display_name}`), `temperature_c`,
 `temperature_f` (computed, never sent), `duration`, `preheat`, `flip` and

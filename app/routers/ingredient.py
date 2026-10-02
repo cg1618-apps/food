@@ -42,10 +42,11 @@ def _summaries(db: Session, rows: list[Ingredient]) -> list[schemas.IngredientSu
     return [_summary(row, counts) for row in rows]
 
 
-def _related(row: Ingredient, counts: dict[int, int]) -> schemas.IngredientSummary:
-    """A parent or child on the full row: the summary's own columns and its
-    count, without the fridge range and cover a list row loads for itself."""
-    summary = schemas.IngredientSummary.model_validate(row)
+def _related(row: Ingredient, counts: dict[int, int]) -> schemas.RelatedIngredient:
+    """A parent or child on the full row: the summary's own columns, its count
+    and where to get it, without the fridge range and cover a list row loads
+    for itself."""
+    summary = schemas.RelatedIngredient.model_validate(row)
     summary.used_in_count = counts.get(row.id, 0)
     return summary
 

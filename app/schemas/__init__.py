@@ -21,6 +21,7 @@ from app.schemas.ingredient import (
     MergePreview,
     PreservationIn,
     PreservationResponse,
+    RelatedIngredient,
     StorageRange,
 )
 from app.schemas.ingredient_category import (
@@ -101,6 +102,7 @@ __all__ = [
     "RecipeResponse",
     "RecipeSummary",
     "RecipeUpdate",
+    "RelatedIngredient",
     "SourceIn",
     "SourceResponse",
     "StepIn",

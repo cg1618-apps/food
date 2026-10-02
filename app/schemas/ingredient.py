@@ -229,6 +229,17 @@ class IngredientSummary(BaseModel):
     used_in_count: int = 0
 
 
+class RelatedIngredient(IngredientSummary):
+    """A parent or a child on the full row: a summary plus where to get it.
+
+    The ingredient page lists its varieties with their rating and where each
+    is bought, so a child carries its `sourcing_notes`; a list row does not
+    need them and does not pay for them.
+    """
+
+    sourcing_notes: str | None = None
+
+
 class IngredientBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -346,8 +357,8 @@ class IngredientResponse(BaseModel):
     name_alt: str | None = None
 
     category: CategoryRef | None = None
-    parent: IngredientSummary | None = None
-    children: list[IngredientSummary] = []
+    parent: RelatedIngredient | None = None
+    children: list[RelatedIngredient] = []
 
     description: str | None = None
     selection_notes: str | None = None
