@@ -25,8 +25,11 @@ from app.models import (
     Recipe,
     RecipeAlias,
     RecipeCourse,
+    RecipeEquipment,
     RecipeImage,
+    RecipeLabel,
     RecipeLine,
+    RecipeMethod,
     RecipeSource,
     RecipeStep,
 )
@@ -59,6 +62,22 @@ def _loaded(query):
         selectinload(Recipe.methods),
         selectinload(Recipe.equipment),
         selectinload(Recipe.serves_as),
+    )
+
+
+def _summary_loaded(query):
+    """Every relationship a library row reads, in one round trip each.
+
+    Lines and steps are loaded for `written_up`; a list of a few hundred rows
+    rendering any of these lazily would issue a query per row.
+    """
+    return query.options(
+        selectinload(Recipe.course),
+        selectinload(Recipe.methods),
+        selectinload(Recipe.sources),
+        selectinload(Recipe.images).selectinload(RecipeImage.image),
+        selectinload(Recipe.lines),
+        selectinload(Recipe.steps),
     )
 
 
@@ -103,6 +122,104 @@ def used_in(db: Session, recipe_id: int) -> list[Recipe]:
         .all()
     )
     return sorted(rows, key=lambda r: r.display_name.casefold())
+
+
+def creators(recipe: Recipe) -> list[str]:
+    """The distinct non-null creators of a recipe's sources, in source order."""
+    return list(dict.fromkeys(s.creator for s in recipe.sources if s.creator))
+
+
+def all_creators(db: Session) -> list[str]:
+    """Every distinct creator any source names, sorted in Python as names are."""
+    rows = db.execute(
+        select(RecipeSource.creator).where(RecipeSource.creator.isnot(None)).distinct()
+    )
+    return sorted((creator for (creator,) in rows), key=str.casefold)
+
+
+def recipe_ids_using_ingredients(ingredient_ids: list[int]):
+    """A subquery of the recipes with a line naming any of `ingredient_ids`.
+
+    Direct lines only, for now. The ingredient's own "used in" replaces this
+    body with the descendant query, so the list filter and the ingredient page
+    cannot disagree about what "uses" means.
+    """
+    return (
+        select(RecipeLine.recipe_id)
+        .where(RecipeLine.ingredient_id.in_(ingredient_ids))
+        .scalar_subquery()
+    )
+
+
+def _any_of(link, column, values):
+    """Recipes with a `link` row whose `column` is any of `values`."""
+    return Recipe.id.in_(select(link.recipe_id).where(column.in_(values)).scalar_subquery())
+
+
+def search(
+    db: Session,
+    q: str | None = None,
+    course_id: list[int] | None = None,
+    status: list[str] | None = None,
+    kind: list[str] | None = None,
+    label_id: list[int] | None = None,
+    method_id: list[int] | None = None,
+    equipment_id: list[int] | None = None,
+    creator: list[str] | None = None,
+    ingredient_id: list[int] | None = None,
+    written_up: bool | None = None,
+) -> list[Recipe]:
+    """The library list. Each multi-valued filter means "any of" its values;
+    different filters narrow each other.
+
+    Every filter that reaches through another table is a subquery rather than
+    a join, for the reason `ingredients.search` gives: a join returns the
+    recipe once per matching row, which only shows on data with several.
+    """
+    query = _summary_loaded(db.query(Recipe))
+
+    if q:
+        term = f"%{q.strip()}%"
+        alias_match = (
+            select(RecipeAlias.recipe_id)
+            .where(func.lower(RecipeAlias.value).like(func.lower(term)))
+            .scalar_subquery()
+        )
+        query = query.filter(
+            or_(
+                Recipe.name_cn.ilike(term),
+                Recipe.name_en.ilike(term),
+                Recipe.name_alt.ilike(term),
+                Recipe.id.in_(alias_match),
+            )
+        )
+
+    if course_id:
+        query = query.filter(Recipe.course_id.in_(course_id))
+    if status:
+        query = query.filter(Recipe.status.in_(status))
+    if kind:
+        query = query.filter(Recipe.kind.in_(kind))
+    if label_id:
+        query = query.filter(_any_of(RecipeLabel, RecipeLabel.label_id, label_id))
+    if method_id:
+        query = query.filter(_any_of(RecipeMethod, RecipeMethod.method_id, method_id))
+    if equipment_id:
+        query = query.filter(_any_of(RecipeEquipment, RecipeEquipment.equipment_id, equipment_id))
+    if creator:
+        query = query.filter(_any_of(RecipeSource, RecipeSource.creator, creator))
+    if ingredient_id:
+        query = query.filter(Recipe.id.in_(recipe_ids_using_ingredients(ingredient_id)))
+    if written_up is not None:
+        has_content = or_(
+            Recipe.id.in_(select(RecipeLine.recipe_id).scalar_subquery()),
+            Recipe.id.in_(select(RecipeStep.recipe_id).scalar_subquery()),
+        )
+        query = query.filter(has_content if written_up else ~has_content)
+
+    rows = query.all()
+    rows.sort(key=lambda r: r.display_name.casefold())
+    return rows
 
 
 # --- validation: everything here runs before anything is written -------------

@@ -47,26 +47,6 @@ def _loaded(query):
     )
 
 
-def set_images(db: Session, ingredient: Ingredient, entries) -> None:
-    """Replace the gallery, in order. Position 0 is the cover.
-
-    Cleared and flushed BEFORE the new rows are assigned: the unit of work
-    INSERTs before it DELETEs, so replacing in one step collides with
-    uq_ingredient_image_position (and _once) whenever a position or an image
-    is reused - which a reorder always does.
-    """
-    from app.services.images import resolve_attachments
-
-    found = resolve_attachments(db, entries)
-    ingredient.images = []
-    db.flush()  # clear the old positions before reusing them
-    ingredient.images = [
-        IngredientImage(image_id=found[e.image_id].id, position=i, focus=e.focus)
-        for i, e in enumerate(entries)
-    ]
-    db.commit()
-
-
 def get(db: Session, ingredient_id: int) -> Ingredient:
     row = _loaded(db.query(Ingredient)).filter(Ingredient.id == ingredient_id).one_or_none()
     if row is None:

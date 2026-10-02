@@ -15,7 +15,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from app.constants import RECIPE_KINDS, RECIPE_STATUSES, SOURCE_PLATFORMS
-from app.schemas.image import AttachedImage
+from app.schemas.image import AttachedImage, CoverRef
 from app.schemas.ingredient import _blank_to_none, _check_url, _clean_aliases
 from app.schemas.vocabulary import VocabRef
 
@@ -294,6 +294,28 @@ class RecipeUpdate(BaseModel):
     @classmethod
     def clean_aliases(cls, values: list[str] | None) -> list[str] | None:
         return None if values is None else _clean_aliases(values)
+
+
+class RecipeSummary(BaseModel):
+    """What a library row needs - the cover view and the table view both.
+
+    `creators` is the distinct non-null creators of the recipe's sources, in
+    source order. `written_up` is derived, as on the full recipe.
+    """
+
+    id: int
+    display_name: str = ""
+    name_cn: str | None = None
+    name_en: str | None = None
+    name_alt: str | None = None
+    kind: str
+    status: str
+    course: VocabRef | None = None
+    methods: list[VocabRef] = []
+    creators: list[str] = []
+    time: str | None = None
+    written_up: bool
+    cover: CoverRef | None = None
 
 
 class RecipeResponse(BaseModel):

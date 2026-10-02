@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 from app import config
 from app.errors import AppError
 from app.models import Image, Ingredient, IngredientImage, Recipe, RecipeImage
+from app.schemas.image import AttachedImage, CoverRef
 
 LONG_EDGE = 2000
 THUMB_EDGE = 400
@@ -192,12 +193,62 @@ def delete_image(db: Session, image: Image) -> None:
 
 
 def resolve_attachments(db: Session, entries) -> dict[int, Image]:
-    """The images a gallery PUT names: 404 for an unknown id, 422 for a repeat."""
+    """The images a gallery PUT names: 422 for an unknown id or a repeat.
+
+    422 rather than 404, as for every id inside a request body: the URL
+    resolved; it is the payload that is wrong.
+    """
     ids = [entry.image_id for entry in entries]
     if len(set(ids)) != len(ids):
         raise AppError(422, "The same image is listed twice.")
     found = {row.id: row for row in db.query(Image).filter(Image.id.in_(ids))} if ids else {}
     missing = [i for i in ids if i not in found]
     if missing:
-        raise AppError(404, f"No such image: {missing[0]}.")
+        raise AppError(422, f"No such image: {missing[0]}.")
     return found
+
+
+def set_images(db: Session, owner, relationship: str, attachment: type, entries) -> None:
+    """Replace `owner`'s gallery, in order. Position 0 is the cover.
+
+    One function for every gallery: `relationship` names the owner's gallery
+    attribute and `attachment` the row class it holds (`IngredientImage`,
+    `RecipeImage`). Cleared and flushed BEFORE the new rows are assigned: the
+    unit of work INSERTs before it DELETEs, so replacing in one step collides
+    with the gallery's position (and once) unique key whenever a position or an
+    image is reused - which a reorder always does.
+    """
+    found = resolve_attachments(db, entries)
+    setattr(owner, relationship, [])
+    db.flush()  # clear the old positions before reusing them
+    setattr(
+        owner,
+        relationship,
+        [
+            attachment(image_id=found[e.image_id].id, position=i, focus=e.focus)
+            for i, e in enumerate(entries)
+        ],
+    )
+    db.commit()
+
+
+def attached(rows) -> list[AttachedImage]:
+    """A gallery's attachment rows as the full response shows them, in order."""
+    return [
+        AttachedImage(
+            image_id=a.image.id,
+            url=image_url(a.image.storage_key),
+            thumb_url=image_url(a.image.thumb_key),
+            width=a.image.width,
+            height=a.image.height,
+            focus=a.focus,
+        )
+        for a in rows
+    ]
+
+
+def cover(rows) -> CoverRef | None:
+    """The first gallery image as a list row shows it, or None."""
+    if not rows:
+        return None
+    return CoverRef(thumb_url=image_url(rows[0].image.thumb_key), focus=rows[0].focus)

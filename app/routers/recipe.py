@@ -11,12 +11,15 @@ from sqlalchemy.orm import Session
 from app import schemas
 from app.database import get_db
 from app.errors import AppError, StaleCountError
-from app.models import Recipe
+from app.models import Recipe, RecipeImage
 from app.routing import read_router, write_router
 from app.services import images, recipes
 
 router = read_router("recipes", "Recipes")
 edit = write_router("recipes", "Recipes")
+# Its own small read router: the creators are not a recipe, and nesting them
+# under /api/recipes would put a string where a recipe id is read.
+creators = read_router("recipe-creators", "Recipes")
 
 
 def recipe_ref(row: Recipe) -> schemas.RecipeRef:
@@ -25,6 +28,28 @@ def recipe_ref(row: Recipe) -> schemas.RecipeRef:
 
 def _vocab(rows) -> list[schemas.VocabRef]:
     return [schemas.VocabRef(id=r.id, display_name=r.display_name) for r in rows]
+
+
+def _course(row: Recipe) -> schemas.VocabRef | None:
+    return schemas.VocabRef(id=row.course.id, display_name=row.course.display_name) if row.course else None
+
+
+def _summary(row: Recipe) -> schemas.RecipeSummary:
+    return schemas.RecipeSummary(
+        id=row.id,
+        display_name=row.display_name,
+        name_cn=row.name_cn,
+        name_en=row.name_en,
+        name_alt=row.name_alt,
+        kind=row.kind,
+        status=row.status,
+        course=_course(row),
+        methods=_vocab(row.methods),
+        creators=recipes.creators(row),
+        time=row.time,
+        written_up=recipes.written_up(row),
+        cover=images.cover(row.images),
+    )
 
 
 def _response(row: Recipe, used_in: list[Recipe]) -> schemas.RecipeResponse:
@@ -39,9 +64,7 @@ def _response(row: Recipe, used_in: list[Recipe]) -> schemas.RecipeResponse:
         name_alt=row.name_alt,
         kind=row.kind,
         status=row.status,
-        course=schemas.VocabRef(id=row.course.id, display_name=row.course.display_name)
-        if row.course
-        else None,
+        course=_course(row),
         servings=row.servings,
         time=row.time,
         description=row.description,
@@ -73,17 +96,7 @@ def _response(row: Recipe, used_in: list[Recipe]) -> schemas.RecipeResponse:
         labels=_vocab(row.labels),
         methods=_vocab(row.methods),
         equipment=_vocab(row.equipment),
-        images=[
-            schemas.AttachedImage(
-                image_id=a.image.id,
-                url=images.image_url(a.image.storage_key),
-                thumb_url=images.image_url(a.image.thumb_key),
-                width=a.image.width,
-                height=a.image.height,
-                focus=a.focus,
-            )
-            for a in row.images
-        ],
+        images=images.attached(row.images),
         variant_of=recipe_ref(row.variant_of) if row.variant_of else None,
         versions=[recipe_ref(v) for v in recipes.versions(row)],
         used_in=[recipe_ref(r) for r in used_in],
@@ -100,6 +113,44 @@ def _full(db: Session, row: Recipe) -> schemas.RecipeResponse:
 # ==========================================
 # PUBLIC READS
 # ==========================================
+
+
+@router.get("", response_model=list[schemas.RecipeSummary])
+def list_recipes(
+    q: str | None = Query(default=None, description="Matches any name slot or an alias"),
+    course_id: list[int] | None = Query(None),
+    status: list[str] | None = Query(None),
+    kind: list[str] | None = Query(None),
+    label_id: list[int] | None = Query(None),
+    method_id: list[int] | None = Query(None),
+    equipment_id: list[int] | None = Query(None),
+    creator: list[str] | None = Query(None, description="Exact; repeat for any of several"),
+    ingredient_id: list[int] | None = Query(None),
+    written_up: bool | None = None,
+    db: Session = Depends(get_db),
+):
+    """The library: a bare array sorted by display name, as the ingredient
+    list is. A repeated parameter means "any of" its values."""
+    rows = recipes.search(
+        db,
+        q=q,
+        course_id=course_id,
+        status=status,
+        kind=kind,
+        label_id=label_id,
+        method_id=method_id,
+        equipment_id=equipment_id,
+        creator=creator,
+        ingredient_id=ingredient_id,
+        written_up=written_up,
+    )
+    return [_summary(row) for row in rows]
+
+
+@creators.get("", response_model=list[str])
+def list_creators(db: Session = Depends(get_db)):
+    """Every distinct source creator, sorted - for suggestions and the filter."""
+    return recipes.all_creators(db)
 
 
 @router.get("/{recipe_id}", response_model=schemas.RecipeResponse)
@@ -171,3 +222,15 @@ def delete_recipe(
     db.delete(recipe)
     db.commit()
     return Response(status_code=204)
+
+
+@edit.put("/{recipe_id}/images", response_model=schemas.RecipeResponse)
+def set_recipe_images(
+    recipe_id: int,
+    payload: list[schemas.ImageAttachmentIn],
+    db: Session = Depends(get_db),
+):
+    """Replace the gallery, in order. Position 0 is the cover."""
+    recipe = recipes.get(db, recipe_id)
+    images.set_images(db, recipe, "images", RecipeImage, payload)
+    return _full(db, recipes.get(db, recipe_id))

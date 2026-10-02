@@ -56,6 +56,14 @@ Telling the user to reload is what a prose-only body forces.
 treating it as a string renders `[object Object]`, which is exactly what a
 malformed body produces.
 
+### An id in the body that names nothing is 422
+
+**A missing row named by the URL is 404; an id inside the request body that
+names no row is 422**, everywhere — a parent, a label, a cooking method, a
+course, a version's original, a line's ingredient or base recipe, a gallery's
+`image_id`. The URL resolved; it is the payload that is wrong. The detail
+names the id.
+
 ### Which status a constraint violation answers
 
 Classified by SQLSTATE, not by constraint name, and decided once with every
@@ -143,8 +151,9 @@ user would miss.
 
 **`PUT /api/edit/ingredients/{id}/images`** takes a list of
 `{"image_id": 12, "focus": "50% 30%"}` and makes it the gallery, in that order;
-index 0 is the cover. `[]` clears it. An unknown `image_id` is 404, the same
-image twice is 422, and a `focus` that is not `"X% Y%"` with each between 0 and
+index 0 is the cover. `[]` clears it. An unknown `image_id` is 422 naming the
+id (see "An id in the body that names nothing is 422"), the same image twice
+is 422, and a `focus` that is not `"X% Y%"` with each between 0 and
 100 is 422. Putting the same list twice in a row succeeds. The answer is the
 full ingredient.
 
@@ -152,11 +161,42 @@ full ingredient.
 
 | Route | |
 | --- | --- |
+| `GET /api/recipes` | list, search and filter |
 | `GET /api/recipes/{id}` | the full recipe |
 | `GET /api/recipes/{id}/cascade` | what a delete would remove, and what blocks it |
 | `POST /api/edit/recipes` | |
 | `PATCH /api/edit/recipes/{id}` | also the in-place status change |
 | `DELETE /api/edit/recipes/{id}` | requires the confirmation counts |
+| `PUT /api/edit/recipes/{id}/images` | replace the gallery, in order |
+| `GET /api/recipe-creators` | every distinct source creator |
+
+**`GET /api/recipes`** is the library: a bare array of summaries sorted by
+display name. A summary is the name slots and `display_name`, `kind`,
+`status`, `course` (`{id, display_name}` or null), `methods`
+(`{id, display_name}` list), `creators` (the distinct creators of its sources,
+in source order, skipping sources with none), `time`, `written_up` and `cover`
+(the first gallery image's `thumb_url` and `focus`, or null).
+
+Query parameters:
+
+- `q` — any name slot or any alias, case-insensitively, as a substring. The
+  alias arm is a subquery, so a recipe matching two of its aliases comes back
+  once;
+- `course_id`, `status`, `kind`, `label_id`, `method_id`, `equipment_id`,
+  `creator`, `ingredient_id` — each may repeat, and a repeated parameter means
+  **any of** its values (`?status=can_cook&status=regular`). Different
+  parameters narrow each other. `course_id` is the course a recipe is filed
+  under, not one it serves as; `creator` matches a source's creator exactly;
+  `ingredient_id` matches recipes with a line naming that ingredient directly;
+- `written_up` — `true` for recipes with at least one line or step, `false`
+  for the rest.
+
+**`GET /api/recipe-creators`** is every distinct creator any source names,
+sorted, as a bare array of strings — for suggestions while typing a source and
+for the `creator` filter.
+
+**`PUT /api/edit/recipes/{id}/images`** replaces the gallery exactly as an
+ingredient's does, and answers the full recipe.
 
 **The full recipe** is the name slots and `display_name`, `kind` (`dish` or
 `base`), `status` (`want_to_try`, `can_cook`, `regular`), `course`

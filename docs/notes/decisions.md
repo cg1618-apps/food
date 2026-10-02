@@ -32,6 +32,15 @@ as they bind this app:
   regardless, and doing it at the edge means no password is stored and no auth
   code is written. This requires the URL layout to separate reads from writes
   from the first route, which is cheap now and invasive later.
+- **An id inside a request body that names no row is 422, everywhere; a
+  missing row named by the URL is 404.** Owner decision, 2026-10-02. The URL
+  resolved, so the resource exists; it is the payload that is wrong. This
+  covers a parent, a label, a cooking method, a course, a version's original,
+  a line's ingredient or base recipe, and a gallery's `image_id` - the last
+  was 404 until recipes added a third case and one convention had to cover
+  all of them. The detail names the id. Rejected: 404 for body ids, which
+  reads as "the thing you addressed is gone" when the thing addressed is
+  fine.
 
 ## The skeleton
 
