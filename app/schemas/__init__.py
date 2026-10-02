@@ -1,5 +1,13 @@
 """Every schema, re-exported so call sites write `schemas.IngredientResponse`."""
 
+from app.schemas.image import (
+    AttachedImage,
+    CoverRef,
+    ImageAttachmentIn,
+    ImageDetail,
+    ImageOwner,
+    ImageSummary,
+)
 from app.schemas.ingredient import (
     HeatingIn,
     HeatingResponse,
@@ -28,6 +36,12 @@ from app.schemas.vocabulary import (
 )
 
 __all__ = [
+    "AttachedImage",
+    "CoverRef",
+    "ImageAttachmentIn",
+    "ImageDetail",
+    "ImageOwner",
+    "ImageSummary",
     "HeatingIn",
     "HeatingResponse",
     "CategoryCreate",

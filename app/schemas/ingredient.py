@@ -19,6 +19,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from app.constants import PRESERVATION_METHODS, PRESERVATION_STATES, RATINGS
+from app.schemas.image import AttachedImage, CoverRef
 from app.schemas.vocabulary import VocabRef
 
 
@@ -212,6 +213,7 @@ class IngredientSummary(BaseModel):
     needs_detail: bool
     rating: str | None = None
     fridge: StorageRange | None = None
+    cover: CoverRef | None = None
 
 
 class IngredientBase(BaseModel):
@@ -346,6 +348,7 @@ class IngredientResponse(BaseModel):
     heating: list[HeatingResponse] = []
     links: list[LinkResponse] = []
     labels: list[LabelRef] = []
+    images: list[AttachedImage] = []
 
     created_at: datetime | None = None
     updated_at: datetime | None = None

@@ -19,7 +19,7 @@ from app.database import get_db
 from app.errors import AppError, StaleCountError
 from app.models import Ingredient
 from app.routing import read_router, write_router
-from app.services import ingredients
+from app.services import images, ingredients
 
 router = read_router("ingredients", "Ingredients")
 edit = write_router("ingredients", "Ingredients")
@@ -29,6 +29,11 @@ def _summary(row: Ingredient) -> schemas.IngredientSummary:
     summary = schemas.IngredientSummary.model_validate(row)
     fridge = ingredients.fridge_range(row)
     summary.fridge = schemas.StorageRange(**fridge) if fridge else None
+    if row.images:
+        cover = row.images[0]
+        summary.cover = schemas.CoverRef(
+            thumb_url=images.image_url(cover.image.thumb_key), focus=cover.focus
+        )
     return summary
 
 
@@ -82,6 +87,17 @@ def _response(row: Ingredient) -> schemas.IngredientResponse:
             for h in row.heating
         ],
         links=[schemas.LinkResponse.model_validate(link) for link in row.links],
+        images=[
+            schemas.AttachedImage(
+                image_id=a.image.id,
+                url=images.image_url(a.image.storage_key),
+                thumb_url=images.image_url(a.image.thumb_key),
+                width=a.image.width,
+                height=a.image.height,
+                focus=a.focus,
+            )
+            for a in row.images
+        ],
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -197,6 +213,18 @@ def delete_ingredient(
     db.delete(ingredient)
     db.commit()
     return Response(status_code=204)
+
+
+@edit.put("/{ingredient_id}/images", response_model=schemas.IngredientResponse)
+def set_ingredient_images(
+    ingredient_id: int,
+    payload: list[schemas.ImageAttachmentIn],
+    db: Session = Depends(get_db),
+):
+    """Replace the gallery, in order. Position 0 is the cover."""
+    ingredient = ingredients.get(db, ingredient_id)
+    ingredients.set_images(db, ingredient, payload)
+    return _response(ingredients.get(db, ingredient_id))
 
 
 @edit.post("/{ingredient_id}/labels/{label_id}", status_code=204)

@@ -50,6 +50,13 @@ class Settings(BaseSettings):
 
     database_url: str | None = None
 
+    # Where uploaded images live. A setting, not a hardcoded relative path:
+    # media hard-codes its directory and records that leaving the path
+    # implicit produced a wrong spec. In the container this is
+    # /app/data/images, bind-mounted from the box (docker-compose.prod.yml).
+    image_dir: str = "data/images"
+    max_image_upload_mb: int = 10
+
     @property
     def sqlalchemy_database_url(self) -> str:
         if self.database_url:

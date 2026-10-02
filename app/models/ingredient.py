@@ -171,6 +171,12 @@ class Ingredient(Base, NameFallbackMixin):
         cascade="all, delete-orphan",
         order_by="IngredientLink.sort_order",
     )
+    images = relationship(
+        "IngredientImage",
+        back_populates="ingredient",
+        cascade="all, delete-orphan",
+        order_by="IngredientImage.position",
+    )
     labels = relationship("Label", secondary="ingredient_label", back_populates="ingredients")
 
     __table_args__ = (

@@ -36,6 +36,7 @@ docker-compose.yml
 **/node_modules
 npm-debug.log
 frontend_dist/
+data/
 
 # Exclude Claude's working directory
 .claude/

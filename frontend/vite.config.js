@@ -20,6 +20,7 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:8001',
       '/health': 'http://localhost:8001',
+      '/images': 'http://localhost:8001',
     },
   },
   test: {

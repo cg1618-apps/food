@@ -68,6 +68,9 @@ CONSTRAINT_MESSAGES = {
         "The shortest storage time cannot be longer than the longest."
     ),
     "ck_ingredient_heating_temperature_positive": "A temperature has to be positive.",
+    "uq_image_checksum": "That image is already in the library.",
+    "uq_ingredient_image_position": "Two images cannot share one position.",
+    "uq_ingredient_image_once": "That image is already in this gallery.",
     "uq_ingredient_name_cn": "Another ingredient already has that Chinese name.",
     "uq_ingredient_name_en": "Another ingredient already has that English name.",
     "uq_label_name_cn": "Another label already has that Chinese name.",

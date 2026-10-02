@@ -17,6 +17,7 @@ from app.models import (
     Ingredient,
     IngredientAlias,
     IngredientHeating,
+    IngredientImage,
     IngredientLabel,
     IngredientLink,
     IngredientPreservation,
@@ -41,8 +42,29 @@ def _loaded(query):
         selectinload(Ingredient.preservation),
         selectinload(Ingredient.heating).selectinload(IngredientHeating.method),
         selectinload(Ingredient.links),
+        selectinload(Ingredient.images).selectinload(IngredientImage.image),
         selectinload(Ingredient.labels),
     )
+
+
+def set_images(db: Session, ingredient: Ingredient, entries) -> None:
+    """Replace the gallery, in order. Position 0 is the cover.
+
+    Cleared and flushed BEFORE the new rows are assigned: the unit of work
+    INSERTs before it DELETEs, so replacing in one step collides with
+    uq_ingredient_image_position (and _once) whenever a position or an image
+    is reused - which a reorder always does.
+    """
+    from app.services.images import resolve_attachments
+
+    found = resolve_attachments(db, entries)
+    ingredient.images = []
+    db.flush()  # clear the old positions before reusing them
+    ingredient.images = [
+        IngredientImage(image_id=found[e.image_id].id, position=i, focus=e.focus)
+        for i, e in enumerate(entries)
+    ]
+    db.commit()
 
 
 def get(db: Session, ingredient_id: int) -> Ingredient:
