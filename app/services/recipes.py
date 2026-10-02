@@ -160,7 +160,7 @@ def _usage(ingredient_ids: list[int]):
     THE definition of "uses" for an ingredient. The recipe list's
     `ingredient_id` filter, an ingredient's `used_in` and its `used_in_count`
     all read this and nothing else, so the three cannot disagree. Depth through
-    sub-recipes is zero: a line naming a base recipe is not a line naming what
+    sub-recipes is zero: a line naming a sub-recipe is not a line naming what
     that base uses.
     """
     tree = _below(ingredient_ids)
@@ -360,10 +360,9 @@ def _check_line_targets(db: Session, recipe_id: int | None, entries) -> None:
     recipe's own lines are about to be replaced, and a walk that reaches this
     recipe stops being a question about them.
     """
-    _fetch_all(
-        db, Ingredient, [e.ingredient_id for e in entries if e.ingredient_id], "ingredient"
-    )
-    sub_ids = [e.sub_recipe_id for e in entries if e.sub_recipe_id]
+    ingredient_ids = [e.ingredient_id for e in entries if e.ingredient_id is not None]
+    _fetch_all(db, Ingredient, ingredient_ids, "ingredient")
+    sub_ids = [e.sub_recipe_id for e in entries if e.sub_recipe_id is not None]
     _fetch_all(db, Recipe, sub_ids, "recipe")
     if recipe_id is None or not sub_ids:
         return

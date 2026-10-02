@@ -45,6 +45,23 @@ def test_a_line_naming_a_base_recipe_shows_it(client):
     assert client.get(f"/api/recipes/{base['id']}").json()["used_in"][0]["display_name"] == "番茄炒蛋"
 
 
+def test_a_line_may_nest_a_dish_as_well_as_a_base(client):
+    # `kind` files a recipe in the library; it does not limit where it is used.
+    dish = create(client, name_cn="白飯")
+    line = create(client, name_cn="咖哩飯", lines=[{"sub_recipe_id": dish["id"]}])["lines"][0]
+    assert line["sub_recipe"] == {"id": dish["id"], "display_name": "白飯", "kind": "dish"}
+
+
+def test_id_zero_on_a_line_is_422_naming_it(client, ingredient):
+    # Zero is falsy: a truthiness filter skipped it and left the foreign key
+    # to refuse it without the id. The real ingredient is the mirror.
+    create(client, name_cn="real", lines=[{"ingredient_id": ingredient.id}])
+    for line, what in (({"ingredient_id": 0}, "ingredient"), ({"sub_recipe_id": 0}, "recipe")):
+        response = client.post("/api/edit/recipes", json={"name_cn": "x", "lines": [line]})
+        assert response.status_code == 422, line
+        assert response.json()["detail"] == f"No such {what}: 0.", line
+
+
 def test_a_line_must_name_exactly_one_target(client, ingredient):
     base = create(client, name_cn="高湯")
     for line in (
