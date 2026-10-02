@@ -1,0 +1,195 @@
+name_cn,name_en,aliases,parent,category
+雞肉,chicken,,,肉類
+雞腿,chicken leg,帶皮雞腿|chicken legs,雞肉,肉類
+去骨雞腿,boneless chicken thigh,雞腿肉|雞腿排,雞腿,肉類
+棒棒腿,chicken drumstick,chicken drumsticks|skin-on chicken drumsticks,雞腿,肉類
+雞胸肉,chicken breast,帶皮去骨雞胸|Chicken breasts,雞肉,肉類
+雞翅,chicken wings,,雞肉,肉類
+豬肉,pork,豬肉片,,肉類
+五花肉,pork belly,豬五花|豬五花肉|豬五花肉絲|豬五花肉片|三層肉|三層肉中下段,豬肉,肉類
+豬絞肉,ground pork,,豬肉,肉類
+排骨,pork ribs,Pork Rib,豬肉,肉類
+豬軟排,pork soft ribs,,排骨,肉類
+牛肉,beef,,,肉類
+牛肉片,sliced beef,牛肉火鍋肉片,牛肉,肉類
+牛絞肉,ground beef,,牛肉,肉類
+牛腩,beef brisket,,牛肉,肉類
+牛小排,beef short rib,美國牛小排|牛小排火鍋肉片,牛肉,肉類
+火腿,ham,,,肉類
+培根,bacon,,,肉類
+蝦,shrimp,蝦子|蝦仁|Prawns,,海鮮
+中卷,squid,,,海鮮
+鮭魚,salmon,Salmon Filets,,海鮮
+蛤蜊,clam,蛤蠣,,海鮮
+鮮蚵,oyster,蚵仔,,海鮮
+海帶,kelp,,,乾貨
+蝦米,dried shrimp,,,乾貨
+金鉤蝦,dried shrimp (large),,蝦米,乾貨
+乾魷魚,dried squid,,,乾貨
+柴魚片,bonito flakes,Katsuo bushi,,乾貨
+海苔粉,aonori,,,乾貨
+白芝麻,white sesame,熟白芝麻|White sesame seed,,乾貨
+花生粉,peanut powder,,,乾貨
+綠豆,mung beans,green beans,,乾貨
+可可粉,cocoa powder,Cacao powder,,乾貨
+紹興梅,Shaoxing plum,,,乾貨
+洋蔥,onion,洋蔥末|洋蔥塊|洋蔥丁,,蔬菜
+紅洋蔥,red onion,,洋蔥,蔬菜
+蔥,green onion,青蔥|蔥花|蔥段|Spring onion,,蔬菜
+蒜頭,garlic,蒜|蒜末|蒜泥|蒜片|蒜頭片|蒜碎|蒜球|Minced garlic,,蔬菜
+紅蔥頭,shallot,紅蔥頭末,,蔬菜
+薑,ginger,生薑|薑片|薑末|生薑泥|Ginger paste|Minced ginger,,蔬菜
+番茄,tomato,大番茄,,蔬菜
+高麗菜,cabbage,高山高麗菜,,蔬菜
+小黃瓜,cucumber,小黃瓜塊,,蔬菜
+辣椒,chili pepper,大辣椒|Shredded chili,,蔬菜
+綠辣椒,green chili,,辣椒,蔬菜
+乾辣椒,dried chili,乾辣椒段,辣椒,乾貨
+九層塔,Thai basil,,,蔬菜
+蒜苗,garlic leek,,,蔬菜
+香菜,cilantro,,,蔬菜
+櫛瓜,zucchini,,,蔬菜
+茄子,eggplant,長茄,,蔬菜
+馬鈴薯,potato,Potatoes,,蔬菜
+地瓜,sweet potato,,,蔬菜
+白蘿蔔,daikon,蘿蔔泥|Radish,,蔬菜
+醃蘿蔔,pickled radish,,白蘿蔔,蔬菜
+菜脯,dried radish,,白蘿蔔,乾貨
+蘿蔓生菜,romaine lettuce,,,蔬菜
+紅甜椒,red bell pepper,,,蔬菜
+青花菜,broccoli,,,蔬菜
+玉米筍,baby corn,,,蔬菜
+娃娃菜,baby napa cabbage,,,蔬菜
+茭白筍,water bamboo,,,蔬菜
+芹菜,celery,中芹,,蔬菜
+小白菜,bok choy,,,蔬菜
+山藥,Japanese yam,山藥泥|Japanese yam paste,,蔬菜
+豆角,long green beans,豆子,,蔬菜
+紫蘇,shiso,青紫蘇|Beefsteak plant|Aojiso,,蔬菜
+檸檬,lemon,檸檬汁|Lemon (Juice)|lemon wedges,,水果
+香菇,shiitake,,,菇類
+乾香菇,dried shiitake,,香菇,乾貨
+蘑菇,button mushroom,,,菇類
+杏鮑菇,king oyster mushroom,,,菇類
+鴻禧菇,beech mushroom,,,菇類
+雪白菇,white beech mushroom,,鴻禧菇,菇類
+金針菇,enoki,,,菇類
+木耳,wood ear,黑木耳,,菇類
+雞蛋,egg,蛋|蛋液|糖心蛋|eggs|溫泉蛋,,蛋豆製品
+鵪鶉蛋,quail egg,鳥蛋,,蛋豆製品
+皮蛋,century egg,,,蛋豆製品
+豆腐,tofu,,,蛋豆製品
+嫩豆腐,soft tofu,,豆腐,蛋豆製品
+百頁豆腐,baiye tofu,,豆腐,蛋豆製品
+玉子豆腐,egg tofu,,豆腐,蛋豆製品
+豆干,dried tofu,豆乾,,蛋豆製品
+五香豆干,five-spice dried tofu,,豆干,蛋豆製品
+豆皮,tofu skin,,,蛋豆製品
+白米,rice,米|白飯|Cooked rice,,主食穀物
+糯米,glutinous rice,熟糯米,,主食穀物
+麵條,noodles,白麵,,主食穀物
+手工拉麵,hand-pulled noodles,,麵條,主食穀物
+辛拉麵,Shin Ramyun,,麵條,主食穀物
+螺旋麵,fusilli,,,主食穀物
+麵粉,all-purpose flour,flour|All purpose flour,,主食穀物
+低筋麵粉,cake flour,,麵粉,主食穀物
+麵包粉,bread crumbs,麵包糠,,主食穀物
+太白粉,potato starch,生粉,,主食穀物
+玉米澱粉,corn starch,,,主食穀物
+地瓜粉,sweet potato starch,,,主食穀物
+在來米粉,rice flour,,,主食穀物
+糯米粉,glutinous rice flour,,糯米,主食穀物
+泡打粉,baking powder,,,
+小蘇打粉,baking soda,Soda ash,,
+牛奶,milk,,,乳製品
+奶油,butter,無鹽奶油|有鹽奶油,,乳製品
+起司,cheese,,,乳製品
+帕瑪森起司,parmesan,Parmesan Cheese,起司,乳製品
+起司粉,cheese powder,,起司,乳製品
+醬油,soy sauce,生抽,,調味料
+柴魚醬油,bonito soy sauce,鰹魚醬油,醬油,調味料
+昆布醬油,kombu soy sauce,,醬油,調味料
+醬油膏,thick soy sauce,,醬油,調味料
+味醂,mirin,味霖,,調味料
+鹽,salt,鹽巴,,調味料
+玫瑰鹽,pink salt,,鹽,調味料
+猶太鹽,kosher salt,Diamond Crystal kosher salt,鹽,調味料
+胡椒鹽,pepper salt,,鹽,調味料
+糖,sugar,砂糖,,調味料
+黑糖,brown sugar,紅糖,糖,調味料
+二砂糖,raw cane sugar,二砂,糖,調味料
+冰糖,rock sugar,,糖,調味料
+蜂蜜,honey,,,調味料
+楓糖漿,maple syrup,,,調味料
+胡椒,pepper,胡椒粉,,調味料
+黑胡椒,black pepper,黑胡椒粉|黑胡椒粒,胡椒,調味料
+白胡椒,white pepper,白胡椒粉,胡椒,調味料
+七味粉,shichimi togarashi,Shichimi powder,,調味料
+五香粉,five-spice powder,,,調味料
+孜然粉,cumin powder,,,調味料
+紅椒粉,paprika,Red pepper powder,,調味料
+煙燻紅椒粉,smoked paprika,,紅椒粉,調味料
+卡宴辣椒粉,cayenne pepper,,,調味料
+韓式辣椒粉,gochugaru,,,調味料
+蒜粉,garlic powder,,,調味料
+洋蔥粉,onion powder,,,調味料
+奧勒岡,oregano,,,調味料
+,Old Bay Seasoning,,,調味料
+滷包,braising spice packet,,,調味料
+八角,star anise,,,調味料
+桂皮,cassia bark,,,調味料
+茴香,fennel seed,,,調味料
+肉桂葉,cinnamon leaf,,,調味料
+天然鮮味粉,natural umami powder,,,調味料
+調味粉,seasoning powder,,,調味料
+蠔油,oyster sauce,,,調味料
+魚露,fish sauce,,,調味料
+番茄醬,ketchup,Tomato sauce,,調味料
+牛排醬,steak sauce,,,調味料
+豬排醬,tonkatsu sauce,日式豬排醬|Tonkotsu sauce,,調味料
+中濃醬,chuno sauce,,,調味料
+大阪燒醬,okonomiyaki sauce,,,調味料
+美乃滋,mayonnaise,,,調味料
+味噌,miso,,,調味料
+豆瓣醬,broad bean paste,豆(瓣)醬|豆醬,,調味料
+辣豆瓣醬,spicy broad bean paste,辣豆瓣,豆瓣醬,調味料
+黃豆醬,soybean paste,,,調味料
+甜麵醬,sweet bean sauce,,,調味料
+海山醬,Haishan sauce,,,調味料
+韓式辣椒醬,gochujang,Korean hot pepper paste,,調味料
+醋,vinegar,,,調味料
+烏醋,black vinegar,,醋,調味料
+白醋,white vinegar,,醋,調味料
+米醋,rice vinegar,,醋,調味料
+蘋果醋,apple cider vinegar,,醋,調味料
+米酒,rice wine,,,調味料
+料酒,Chinese cooking wine,,,調味料
+黃酒,yellow wine,,,調味料
+花雕酒,Huadiao wine,,黃酒,調味料
+清酒,sake,,,調味料
+白酒,white wine,,,調味料
+啤酒,beer,,,調味料
+油,cooking oil,熱油,,調味料
+橄欖油,olive oil,,油,調味料
+芥花油,canola oil,,油,調味料
+沙拉油,salad oil,,油,調味料
+豬油,lard,,油,調味料
+紅蔥油,shallot oil,,油,調味料
+油蔥酥,fried shallots,,紅蔥頭,調味料
+香油,sesame oil,,,調味料
+韓式香油,Korean sesame oil,,香油,調味料
+麻油,black sesame oil,,,調味料
+雞高湯,chicken broth,,,調味料
+水,water,熱水|冷水|涼水|Hot water,,
+樹薯粉,tapioca starch,木薯粉,,主食穀物
+澱粉,starch,,,主食穀物
+咖哩塊,curry roux,,,調味料
+絞肉,minced meat,,,肉類
+青椒,green bell pepper,,,蔬菜
+雞條,chicken strips,,雞肉,肉類
+洋香菜粉,dried parsley,,,調味料
+迷迭香,rosemary,,,調味料
+義大利香料,Italian seasoning,,,調味料
+紫地瓜,purple sweet potato,,地瓜,蔬菜
+雞皮,chicken skin,,雞肉,肉類
+冰塊,ice,,,
