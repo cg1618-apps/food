@@ -83,6 +83,8 @@ words and its filters:
   name as a link with its badges, then the page's columns.
 - **Two empties, two directions**: an empty library offers the add button; a
   filter or search that matches nothing offers 清除搜尋與篩選.
+- **A label chip carries its own library's count** - `ingredient_count`,
+  `recipe_count` or `note_count` from `GET /api/labels` - not the total.
 - The list keeps the previous result on screen while a new filter loads
   (`keepPreviousData`), so the grid does not blank on every click.
 

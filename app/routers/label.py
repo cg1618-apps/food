@@ -7,29 +7,42 @@ from sqlalchemy.orm import Session
 from app import schemas
 from app.database import get_db
 from app.errors import AppError
-from app.models import IngredientLabel, Label
+from app.models import IngredientLabel, KitchenNoteLabel, Label, RecipeLabel
 from app.routing import read_router, write_router
 
 router = read_router("labels", "Labels")
 edit = write_router("labels", "Labels")
 
 
-def _counts(db: Session) -> dict[int, int]:
-    rows = (
-        db.query(IngredientLabel.label_id, func.count(IngredientLabel.ingredient_id))
-        .group_by(IngredientLabel.label_id)
-        .all()
-    )
-    return dict(rows)
+# Every owner that carries labels, by the response field its count fills.
+# A label is one vocabulary across all three, so a count over one link table
+# would tell the settings page a label is unused while recipes carry it.
+_LINK_TABLES = {
+    "ingredient_count": IngredientLabel,
+    "recipe_count": RecipeLabel,
+    "note_count": KitchenNoteLabel,
+}
+
+Counts = dict[str, dict[int, int]]
 
 
-def _response(label: Label, counts: dict[int, int]) -> schemas.LabelResponse:
+def _counts(db: Session) -> Counts:
+    """Links per label, per owner: one GROUP BY per link table, not per label."""
+    return {
+        field: dict(db.query(link.label_id, func.count()).group_by(link.label_id).all())
+        for field, link in _LINK_TABLES.items()
+    }
+
+
+def _response(label: Label, counts: Counts) -> schemas.LabelResponse:
+    per_owner = {field: counts.get(field, {}).get(label.id, 0) for field in _LINK_TABLES}
     return schemas.LabelResponse(
         id=label.id,
         display_name=label.display_name,
         name_cn=label.name_cn,
         name_en=label.name_en,
-        ingredient_count=counts.get(label.id, 0),
+        usage_count=sum(per_owner.values()),
+        **per_owner,
     )
 
 
@@ -72,7 +85,8 @@ def delete_label(
     label_id: int,
     db: Session = Depends(get_db),
 ):
-    """Deleting a label detaches it from every ingredient carrying it.
+    """Deleting a label detaches it from every ingredient, recipe and note
+    carrying it.
 
     That is a CASCADE on the link table and it is the right behaviour - a label
     is a tag, and removing the tag from the vocabulary means removing it from

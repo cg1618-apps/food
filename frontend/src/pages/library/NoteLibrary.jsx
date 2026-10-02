@@ -54,6 +54,7 @@ export default function NoteLibrary() {
           options={(labels.data ?? []).map((label) => ({
             value: String(label.id),
             label: label.display_name,
+            count: label.note_count,
           }))}
           selected={values.label}
           onToggle={(value) => toggle('label', value)}

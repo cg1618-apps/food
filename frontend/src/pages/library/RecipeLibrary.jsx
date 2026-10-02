@@ -135,7 +135,11 @@ export default function RecipeLibrary() {
       </FilterGroup>
       <FilterGroup title="標籤">
         <FilterOptions
-          options={asOptions(labels.data)}
+          options={(labels.data ?? []).map((label) => ({
+            value: String(label.id),
+            label: label.display_name,
+            count: label.recipe_count,
+          }))}
           selected={values.label}
           onToggle={(value) => toggle('label', value)}
         />

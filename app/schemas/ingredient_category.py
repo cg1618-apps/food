@@ -79,12 +79,13 @@ class CategoryResponse(BaseModel):
 
 
 class CategoryNode(CategoryResponse):
-    """A category with its subtree, and the counts the editor needs.
+    """A category with its subtree, and the count the editor needs.
 
-    `ingredient_count` is this node alone; `descendant_count` includes every
-    node beneath it. Both are here because the delete confirmation needs the
-    first and the tree display wants the second, and computing either in the
-    browser would mean shipping every ingredient to do it.
+    `ingredient_count` is the ingredients filed in this node alone, not in the
+    nodes beneath it - the library's category filter is exact, and this is the
+    number beside it. It is here because computing it in the browser would mean
+    shipping every ingredient to do it. A subtree total is not sent: the
+    `children` lists are there for whoever wants to sum them.
     """
 
     children: list["CategoryNode"] = []
