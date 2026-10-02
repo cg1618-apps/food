@@ -31,6 +31,11 @@ services:
       - .env
     environment:
       PORT: 8001
+    volumes:
+      # Uploaded images: the ONLY copy of every photograph uploaded to this
+      # app. A bind mount rather than a named volume so a backup job sees
+      # ordinary files. There is no such job yet - docs/open-items.md.
+      - ./data/images:/app/data/images
     networks:
       cg1618:
         # The generated ingress routes food.cg1618.com to
