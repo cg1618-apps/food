@@ -186,13 +186,13 @@ def delete_ingredient(
     actual = ingredients.cascade_counts(db, ingredient_id)
 
     if actual["aliases"] != aliases:
-        raise StaleCountError("aliases", aliases, actual["aliases"])
+        raise StaleCountError("aliases", "aliases", aliases, actual["aliases"])
     if actual["preservation"] != preservation:
-        raise StaleCountError("preservation notes", preservation, actual["preservation"])
+        raise StaleCountError("preservation", "preservation notes", preservation, actual["preservation"])
     if actual["heating"] != heating:
-        raise StaleCountError("heating notes", heating, actual["heating"])
+        raise StaleCountError("heating", "heating notes", heating, actual["heating"])
     if actual["links"] != links:
-        raise StaleCountError("links", links, actual["links"])
+        raise StaleCountError("links", "links", links, actual["links"])
 
     db.delete(ingredient)
     db.commit()

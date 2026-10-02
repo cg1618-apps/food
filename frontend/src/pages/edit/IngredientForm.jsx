@@ -78,6 +78,10 @@ export default function IngredientForm() {
       needs_detail: row.needs_detail,
       aliases: row.aliases.join(', '),
       preservation: row.preservation.map((entry) => ({
+        // Kept as loaded and sent back unchanged: this form has no control for
+        // either, and dropping them would rewrite stored data on every save.
+        state: entry.state,
+        duration_min_days: entry.duration_min_days,
         method: entry.method,
         duration_max_days: entry.duration_max_days ?? '',
         notes: entry.notes ?? '',
@@ -119,7 +123,8 @@ export default function IngredientForm() {
       preservation: form.preservation
         .filter((entry) => entry.method)
         .map((entry) => ({
-          state: 'unused',
+          state: entry.state,
+          duration_min_days: entry.duration_min_days,
           method: entry.method,
           // An empty number input means "unknown", which is null - not 0,
           // which the CHECK constraint refuses and which would surface as a
@@ -255,6 +260,8 @@ export default function IngredientForm() {
               preservation: [
                 ...previous.preservation,
                 {
+                  state: 'unused',
+                  duration_min_days: null,
                   method: '',
                   duration_max_days: '',
                   notes: '',

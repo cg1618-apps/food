@@ -114,12 +114,17 @@ class StaleCountError(AppError):
     in place. Without them the only recovery a page has is a full reload, which
     is why media's equivalent message ends "Reload and confirm again" - the
     sentence is an artifact of having nothing to hand back.
+
+    `field` names which count moved, using the delete's query-parameter names.
+    Several counts can share a value, so a dialog matching `expected` against
+    its own numbers would correct the wrong one and loop.
     """
 
-    def __init__(self, what: str, expected: int, actual: int):
+    def __init__(self, field: str, what: str, expected: int, actual: int):
         super().__init__(
             409,
             f"This now removes {actual} {what}, not {expected}. Check and confirm again.",
+            field=field,
             expected=expected,
             actual=actual,
         )

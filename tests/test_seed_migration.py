@@ -90,3 +90,54 @@ def test_downgrade_keeps_a_seeded_category_that_is_in_use(scratch):
         names = conn.execute(text("SELECT name_cn FROM ingredient_category")).scalars().all()
     assert "肉類" in names
     assert "海鮮" not in names
+
+
+def _preservation(conn):
+    return conn.execute(
+        text(
+            "SELECT state, method, duration_min_days, duration_max_days "
+            "FROM ingredient_preservation ORDER BY id"
+        )
+    ).all()
+
+
+def test_the_storage_migration_copies_the_old_duration_and_downgrades_lossily(scratch):
+    """Pre-existing rows are the fixture: on an empty table the copy and the
+    delete in the downgrade touch nothing."""
+    _alembic("upgrade", "v1ocabulary")
+    with scratch.begin() as conn:
+        category = conn.execute(
+            text("SELECT id FROM ingredient_category WHERE name_cn = '肉類'")
+        ).scalar()
+        ingredient = conn.execute(
+            text("INSERT INTO ingredient (name_cn, category_id) VALUES ('雞腿', :c) RETURNING id"),
+            {"c": category},
+        ).scalar()
+        conn.execute(
+            text(
+                "INSERT INTO ingredient_preservation (ingredient_id, method, duration_days) "
+                "VALUES (:i, '冷藏', 5)"
+            ),
+            {"i": ingredient},
+        )
+
+    _alembic("upgrade", "i2storage")
+    with scratch.begin() as conn:
+        assert _preservation(conn) == [("unused", "冷藏", 5, 5)]
+        conn.execute(
+            text(
+                "INSERT INTO ingredient_preservation "
+                "(ingredient_id, state, method, duration_min_days, duration_max_days) "
+                "VALUES (:i, 'opened', '冷藏', 1, 2), (:i, 'unused', '冷凍', 30, NULL)"
+            ),
+            {"i": ingredient},
+        )
+
+    _alembic("downgrade", "v1ocabulary")
+    with scratch.connect() as conn:
+        rows = conn.execute(
+            text("SELECT method, duration_days FROM ingredient_preservation ORDER BY id")
+        ).all()
+    # The opened row is gone (the old key cannot hold two states); the
+    # minimum-only row keeps its minimum.
+    assert rows == [("冷藏", 5), ("冷凍", 30)]

@@ -237,3 +237,25 @@ def test_the_fixed_vocabularies_are_served_with_labels(client):
     assert {"value": "unused", "label": "未使用"} in body["preservation_states"]
     assert {"value": "冷藏", "label": "冷藏"} in body["preservation_methods"]
     assert [entry["value"] for entry in body["ratings"]] == ["S", "A", "B", "C", "D"]
+
+
+def test_a_stale_delete_names_which_count_moved(client, fallback_category, air_fryer):
+    """Every count is 0 in the dialog and only heating has moved, so matching
+    on the number alone could not tell which one to correct."""
+    body = _create(client, fallback_category.id, heating=[{"method_id": air_fryer.id}])
+    stale = client.delete(
+        f"/api/edit/ingredients/{body['id']}",
+        params={"aliases": 0, "preservation": 0, "heating": 0, "links": 0},
+    )
+    assert stale.status_code == 409
+    assert stale.json()["field"] == "heating"
+    assert (stale.json()["expected"], stale.json()["actual"]) == (0, 1)
+
+
+def test_a_current_delete_with_every_count_matching_succeeds(client, fallback_category, air_fryer):
+    body = _create(client, fallback_category.id, heating=[{"method_id": air_fryer.id}])
+    ok = client.delete(
+        f"/api/edit/ingredients/{body['id']}",
+        params={"aliases": 0, "preservation": 0, "heating": 1, "links": 0},
+    )
+    assert ok.status_code == 204
