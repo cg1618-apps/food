@@ -268,6 +268,28 @@ so a later reader can tell a decision from an accident. These are food's.
   server-owned columns loudly rather than dropping them silently. "Conventional
   beats clever" is the tiebreak.
 
+- **Library filters and the search term live in the URL query**, where
+  media's `useLibraryState` holds them in component state. The spec needs a
+  filtered view to be a link: the ingredient page links to
+  `/ingredients?category=<id>`, and the first library ignored the query - a
+  known defect that state cannot fix. A filter click pushes (Back undoes it);
+  typing replaces, debounced, so a search is one history entry. media also
+  filters a fully loaded list in the browser; food sends the filters to the
+  list endpoint, which already takes them.
+- **Filters in a sidebar on a desktop and a drawer on a phone**, where media
+  draws an inline chip panel the list is pushed down by. food's libraries
+  have up to eight filter groups and are used on a phone at the shop; a
+  permanent column suits the desk, and the drawer (the shared `Dialog`, a
+  bottom sheet on a phone) keeps the list on screen until it is asked for.
+- **The 封面 / 清單 choice is remembered per library**, where media's library
+  view resets to the grid on every visit (only its dashboard remembers, in
+  `lib/dashboardView.js`, whose shape food's `lib/libraryView.js` copies). The
+  ingredient library is read as a table at a desk and as covers on a phone,
+  and each device should keep its own.
+- **A library table's name cell is a link**, where media makes the whole row
+  clickable. A link opens in a new tab and is reached by Tab; a clickable row
+  is neither.
+
 ### The one that is not a divergence but reads like one
 
 **Single-column unique name indexes use Postgres's DEFAULT null handling, not

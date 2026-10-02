@@ -16,12 +16,18 @@
 //   re-implement fetch by hand, and a documented 409 contract becomes
 //   unreachable without anything saying so.
 
+// An array value repeats its key - `{ course_id: [1, 2] }` is
+// `course_id=1&course_id=2` - which is how FastAPI reads a `list[int]` query
+// parameter, and what the recipe and note lists mean by "any of". Joining it
+// with commas would send one value FastAPI cannot parse as an integer.
 export function buildUrl(url, params) {
   if (!params) return url
   const search = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === null || value === '') continue
-    search.append(key, String(value))
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item === undefined || item === null || item === '') continue
+      search.append(key, String(item))
+    }
   }
   const query = search.toString()
   return query ? `${url}?${query}` : url

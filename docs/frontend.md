@@ -25,8 +25,8 @@ section a page belongs to - its edit pages included - is marked with
 | 設定 (`/settings` redirects here) | `/edit/settings` | Access |
 | Image library | `/edit/images` | Access |
 
-The recipe and note pages, the recipe and note forms and the image library
-render a heading and an empty note until their real versions land; 設定 hosts
+The recipe and note detail pages, the recipe and note forms and the image
+library render a heading and an empty note until their real versions land; 設定 hosts
 the categories-and-labels editor. Any other path is a "page not found" page,
 not a redirect.
 
@@ -54,6 +54,53 @@ suggest the gate lives in this application, and the day someone believes that
 is the day it moves. For the same reason the edit links are visible to
 everyone: hiding them protects nothing.
 
+## Libraries
+
+The three libraries - recipes, ingredients, kitchen notes - are one scaffold,
+`components/layout/LibraryLayout.jsx`, with each page supplying its data, its
+words and its filters:
+
+- **Title and add button**, then a search box, the 篩選 button (below `lg`
+  only), the 封面 / 清單 toggle and a result count.
+- **Filters in a sidebar on a desktop and a drawer on a phone.** The sidebar
+  is built from `components/layout/FilterPanel.jsx` - `FilterGroup`,
+  `FilterOptions` (toggle chips), `FilterSwitch` (a checkbox with a count) and
+  `FilterTree` (the category tree). Below `lg` the same controls open in the
+  shared `Dialog`, which a phone draws as a bottom sheet; the 篩選 button
+  carries the number of filters that are on.
+- **Every filter and the search term live in the URL query**
+  (`hooks/useUrlFilters.js`, pure parsing in `lib/urlFilters.js`). A library
+  declares a spec of URL keys - `single`, `multi` ("any of", the key repeated)
+  or `bool` (on, or absent) - each mapped to its API parameter. A filter click
+  pushes a history entry, so Back undoes it; typing replaces, debounced by
+  300 ms. A switch that is off sends nothing: `needs_detail=false` would be a
+  different filter.
+- **封面 / 清單 is remembered per library** in `localStorage` under
+  `cg1618:food:<library>-view` (`lib/libraryView.js`), every read and write in
+  a try/catch, falling back to 封面.
+- **The cover view** (`CoverGrid.jsx`): the cover cropped at its focus, or the
+  name's first character in the serif when there is no photograph; the name,
+  one line of metadata, badges. **The list view** (`LibraryTable.jsx`): the
+  name as a link with its badges, then the page's columns.
+- **Two empties, two directions**: an empty library offers the add button; a
+  filter or search that matches nothing offers 清除搜尋與篩選.
+- The list keeps the previous result on screen while a new filter loads
+  (`keepPreviousData`), so the grid does not blank on every click.
+
+| Library | URL keys | Table columns | Badges |
+| --- | --- | --- | --- |
+| 食譜 `/recipes` | `course`, `status`, `kind`, `method`, `equipment`, `creator`, `label` (all "any of"); `written` = `true` / `false` | 類別, 做法, 時間, 作者, 狀態 | 書籤 when not written up |
+| 食材 `/ingredients` | `category`, `label`, `rating` (one each); `stub`, `variety` (switches) | 分類 / 品種, 冷藏, 用於, 評等 | 待補, rating |
+| 筆記 `/notes` | `kind`, `label` (both "any of") | 種類, 連結 (host only) | - |
+
+**The ingredient category filter is exact.** Choosing 蔬菜 lists what is filed
+under 蔬菜 itself, not under its child categories; that is the API's
+`category_id`, the count beside each node is the same number, and it is the
+category the ingredient page links to (`/ingredients?category=<id>`). The
+tree says so under itself. The stub backlog's count (`只看待補`) shows whether
+or not the switch is on, read from the unfiltered list - which also names a
+variety's parent when the filtered list does not include it.
+
 ## Two things that are not pages
 
 **The `needs_detail` backlog and the uncategorised pile are filters** on the
@@ -74,6 +121,8 @@ button. Asking for a reload is what a prose-only error body forces.
   409 without re-implementing fetch.
   It leaves the `Content-Type` alone for a `FormData` body, so the browser
   writes the multipart boundary itself.
+  `buildUrl` repeats the key for an array value (`course_id=1&course_id=2`),
+  which is how FastAPI reads a `list[int]` query parameter.
 - **`api/endpoints.js` is the single source of URL truth.** Each group's
   `list()` doubles as the resource's read prefix. Its test asserts every
   mutation URL sits under `/api/edit` - the invariant the backend asserts over

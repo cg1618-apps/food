@@ -41,6 +41,14 @@ describe('buildUrl', () => {
       '/api/ingredients?needs_detail=false',
     )
   })
+
+  // FastAPI reads a list[int] query parameter from a repeated key; a joined
+  // "1,2" is a 422.
+  it('repeats the key for an array, dropping its empty members', () => {
+    expect(buildUrl('/api/recipes', { course_id: [1, 2], status: [], kind: ['', null] })).toBe(
+      '/api/recipes?course_id=1&course_id=2',
+    )
+  })
 })
 
 describe('fetchJson request headers', () => {
