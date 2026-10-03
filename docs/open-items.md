@@ -40,10 +40,10 @@ filter at all.
 ## Labels cannot be reordered in 設定
 
 A label has no `sort_order` column, so the API lists labels by name and the
-設定 page draws their rows without the ▲ / ▼ the other vocabularies have.
+設定 page draws their rows without the drag handle the other vocabularies have.
 Every other vocabulary is ordered by hand. If an order other than the
 alphabet is wanted, the label table needs the column (a migration), its
-`PATCH` the field, and `NameRow` the arrows it already draws elsewhere.
+`PATCH` the field, and `VocabularyEditor` its `ordered` flag turned on.
 
 ## The image library reads one detail per tile to show owners
 

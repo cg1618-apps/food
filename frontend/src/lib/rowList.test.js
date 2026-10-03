@@ -31,18 +31,18 @@ describe('rowsReducer', () => {
     expect(namesOf(rowsReducer(rows('a', 'b', 'c'), { type: 'remove', index: 1 }))).toEqual(['a', 'c'])
   })
 
-  it('moves up and down, carrying the key with the row', () => {
-    const before = rows('a', 'b', 'c')
-    const up = rowsReducer(before, { type: 'move', index: 2, delta: -1 })
-    expect(namesOf(up)).toEqual(['a', 'c', 'b'])
-    expect(up[1]._key).toBe(before[2]._key)
-    expect(namesOf(rowsReducer(before, { type: 'move', index: 0, delta: 1 }))).toEqual(['b', 'a', 'c'])
+  it('moves a row to where it was dropped, carrying the key with it', () => {
+    const before = rows('a', 'b', 'c', 'd')
+    const up = rowsReducer(before, { type: 'move', from: 3, to: 1 })
+    expect(namesOf(up)).toEqual(['a', 'd', 'b', 'c'])
+    expect(up[1]._key).toBe(before[3]._key)
+    expect(namesOf(rowsReducer(before, { type: 'move', from: 0, to: 2 }))).toEqual(['b', 'c', 'a', 'd'])
   })
 
   it('does not wrap a move off either end', () => {
     const before = rows('a', 'b')
-    expect(rowsReducer(before, { type: 'move', index: 0, delta: -1 })).toBe(before)
-    expect(rowsReducer(before, { type: 'move', index: 1, delta: 1 })).toBe(before)
+    expect(rowsReducer(before, { type: 'move', from: 0, to: -1 })).toBe(before)
+    expect(rowsReducer(before, { type: 'move', from: 1, to: 2 })).toBe(before)
   })
 
   it('refuses an unknown action loudly', () => {

@@ -236,11 +236,21 @@ if the categories fail to load.
   tree, labels, methods (heating rows), recipes (line names, used-in) and
   images; a note moves labels and images.
 - **Every list is `components/forms/RowEditor.jsx`**: controlled `rows` /
-  `onChange`, each row with ▲ / ▼ (上移 / 下移) and ✕, an add button under
+  `onChange`, each row with a drag handle (⠿) and ✕, an add button under
   the list, and a render prop for the row's cells (`children(row, { index,
   update })`). The list operations are one pure reducer, `lib/rowList.js`;
   each row carries a browser-only `_key` so a reorder keeps React's state with
   its row, and the payload builders never send it.
+- **Every reorder is a drag**, through `components/ui/Sortable.jsx`
+  (`SortableList`, `SortableItem`, `DragHandle`, media's component ported):
+  a row is picked up only by its handle, so the inputs inside it stay usable,
+  and a press has to travel 4px before it becomes a drag, so a tap does
+  nothing. It is dnd-kit's pointer events, so a finger drags as a mouse does
+  and the page keeps scrolling under the wheel while a row is held. A focused
+  handle moves its row one place with Up / Down (and Left / Right in the
+  gallery's grid), and focus follows the row - the keyboard path, and the one
+  the tests drive, since jsdom cannot drag. A vertical list's drag is locked
+  to the vertical axis.
 - **Choosing from a short vocabulary** - labels, methods, equipment,
   serves-as - is `ChipPicker.jsx`, toggle chips with `aria-pressed`.
 - **Aliases are one box**, split on any comma or 、 (`splitAliases`): they are
@@ -296,8 +306,9 @@ so a bad file fails alone with its own message; uploading reaches the library
 at once, attaching waits for 儲存. 從圖庫選 opens the library in a dialog,
 「只看未使用」 on by default, 30 a page; several can be added before 完成, and
 one already in the gallery is marked and can be taken out. Each picture has
-◀ / ▶, 焦點 (`FocusPicker.jsx`: click or drag, arrow keys nudge 1% / 10%,
-previewed as a cover and a thumbnail) and 移除.
+a drag handle - the tiles drag in both directions, as a grid - 焦點
+(`FocusPicker.jsx`: click or drag, arrow keys nudge 1% / 10%, previewed as a
+cover and a thumbnail) and 移除.
 
 ## 設定 and 圖片
 
@@ -309,12 +320,22 @@ is a `components/settings/NameRow.jsx`:
 - **改名** turns the row into its two name slots in place; Enter saves,
   Escape puts the row back. A 409 (a duplicate name) or 422 is said under
   the boxes.
-- **▲ / ▼** (上移 / 下移) reorder by `sort_order` (`lib/vocabulary.js`
-  `reorderPatches`): when every sibling's number is distinct the two rows
-  swap numbers - so up then down restores exactly what was there - and when
-  any tie (ordered by name, which a swap cannot change) the siblings are
-  renumbered 1..n, sending only the rows that change. **Labels have no
-  `sort_order`** and are listed by name, so their rows have no arrows.
+- **The drag handle** reorders by `sort_order` (`lib/vocabulary.js`
+  `reorderPatches`): when every sibling's number is distinct the siblings
+  keep the same set of numbers, handed out again in the new order - a
+  one-place move is a swap, and a move and back restores exactly what was
+  there - and when any tie (ordered by name, which no reassignment of equal
+  values can change) the siblings are renumbered 1..n. Either way only the
+  rows whose number changes are sent. The move saves at once
+  (`hooks/useSortOrderMove.js`): the new order shows immediately, the list's
+  handles are off until every PATCH has landed and the list has been read
+  again - a second drag computed from an order still being written would undo
+  the first - and a failure puts the stored order back with the server's
+  sentence above the list. **Labels have no `sort_order`** and are listed by
+  name, so their rows have no handle. **The category tree is nested lists**,
+  one `SortableList` per sibling group: a category drags only among its
+  siblings, and carries its children with it; moving it under another parent
+  is 改名's 上層.
 - **刪除** asks in `ConfirmModal`, saying the count it knows. A refusal is
   explained **in the row**: for a course, method or piece of equipment with
   the 409's `usage_count` (the server's number, newer than the page's); for a

@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AppRoutes from '../../routes'
 import Dialog from '../ui/Dialog'
 import DeleteDialog from './DeleteDialog'
+import RowEditor from './RowEditor'
 import Typeahead from './Typeahead'
 
 let calls
@@ -141,6 +142,51 @@ describe('Typeahead', () => {
     )
     fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' })
     expect(onSubmit).not.toHaveBeenCalled()
+  })
+})
+
+describe('RowEditor', () => {
+  // jsdom cannot drag, so the handle's keyboard path stands in for it: the
+  // same onMove a drop calls, one place at a time.
+  function Steps({ onChange }) {
+    const [rows, setRows] = useState([
+      { _key: 'a', text: '洗' },
+      { _key: 'b', text: '切' },
+      { _key: 'c', text: '炒' },
+    ])
+    return (
+      <RowEditor
+        rows={rows}
+        onChange={(next) => {
+          onChange(next)
+          setRows(next)
+        }}
+        newRow={() => ({ text: '' })}
+        itemLabel="步驟"
+      >
+        {(row) => <span>{row.text}</span>}
+      </RowEditor>
+    )
+  }
+
+  it('moves a row by its handle, carrying its key, and keeps focus on it', () => {
+    const onChange = vi.fn()
+    render(<Steps onChange={onChange} />)
+    expect(screen.queryByRole('button', { name: /上移|下移/ })).toBeNull()
+
+    fireEvent.keyDown(screen.getByRole('button', { name: '排序 步驟 1' }), { key: 'ArrowUp' })
+    expect(onChange).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(screen.getByRole('button', { name: '排序 步驟 3' }), { key: 'ArrowUp' })
+    expect(onChange).toHaveBeenLastCalledWith([
+      { _key: 'a', text: '洗' },
+      { _key: 'c', text: '炒' },
+      { _key: 'b', text: '切' },
+    ])
+    // The moved row is now 步驟 2, and its handle has the focus, so a held
+    // key keeps moving the same row.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '排序 步驟 2' }))
+    expect(screen.getByRole('group', { name: '步驟 2' }).textContent).toContain('炒')
   })
 })
 

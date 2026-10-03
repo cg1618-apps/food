@@ -134,7 +134,7 @@ describe('設定', () => {
     const labels = await screen.findByRole('list', { name: '標籤' })
     expect(labels.textContent).toContain('食材 1 · 食譜 2 · 筆記 0')
     // Labels have no order to move by.
-    expect(within(labels).queryByRole('button', { name: /上移/ })).toBeNull()
+    expect(within(labels).queryByRole('button', { name: /^排序/ })).toBeNull()
   })
 
   it('renames in place', async () => {
@@ -154,7 +154,18 @@ describe('設定', () => {
   it('moves a value by swapping sort_order with its neighbour', async () => {
     handler = (call) => (call.method === 'PATCH' ? json({}) : settingsData(call))
     renderAt('/edit/settings')
-    fireEvent.click(await screen.findByRole('button', { name: '上移「甜點」' }))
+    // The first row has nowhere to go up to: nothing is sent.
+    fireEvent.keyDown(await screen.findByRole('button', { name: '排序 「主菜」' }), { key: 'ArrowUp' })
+    expect(writes()).toEqual([])
+
+    fireEvent.keyDown(screen.getByRole('button', { name: '排序 「甜點」' }), { key: 'ArrowUp' })
+    // The new order shows at once, and the list holds still until it lands.
+    const names = () =>
+      within(section('類別'))
+        .getAllByRole('listitem')
+        .map((row) => row.getAttribute('aria-label'))
+    expect(names()).toEqual(['主菜', '甜點', '湯'])
+    expect(screen.getByRole('button', { name: '排序 「湯」' }).disabled).toBe(true)
     await waitFor(() => expect(writes()).toHaveLength(2))
     expect(writes()).toEqual(
       expect.arrayContaining([
@@ -162,7 +173,44 @@ describe('設定', () => {
         { url: '/api/edit/recipe-courses/2', method: 'PATCH', body: { sort_order: 3 } },
       ]),
     )
-    expect(screen.getByRole('button', { name: '上移「主菜」' }).disabled).toBe(true)
+    await waitFor(() => expect(screen.getByRole('button', { name: '排序 「湯」' }).disabled).toBe(false))
+  })
+
+  it('puts the stored order back and says why when a move is refused', async () => {
+    handler = (call) =>
+      call.method === 'PATCH' ? json({ detail: '資料庫連不上' }, 503) : settingsData(call)
+    renderAt('/edit/settings')
+    fireEvent.keyDown(await screen.findByRole('button', { name: '排序 「甜點」' }), { key: 'ArrowUp' })
+    await waitFor(() =>
+      expect(within(section('類別').parentElement).getByRole('alert').textContent).toBe('資料庫連不上'),
+    )
+    expect(
+      within(section('類別'))
+        .getAllByRole('listitem')
+        .map((row) => row.getAttribute('aria-label')),
+    ).toEqual(['主菜', '湯', '甜點'])
+  })
+
+  it('moves a category among its own siblings, carrying its children', async () => {
+    handler = (call) => (call.method === 'PATCH' ? json({}) : settingsData(call))
+    renderAt('/edit/settings')
+    await screen.findByRole('list', { name: '食材分類' })
+    // 葉菜 is an only child: neither key has anywhere to take it.
+    fireEvent.keyDown(screen.getByRole('button', { name: '排序 「葉菜」' }), { key: 'ArrowUp' })
+    fireEvent.keyDown(screen.getByRole('button', { name: '排序 「葉菜」' }), { key: 'ArrowDown' })
+    expect(writes()).toEqual([])
+
+    fireEvent.keyDown(screen.getByRole('button', { name: '排序 「蔬菜」' }), { key: 'ArrowUp' })
+    const roots = screen.getByRole('list', { name: '食材分類' })
+    expect([...roots.children].map((row) => row.getAttribute('aria-label'))).toEqual(['蔬菜', '未分類'])
+    expect(within(roots.children[0]).getByRole('listitem', { name: '葉菜' })).toBeTruthy()
+    await waitFor(() => expect(writes()).toHaveLength(2))
+    expect(writes()).toEqual(
+      expect.arrayContaining([
+        { url: '/api/edit/ingredient-categories/2', method: 'PATCH', body: { sort_order: 0 } },
+        { url: '/api/edit/ingredient-categories/1', method: 'PATCH', body: { sort_order: 1 } },
+      ]),
+    )
   })
 
   it('adds a value after the last one', async () => {
