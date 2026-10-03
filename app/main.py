@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from app import errors, logging_config
 from app.request_context import RequestIdMiddleware
 from app.routers import (
+    edit_session,
     health,
     image,
     ingredient,
@@ -39,6 +40,8 @@ def create_app(dist: Path = DIST) -> FastAPI:
     errors.install(app)
 
     app.include_router(health.router)
+    # The sign-in probe for the edit pages; no read counterpart, by nature.
+    app.include_router(edit_session.router)
     # Read routers and their write counterparts are registered together, so
     # that adding a resource without its gate is visible here rather than
     # discovered by the prefix test.

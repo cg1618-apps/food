@@ -7,9 +7,12 @@
 //
 // There is no route guard here and there must not be one: a guard in the
 // browser would suggest the gate lives in this application, and the day
-// someone believed that is the day it moves.
+// someone believed that is the day it moves. EditSignIn wraps the /edit pages
+// and is not one: it renders every page whatever happens, and only sends a
+// signed-out browser through the Access login as the page opens.
 import { Navigate, Route, Routes } from 'react-router-dom'
 
+import EditSignIn from './components/layout/EditSignIn'
 import Layout from './components/layout/Layout'
 import Redirect from './components/layout/Redirect'
 import IngredientDetail from './pages/detail/Ingredient'
@@ -40,14 +43,16 @@ export default function AppRoutes() {
         <Route path="/notes/:id" element={<NoteDetail />} />
 
         {/* Behind Cloudflare Access, by path. */}
-        <Route path="/edit/recipes/new" element={<RecipeForm />} />
-        <Route path="/edit/recipes/:id" element={<RecipeForm />} />
-        <Route path="/edit/ingredients/new" element={<IngredientForm />} />
-        <Route path="/edit/ingredients/:id" element={<IngredientForm />} />
-        <Route path="/edit/notes/new" element={<NoteForm />} />
-        <Route path="/edit/notes/:id" element={<NoteForm />} />
-        <Route path="/edit/settings" element={<Settings />} />
-        <Route path="/edit/images" element={<ImageLibrary />} />
+        <Route element={<EditSignIn />}>
+          <Route path="/edit/recipes/new" element={<RecipeForm />} />
+          <Route path="/edit/recipes/:id" element={<RecipeForm />} />
+          <Route path="/edit/ingredients/new" element={<IngredientForm />} />
+          <Route path="/edit/ingredients/:id" element={<IngredientForm />} />
+          <Route path="/edit/notes/new" element={<NoteForm />} />
+          <Route path="/edit/notes/:id" element={<NoteForm />} />
+          <Route path="/edit/settings" element={<Settings />} />
+          <Route path="/edit/images" element={<ImageLibrary />} />
+        </Route>
 
         {/* 設定 is a write page, so it lives under /edit; the short path is
             what someone types. */}
