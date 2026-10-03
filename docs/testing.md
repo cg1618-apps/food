@@ -102,7 +102,9 @@ is load-bearing and says so. Some examples worth knowing about:
   with none - are what prove the first-use order, the vocabulary match, the
   trim, the de-duplication and the ungrouped-first re-numbering, and the
   downgrade's re-flattening; on empty tables the upgrade makes no group and
-  passes.
+  passes. And the `s1tepkinds` test: a step stored before the upgrade is what
+  proves existing rows take the `step` default; on an empty table a NOT NULL
+  column without one would pass too.
 - `recipe_statuses` and `source_platforms` (`tests/api/conftest.py`) are the
   rows `v2ocabulary` seeds, which `create_all` does not. `recipe.status_id`
   is NOT NULL, so every module that saves a recipe takes `recipe_statuses`
@@ -184,12 +186,13 @@ the entire failure.
 | `tests/api/test_recipe_model.py` | every named recipe constraint, each refusal with its mirror; SET NULL on a version's parent; CASCADE and RESTRICT on delete |
 | `tests/api/test_recipe_crud.py` | the recipe round trip, `PATCH` list semantics, kind and status, the default status and the 422 with none, sources and their platforms, the version rule, delete refusals and stale counts |
 | `tests/api/test_recipe_lines.py` | line targets, the claimed-type refusal, the cycle guard, stub creation and reuse |
+| `tests/api/test_recipe_step_kinds.py` | a step's kind: the `step` default, the round trip through create, read and `PATCH` in and out of groups, the 422 for an unknown or null kind, the `step_kinds` fixed list |
 | `tests/api/test_recipe_groups.py` | lines and steps in groups: order and positions, a name stored as its 設定 value, the empty group, duplicate and malformed groups, the `PATCH` pair rule, stubs, cycles and "used in" through grouped lines, the delete counts, the in-use 409, SET NULL from a group to its rows |
 | `tests/api/test_recipe_library.py` | the list's search (wildcards literal) and "any of" filters (`author_id` among them), the summary's authors, and the query count |
 | `tests/api/test_kitchen_notes.py` | every named kitchen-note constraint with its mirror, CASCADE on delete, the round trip, title, kind, link and label refusals, newest-first order, `q` over title and body (wildcards literal), the "any of" filters, the query count, the gallery and the image 409 naming a note |
 | `tests/api/test_ingredient_used_in.py` | "used in" over descendants, the list filter agreeing with it, the delete refusal, the query count |
 | `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, ordering after the target's rows, the fingerprint and its 409, refusals |
-| `tests/test_seed_migration.py` | the seeds, the storage migration's copy and lossy downgrade, `v2ocabulary`'s string-to-row mapping, `a1uthors`'s creator-to-author mapping and `g1roups`' sections-to-groups move, each with its downgrade, on a scratch database |
+| `tests/test_seed_migration.py` | the seeds, the storage migration's copy and lossy downgrade, `v2ocabulary`'s string-to-row mapping, `a1uthors`'s creator-to-author mapping, `g1roups`' sections-to-groups move and `s1tepkinds`' default for existing steps, each with its downgrade, on a scratch database |
 | `tests/test_ingredient_import.py` | `i3import`: the committed CSV passes validation, each validation refusal with a good mirror, and the load on a scratch database — stubs, aliases, parents, categories, the skip rule, the cycle guard, a second run, the no-op downgrade |
 | `tests/unit/test_prod_compose.py` | the production compose file, including the image bind mount |
 

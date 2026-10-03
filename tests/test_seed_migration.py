@@ -531,3 +531,39 @@ def test_the_group_migration_turns_sections_into_groups_and_back(scratch):
     ]
     assert restored_steps == [(None, "看", 0), ("備料", "切", 1), ("備料", "醃", 2), ("炒", "炒", 3)]
     assert tables == 0
+
+
+def test_the_step_kind_migration_makes_existing_steps_ordinary_and_drops_on_downgrade(scratch):
+    """An existing step is the fixture: on an empty table the column would be
+    added with nothing to default, and a NOT NULL without a server default
+    would pass."""
+    _alembic("upgrade", "g1roups")
+    with scratch.begin() as conn:
+        status = conn.execute(text("SELECT id FROM recipe_status ORDER BY sort_order")).scalar()
+        recipe = conn.execute(
+            text("INSERT INTO recipe (name_cn, status_id) VALUES ('白飯', :s) RETURNING id"),
+            {"s": status},
+        ).scalar()
+        conn.execute(
+            text("INSERT INTO recipe_step (recipe_id, position, body) VALUES (:r, 0, '煮')"),
+            {"r": recipe},
+        )
+
+    _alembic("upgrade", "s1tepkinds")
+    with scratch.connect() as conn:
+        kinds = conn.execute(text("SELECT kind FROM recipe_step")).scalars().all()
+    assert kinds == ["step"]
+
+    _alembic("downgrade", "g1roups")
+    with scratch.connect() as conn:
+        columns = set(
+            conn.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'recipe_step'"
+                )
+            ).scalars()
+        )
+        bodies = conn.execute(text("SELECT body FROM recipe_step")).scalars().all()
+    assert "kind" not in columns
+    assert bodies == ["煮"]

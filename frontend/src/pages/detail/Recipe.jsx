@@ -4,8 +4,9 @@
 // names and a meta line (servings, time, methods, equipment); the status,
 // changeable here; where it came from; other versions; the ingredients and
 // the steps, each in its groups (lib/recipeGroups.js) - the ungrouped rows
-// first, then a block per group under its name, steps numbered through every
-// group; notes; and for a base,
+// first, then a block per group under its name, ordinary steps numbered
+// through every group, an optional step marked 可省略 and a 備註 drawn as a
+// callout; notes; and for a base,
 // the recipes that use it. Every section with nothing in it is left out, so a
 // recipe saved as a bookmark is a short page rather than a page of empties.
 //
@@ -25,8 +26,10 @@ import Gallery from '../../components/ui/Gallery'
 import { Badge, Chip, LinkButton, Section, Toggle } from '../../components/ui/primitives'
 import { ErrorNote } from '../../components/ui/states'
 import { fixedLabel, useApiMutation, useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
+import { cx } from '../../lib/cx'
 import { linkHost } from '../../lib/format'
 import { lineBlocks, stepBlocks } from '../../lib/recipeGroups'
+import { NOTE } from '../../lib/steps'
 import { otherVersions } from '../../lib/versions'
 
 const names = (refs) => (refs?.length ? refs.map((ref) => ref.display_name).join('、') : null)
@@ -142,25 +145,40 @@ function Lines({ blocks }) {
   ))
 }
 
-function Steps({ blocks }) {
+// One block per group, as the lines are. An ordinary step has its number in
+// a disc; an optional one a 可省略 chip in that place and slightly muted
+// text; a note is a ruled, tinted callout with no number at all
+// (lib/steps.js). `kindLabel` is the fixed list's label for a kind.
+function Steps({ blocks, kindLabel }) {
   return blocks.map((group) => (
     <div key={group.key} className="space-y-2">
       {group.heading ? <h3 className="text-sm font-bold text-text-muted">{group.heading}</h3> : null}
       <ol className="space-y-3">
-        {group.rows.map((step) => (
-          <li key={step.id} className="flex gap-3">
-            <span
-              aria-hidden="true"
-              className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft font-display text-sm font-bold text-brand"
-            >
-              {step.number}
-            </span>
-            <p className="whitespace-pre-line leading-relaxed">
-              <span className="sr-only">第 {step.number} 步：</span>
-              {step.body}
-            </p>
-          </li>
-        ))}
+        {group.rows.map((step) =>
+          step.kind === NOTE ? (
+            <li key={step.id} className="space-y-0.5 rounded-md border-l-4 border-border-strong bg-surface-2 px-3 py-2">
+              <p className="text-xs font-bold text-text-muted">{kindLabel(NOTE)}</p>
+              <p className="whitespace-pre-line text-sm leading-relaxed">{step.body}</p>
+            </li>
+          ) : (
+            <li key={step.id} className="flex gap-3">
+              {step.number ? (
+                <span
+                  aria-hidden="true"
+                  className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft font-display text-sm font-bold text-brand"
+                >
+                  {step.number}
+                </span>
+              ) : (
+                <Chip className="mt-0.5 shrink-0">{kindLabel(step.kind)}</Chip>
+              )}
+              <p className={cx('whitespace-pre-line leading-relaxed', !step.number && 'text-text-muted')}>
+                {step.number ? <span className="sr-only">第 {step.number} 步：</span> : null}
+                {step.body}
+              </p>
+            </li>
+          ),
+        )}
       </ol>
     </div>
   ))
@@ -243,7 +261,7 @@ export default function Recipe() {
       {steps.length ? (
         <Section title="步驟">
           <div className="space-y-5">
-            <Steps blocks={steps} />
+            <Steps blocks={steps} kindLabel={(kind) => fixedLabel(fixed.data?.step_kinds, kind)} />
           </div>
         </Section>
       ) : null}

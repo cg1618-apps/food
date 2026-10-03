@@ -33,14 +33,15 @@ reference work.
 ## Status
 
 **Modules 1 and 2 are built, with kitchen notes.** The schema is at revision
-`g1roups` (the head).
+`s1tepkinds` (the head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
   parent, rating, labels, storage as a state x method grid with day ranges, a
   heating guide, links, galleries, the 待補 (`needs_detail`) stub backlog,
   and merge.
 - **Recipes** - lines naming an ingredient, a sub-recipe or a new stub made
-  by the save, and steps, each in groups (a 設定 材料分組 / 步驟分組 value or
+  by the save, and steps (each a 步驟, 可省略 or 備註), each in groups (a
+  設定 材料分組 / 步驟分組 value or
   a one-off name, rows dragged within and between them), sources with an
   author picked or made by the save, versions, a status, courses,
   methods, equipment, labels, galleries, and "used in" for ingredients and

@@ -1,7 +1,7 @@
 // 「貼上多行」: pasted text as steps, numbering stripped.
 import { describe, expect, it } from 'vitest'
 
-import { splitSteps, stripNumbering } from './steps'
+import { splitSteps, stepNumbers, stripNumbering } from './steps'
 
 describe('splitSteps', () => {
   it('makes one step per non-blank line', () => {
@@ -36,5 +36,17 @@ describe('splitSteps', () => {
 
   it('handles Windows line endings', () => {
     expect(splitSteps('1. a\r\n2. b')).toEqual(['a', 'b'])
+  })
+})
+
+describe('stepNumbers', () => {
+  it('counts only ordinary steps; a step with no kind is ordinary', () => {
+    expect(
+      stepNumbers([{ kind: 'step' }, { kind: 'optional' }, {}, { kind: 'note' }, { kind: 'step' }]),
+    ).toEqual([1, null, 2, null, 3])
+  })
+
+  it('answers nothing for no steps', () => {
+    expect(stepNumbers([])).toEqual([])
   })
 })

@@ -84,8 +84,8 @@ export function invalidateResources(queryClient, prefixes, options) {
 }
 
 /**
- * Every closed list (preservation methods and states, ratings, recipe kinds
- * and statuses, source platforms, note kinds), each `[{value, label}]`.
+ * Every closed list (preservation methods and states, ratings, recipe kinds,
+ * note kinds, step kinds), each `[{value, label}]`.
  *
  * Read once per page load: the lists change only with a deploy, so there is
  * nothing to refetch. This is what ends the copies of those lists that used to

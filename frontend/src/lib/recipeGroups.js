@@ -6,6 +6,8 @@
 // ungrouped rows first, without a heading, then one block per group under its
 // name. A group with nothing in it has nothing to read and is left out.
 
+import { stepNumbers } from './steps'
+
 function blocks(ungrouped, groups, inner) {
   const out = []
   if (ungrouped?.length) out.push({ key: 'ungrouped', heading: null, rows: ungrouped })
@@ -24,12 +26,16 @@ export function lineBlocks(recipe) {
 /**
  * The same for its steps, each step carrying `number`: counted through the
  * whole recipe in the order the page shows them, so 「第 5 步」 names one step
- * even when the groups are headed separately.
+ * even when the groups are headed separately. Only an ordinary step is
+ * counted; an optional step or a note carries `number: null`
+ * (lib/steps.js).
  */
 export function stepBlocks(recipe) {
-  let number = 0
-  return blocks(recipe.steps, recipe.step_groups, 'steps').map((block) => ({
+  const out = blocks(recipe.steps, recipe.step_groups, 'steps')
+  const numbers = stepNumbers(out.flatMap((block) => block.rows))
+  let index = 0
+  return out.map((block) => ({
     ...block,
-    rows: block.rows.map((step) => ({ ...step, number: ++number })),
+    rows: block.rows.map((step) => ({ ...step, number: numbers[index++] })),
   }))
 }

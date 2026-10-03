@@ -417,8 +417,13 @@ class RecipeLine(Base):
 
 
 class RecipeStep(Base):
-    """One step of the method, in order: the position runs through the whole
-    recipe as a line's does, so it is also the step's number less one."""
+    """One row of the method, in order: the position runs through the whole
+    recipe as a line's does.
+
+    The position is not the step's number. Only a `step`-kind row is
+    numbered; an optional step and a note sit in the order unnumbered, so the
+    number is counted by whoever draws the page, never stored.
+    """
 
     __tablename__ = "recipe_step"
 
@@ -431,6 +436,8 @@ class RecipeStep(Base):
     group_id = Column(
         Integer, ForeignKey("recipe_step_group.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Validated against STEP_KINDS in the schema layer.
+    kind = Column(String, nullable=False, server_default=text("'step'"))
     body = Column(Text, nullable=False)
 
     recipe = relationship("Recipe", back_populates="steps")

@@ -172,7 +172,9 @@ empties.
   siblings, never the recipe itself); 材料 and 步驟 in their groups
   (`lib/recipeGroups.js`: the ungrouped rows first, without a heading, then a
   block per group under its name, in the recipe's group order; an empty group
-  is left out; steps numbered through every group); 保存; 筆記; 用在
+  is left out; ordinary steps numbered through every group, an optional
+  step carrying a 可省略 chip in the number's place with its text muted, a
+  備註 drawn as a ruled, tinted callout with no number); 保存; 筆記; 用在
   (the recipes naming a base directly). A line links to its ingredient or
   sub-recipe; an optional line is drawn faint with （可省略）; a stub
   ingredient carries 待補.
@@ -305,6 +307,16 @@ amount, a note or typed-but-unpicked text (the row's `pending`, never sent)
 and nothing chosen is refused by number - 「第 n 行材料…還沒選食材或食譜」.
 A blank step is dropped the same way.
 
+**Each step has a kind**, switched by a 步驟 / 可省略 / 備註 `Toggle`
+(aria-pressed buttons, the fixed `step_kinds` list) above its text box. A new
+row and a pasted one is 步驟. Only a 步驟 shows a number beside it, counted
+through every group as the recipe's page counts them (`stepNumbers` in
+`lib/steps.js`), so the numbers in the form are the numbers the page will
+show; a 備註 row's box sits in the same ruled, tinted frame the page draws a
+note in. The rows' accessible names - 「步驟 3」, 「步驟 3 的種類」 - keep the
+running index RowEditor gives every row, so each stays unique whatever its
+kind. The save sends each step as `{body, kind}`.
+
 **材料 and 步驟 sit in groups** (`components/forms/GroupedRowEditor.jsx`,
 state and operations in `lib/groupedRows.js`). The ungrouped rows come first,
 with their own add button; then each group is a box: a header with its drag
@@ -343,7 +355,8 @@ says why.
 non-blank line with the leading numbering stripped (`lib/steps.js` -
 `1.`, `1)`, `1、`, `(1)`, `①`, `一、`, `第一步`, `Step 1:`, bullets), because the
 page numbers steps itself. 「加到」 picks where they go: 不分組 (the default)
-or one of the recipe's step groups, at its end.
+or one of the recipe's step groups, at its end. Every pasted step is an
+ordinary 步驟.
 
 **Storage rows** show a min and a max. A row stored as one number (min = max,
 the i2storage migration's shape) keeps its min following the max until the
