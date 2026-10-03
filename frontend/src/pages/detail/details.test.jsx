@@ -195,7 +195,7 @@ describe('the recipe page', () => {
     expect(screen.queryByRole('heading', { name: '用在' })).toBeNull()
   })
 
-  it('names each source by its platform', async () => {
+  it('names each source by its platform, and links its author to the library filter', async () => {
     handler = ({ url, method }) =>
       method === 'GET' && url === '/api/recipes/5'
         ? json({
@@ -204,7 +204,7 @@ describe('the recipe page', () => {
               {
                 id: 1,
                 platform: { id: 4, display_name: '書' },
-                creator: '阿基師',
+                author: { id: 6, display_name: '阿基師' },
                 url: null,
                 title: '家常菜',
                 sort_order: 0,
@@ -215,7 +215,8 @@ describe('the recipe page', () => {
     renderAt('/recipes/5')
     const sources = (await screen.findByRole('heading', { name: '來源' })).closest('section')
     expect(within(sources).getByText('書')).toBeTruthy()
-    expect(within(sources).getByText('阿基師 · 家常菜')).toBeTruthy()
+    expect(within(sources).getByRole('link', { name: '阿基師' }).getAttribute('href')).toBe('/recipes?author=6')
+    expect(within(sources).getByText('家常菜')).toBeTruthy()
   })
 
   it('changes the status in place with a PATCH of status alone', async () => {

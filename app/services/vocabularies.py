@@ -14,6 +14,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import (
+    Author,
     CookingMethod,
     Equipment,
     IngredientHeating,
@@ -47,6 +48,13 @@ def _platform_usage(db: Session) -> dict[int, int]:
     return dict(_count(db, RecipeSource.platform_id))
 
 
+def _author_usage(db: Session) -> dict[int, int]:
+    """Sources, as a platform's: a source with no author counts for nobody."""
+    counts = _count(db, RecipeSource.author_id)
+    counts.pop(None, None)
+    return dict(counts)
+
+
 def _cooking_method_usage(db: Session) -> dict[int, int]:
     return dict(_count(db, IngredientHeating.method_id) + _count(db, RecipeMethod.method_id))
 
@@ -61,6 +69,7 @@ USAGE: dict[type, Callable[[Session], dict[int, int]]] = {
     SourcePlatform: _platform_usage,
     CookingMethod: _cooking_method_usage,
     Equipment: _equipment_usage,
+    Author: _author_usage,
 }
 
 

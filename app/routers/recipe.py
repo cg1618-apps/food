@@ -17,9 +17,6 @@ from app.services import images, recipes
 
 router = read_router("recipes", "Recipes")
 edit = write_router("recipes", "Recipes")
-# Its own small read router: the creators are not a recipe, and nesting them
-# under /api/recipes would put a string where a recipe id is read.
-creators = read_router("recipe-creators", "Recipes")
 
 
 def recipe_ref(row: Recipe) -> schemas.RecipeRef:
@@ -45,7 +42,7 @@ def _summary(row: Recipe) -> schemas.RecipeSummary:
         status=_ref(row.status),
         course=_ref(row.course),
         methods=_vocab(row.methods),
-        creators=recipes.creators(row),
+        authors=_vocab(recipes.authors(row)),
         time=row.time,
         written_up=recipes.written_up(row),
         cover=images.cover(row.images),
@@ -75,7 +72,7 @@ def _response(row: Recipe, used_in: list[Recipe]) -> schemas.RecipeResponse:
             schemas.SourceResponse(
                 id=s.id,
                 platform=_ref(s.platform),
-                creator=s.creator,
+                author=_ref(s.author),
                 url=s.url,
                 title=s.title,
                 sort_order=s.sort_order,
@@ -134,7 +131,7 @@ def list_recipes(
     label_id: list[int] | None = Query(None),
     method_id: list[int] | None = Query(None),
     equipment_id: list[int] | None = Query(None),
-    creator: list[str] | None = Query(None, description="Exact; repeat for any of several"),
+    author_id: list[int] | None = Query(None, description="A source's author"),
     ingredient_id: list[int] | None = Query(None),
     written_up: bool | None = None,
     db: Session = Depends(get_db),
@@ -150,17 +147,11 @@ def list_recipes(
         label_id=label_id,
         method_id=method_id,
         equipment_id=equipment_id,
-        creator=creator,
+        author_id=author_id,
         ingredient_id=ingredient_id,
         written_up=written_up,
     )
     return [_summary(row) for row in rows]
-
-
-@creators.get("", response_model=list[str])
-def list_creators(db: Session = Depends(get_db)):
-    """Every distinct source creator, sorted - for suggestions and the filter."""
-    return recipes.all_creators(db)
 
 
 @router.get("/{recipe_id}", response_model=schemas.RecipeResponse)

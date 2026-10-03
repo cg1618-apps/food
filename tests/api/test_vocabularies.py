@@ -1,5 +1,5 @@
-"""The five managed vocabularies share one router factory, so one parametrised
-suite covers all five. The fixtures that make refusals bite are the in-use
+"""The six managed vocabularies share one router factory, so one parametrised
+suite covers all six. The fixtures that make refusals bite are the in-use
 rows: a vocabulary value nothing uses deletes freely, and that is the mirror."""
 
 import pytest
@@ -10,6 +10,7 @@ RESOURCES = [
     "source-platforms",
     "cooking-methods",
     "equipment",
+    "authors",
 ]
 
 
@@ -209,6 +210,48 @@ def test_a_platform_a_source_names_cannot_be_deleted(
     assert response.json()["usage_count"] == 2
     other = source_platforms["其他"]
     assert client.delete(f"/api/edit/source-platforms/{other.id}").status_code == 204
+
+
+def test_an_author_a_source_names_cannot_be_deleted(
+    client, db, recipe_statuses, source_platforms
+):
+    """Two sources by one author count twice, as a platform's do. The sources
+    are the fixture that makes the 409 bite; the unused author is the mirror
+    and deletes."""
+    from app.models import Author, RecipeSource
+
+    used, unused = Author(name_cn="阿基師"), Author(name_en="James")
+    db.add_all([used, unused])
+    db.flush()
+    recipe = _recipe(db, recipe_statuses["想試"])
+    youtube = source_platforms["YouTube"]
+    db.add_all(
+        [
+            RecipeSource(recipe_id=recipe.id, platform_id=youtube.id, author_id=used.id),
+            RecipeSource(
+                recipe_id=recipe.id, platform_id=youtube.id, author_id=used.id, sort_order=1
+            ),
+        ]
+    )
+    db.flush()
+
+    listed = {row["display_name"]: row for row in client.get("/api/authors").json()}
+    assert listed["阿基師"]["usage_count"] == 2
+    assert listed["James"]["usage_count"] == 0
+
+    response = client.delete(f"/api/edit/authors/{used.id}")
+    assert response.status_code == 409
+    assert response.json()["usage_count"] == 2
+    assert client.delete(f"/api/edit/authors/{unused.id}").status_code == 204
+
+
+def test_authors_list_by_name(client):
+    """Authors are never hand-ordered: every one is created with sort_order 0,
+    so the factory's (sort_order, name) order is name order."""
+    for name in ["詹姆士", "Babish", "阿基師", "adam"]:
+        assert client.post("/api/edit/authors", json={"name_cn": name}).status_code == 201
+    names = [row["display_name"] for row in client.get("/api/authors").json()]
+    assert names == sorted(["詹姆士", "Babish", "阿基師", "adam"], key=str.casefold)
 
 
 def test_statuses_and_platforms_list_in_sort_order(client, recipe_statuses, source_platforms):

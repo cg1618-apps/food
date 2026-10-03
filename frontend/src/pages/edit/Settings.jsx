@@ -14,7 +14,7 @@
 // URL, the label, and what its panel renders.
 //
 // What a change here makes stale is named per vocabulary: a renamed course,
-// status or source platform is shown on every recipe, a renamed method on
+// status, source platform or author is shown on every recipe, a renamed method on
 // recipes and on ingredient heating rows, a renamed label on all three kinds
 // of owner.
 import { endpoints } from '../../api/endpoints'
@@ -28,8 +28,9 @@ const RECIPES = endpoints.recipes.list()
 const INGREDIENTS = endpoints.ingredients.list()
 const NOTES = endpoints.notes.list()
 
-// The five factory vocabularies: one shape, one count (`usage_count`, the
-// RESTRICT references that would stop a delete).
+// The six factory vocabularies: one shape, one count (`usage_count`, the
+// RESTRICT references that would stop a delete). Authors are listed by name
+// like labels, so they have no order to move by.
 const FACTORY = [
   {
     key: 'courses',
@@ -51,6 +52,14 @@ const FACTORY = [
     hint: '食譜是在哪裡看到的：YouTube、網站、書…',
     addLabel: '新增來源',
     invalidate: [endpoints.platforms.list(), RECIPES],
+  },
+  {
+    key: 'authors',
+    title: '作者',
+    hint: '食譜來源的作者，依名稱排列。在食譜表單打一個還沒有的名字，存檔時也會加進來。',
+    addLabel: '新增作者',
+    ordered: false,
+    invalidate: [endpoints.authors.list(), RECIPES],
   },
   {
     key: 'methods',

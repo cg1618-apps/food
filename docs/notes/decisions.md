@@ -555,6 +555,41 @@ What the branch after module 1 chose, and what it turned down.
 - **A platform's usage count is sources, not recipes.** The count is the rows
   that would stop the delete, as everywhere in the factory, so one recipe
   with two sources from one book counts twice.
+- **A source's author is a managed vocabulary that grows from the form.**
+  `recipe_source.creator` began as free text with a `datalist` of every
+  distinct value, and the owner wants authors in 設定: renamed once rather
+  than per source, and filtered by as a row rather than by an exact string,
+  so 詹姆士 and a mistyped 詹姆斯 stop being two people. But an author, unlike
+  a platform, is met while entering a recipe - a new channel is the usual
+  case, not the exception - so stopping to visit 設定 first would be the
+  friction that pushes the name into the title instead. So the source row
+  picks from the list and offers 「新增 'xxx'」, and the save creates the
+  author, exactly as a line creates a stub ingredient: `new_author`
+  resolved after validation in the same transaction, a name the server
+  already knows (either slot, ignoring case) reused rather than duplicated,
+  one new name on two sources one author. Rejected: keeping free text with
+  a derived author list (renaming would still be per source); and creating
+  authors on blur from the form (a save that is then abandoned would leave
+  authors nobody used).
+- **Authors are listed by name, not by hand.** Every author is created with
+  `sort_order` 0 and 設定 shows them as it shows labels, with no drag
+  handle: dozens of names have no meaningful order but the alphabet, and the
+  factory's (sort_order, name) order already gives it, so the factory needed
+  no change. `author_id` is nullable - a source may have no author - and
+  `RESTRICT`, so an author in use answers the factory's 409 with the sources
+  counted, as a platform does.
+- **The author box filters a list in the browser, and it is the Typeahead.**
+  The ingredient typeahead asks the server because the libraries are too
+  large to download per line; the authors list is small and is already
+  fetched for 設定 and the library filter. Rather than a second component,
+  the Typeahead takes `items` and filters them locally with the same
+  keyboard, 「新增」 rule and `Picked` display, so every pick-one box in
+  the app still behaves one way.
+- **`a1uthors` files existing creators by the form's rule.** One author per
+  distinct trimmed creator, compared lower-cased, the first source's spelling
+  kept; a name with Han characters, kana or Hangul in `name_cn`, otherwise
+  `name_en` - the rule `lib/recipeLines.js` applies to any typed name, copied
+  into the migration because a revision imports nothing from the app.
 
 ## Kitchen notes
 

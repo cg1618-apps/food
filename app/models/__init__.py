@@ -33,6 +33,7 @@ from app.models.recipe import (
     RecipeStep,
 )
 from app.models.vocabulary import (
+    Author,
     CookingMethod,
     Equipment,
     RecipeCourse,
@@ -41,6 +42,7 @@ from app.models.vocabulary import (
 )
 
 __all__ = [
+    "Author",
     "CookingMethod",
     "Equipment",
     "Image",

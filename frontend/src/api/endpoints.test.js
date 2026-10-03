@@ -27,7 +27,6 @@ const READ_KEYS = new Set([
   'list',
   'detail',
   'cascade',
-  'creators',
   'mergePreview',
   'tree',
   'fixed',
@@ -76,7 +75,8 @@ describe('paths the backend actually serves', () => {
   // its name, and the routes added beside the plain CRUD.
   it.each([
     [endpoints.notes.list(), '/api/kitchen-notes'],
-    [endpoints.recipes.creators(), '/api/recipe-creators'],
+    [endpoints.authors.list(), '/api/authors'],
+    [endpoints.authors.update(6), '/api/edit/authors/6'],
     [endpoints.courses.list(), '/api/recipe-courses'],
     [endpoints.statuses.update(3), '/api/edit/recipe-statuses/3'],
     [endpoints.platforms.list(), '/api/source-platforms'],

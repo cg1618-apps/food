@@ -255,13 +255,13 @@ full ingredient.
 | `PATCH /api/edit/recipes/{id}` | also the in-place status change |
 | `DELETE /api/edit/recipes/{id}` | requires the confirmation counts |
 | `PUT /api/edit/recipes/{id}/images` | replace the gallery, in order |
-| `GET /api/recipe-creators` | every distinct source creator |
 
 **`GET /api/recipes`** is the library: a bare array of summaries sorted by
 display name. A summary is the name slots and `display_name`, `kind`,
 `status` (`{id, display_name}`), `course` (`{id, display_name}` or null), `methods`
-(`{id, display_name}` list), `creators` (the distinct creators of its sources,
-in source order, skipping sources with none), `time`, `written_up` and `cover`
+(`{id, display_name}` list), `authors` (`{id, display_name}`, the distinct
+authors of its sources, in source order, skipping sources with none), `time`,
+`written_up` and `cover`
 (the first gallery image's `thumb_url` and `focus`, or null).
 
 Query parameters:
@@ -270,18 +270,15 @@ Query parameters:
   `%`, `_` and `\` matched literally as on the ingredient list. The alias arm is a subquery, so a recipe matching two of its aliases comes back
   once;
 - `course_id`, `status_id`, `kind`, `label_id`, `method_id`, `equipment_id`,
-  `creator`, `ingredient_id` — each may repeat, and a repeated parameter means
+  `author_id`, `ingredient_id` — each may repeat, and a repeated parameter means
   **any of** its values (`?status_id=2&status_id=3`). Different
   parameters narrow each other. `course_id` is the course a recipe is filed
-  under, not one it serves as; `creator` matches a source's creator exactly;
+  under, not one it serves as; `author_id` matches recipes with a source by
+  that author;
   `ingredient_id` matches recipes using that ingredient as "used in" defines
   it — a line naming it or anything below it, depth zero through sub-recipes;
 - `written_up` — `true` for recipes with at least one line or step, `false`
   for the rest.
-
-**`GET /api/recipe-creators`** is every distinct creator any source names,
-sorted, as a bare array of strings — for suggestions while typing a source and
-for the `creator` filter.
 
 **`PUT /api/edit/recipes/{id}/images`** replaces the gallery exactly as an
 ingredient's does, and answers the full recipe.
@@ -292,8 +289,8 @@ ingredient's does, and answers the full recipe.
 `storage_notes`, `notes`, and:
 
 - `aliases` — sorted strings;
-- `sources` — `{id, platform, creator, url, title, sort_order}`, `platform`
-  being `{id, display_name}`;
+- `sources` — `{id, platform, author, url, title, sort_order}`, `platform`
+  being `{id, display_name}` and `author` `{id, display_name}` or null;
 - `lines` — `{id, position, section, ingredient, sub_recipe, amount, note,
   is_optional}`, where exactly one of `ingredient`
   (`{id, display_name, needs_detail}`) and `sub_recipe`
@@ -322,8 +319,14 @@ a request naming `sort_order` or `position` is a 422 — and re-sending the same
 lines and steps succeeds. A `PATCH` carrying only `status_id` is the status
 change; nothing else is needed for it.
 
-A source is `{platform_id, creator, url, title}` with at least one of the last
-three, and `platform_id` required; `url` must be `http` or `https`. A step is `{section, body}` with a
+A source is `{platform_id, author_id, new_author, url, title}`: `platform_id`
+required, at most one of `author_id` and `new_author`, and at least one of an
+author, `url` and `title`; `url` must be `http` or `https`. `new_author`
+(`{name_cn, name_en}`, at least one) is a name typed into the source that the
+save resolves: an author whose `name_cn` or `name_en` equals a typed name,
+ignoring case, is reused, and otherwise one is created (with `sort_order` 0,
+as every author). Names resolved earlier in the same save count, so one new
+name on two sources is one author. A step is `{section, body}` with a
 non-blank `body`.
 
 **A line names exactly one of `ingredient_id`, `sub_recipe_id` or
@@ -342,10 +345,11 @@ earlier line asked for:
 
 - a `kind` outside its list, and an explicit null for `kind`, `status_id` or a
   source's `platform_id`;
+- a source sending both `author_id` and `new_author`;
 - creating a recipe without `status_id` when there is no status at all;
 - no name left on the merged row;
 - **an id inside the body that names nothing** — `course_id`, `status_id`,
-  `variant_of_id`, a source's `platform_id`, any of the four id lists, `ingredient_id` or `sub_recipe_id` in a line. The
+  `variant_of_id`, a source's `platform_id` or `author_id`, any of the four id lists, `ingredient_id` or `sub_recipe_id` in a line. The
   detail names the id. The URL's own recipe missing is 404;
 - a line whose recipe is reachable from its `sub_recipe_id` through sub-recipe
   lines, at any depth — itself included;
@@ -414,7 +418,7 @@ answers the full note.
 
 ## Vocabularies
 
-Five managed vocabularies share one shape, so one description covers them:
+Six managed vocabularies share one shape, so one description covers them:
 
 | Route | |
 | --- | --- |
@@ -423,13 +427,16 @@ Five managed vocabularies share one shape, so one description covers them:
 | `GET /api/source-platforms` | |
 | `GET /api/cooking-methods` | |
 | `GET /api/equipment` | |
+| `GET /api/authors` | |
 | `POST /api/edit/<same>` | |
 | `PATCH /api/edit/<same>/{id}` | |
 | `DELETE /api/edit/<same>/{id}` | |
 
 Each value is `id`, `display_name`, `name_cn`, `name_en`, `sort_order` and
 `usage_count`, listed by `sort_order` then name. A value needs at least one name
-and names are unique case-insensitively per slot.
+and names are unique case-insensitively per slot. Authors are never
+hand-ordered: the recipe form creates them with `sort_order` 0 and 設定 sends
+none, so their list is in name order.
 
 **Deleting a value that is in use is a 409 carrying `usage_count`**, answered
 before the database is asked; the `RESTRICT` foreign key is the backstop. The
@@ -437,8 +444,9 @@ count is the number of `RESTRICT` references: for a course, the recipes filed
 in it (a recipe that only serves as that course does not count, and its link
 goes with the course); for a status, the recipes in it; for a source platform,
 the sources naming it, so one recipe with two sources from one book counts
-twice; for a cooking method, ingredient heating rows plus
-recipes using it; for equipment, recipes using it.
+twice; for an author, likewise the sources naming them; for a cooking method,
+ingredient heating rows plus recipes using it; for equipment, recipes using
+it.
 
 **`GET /api/vocabularies/fixed`** serves every closed list the interface
 renders, as `{value, label}` pairs under `preservation_methods`,

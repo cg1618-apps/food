@@ -42,7 +42,7 @@ phone in a shop, signed out: selection notes, the preservation methods with
 their durations, where to get the thing. Everything else is a list or a form.
 
 **Every vocabulary shares one page**, 設定, a tab each. They are the
-same kind of work — maintaining a short list — and a page each would be seven
+same kind of work — maintaining a short list — and a page each would be eight
 screens with a handful of rows on them.
 
 **There is no route guard, and there must not be one.** The gate is Cloudflare
@@ -112,7 +112,7 @@ words and its filters:
 
 | Library | URL keys | Table columns | Badges |
 | --- | --- | --- | --- |
-| 食譜 `/recipes` | `course`, `status` (ids, sent as `status_id`), `kind`, `method`, `equipment`, `creator`, `label` (all "any of"); `written` = `true` / `false` | 類別, 做法, 時間, 作者, 狀態 | 書籤 when not written up |
+| 食譜 `/recipes` | `course`, `status` (ids, sent as `status_id`), `kind`, `method`, `equipment`, `author` (ids, sent as `author_id`), `label` (all "any of"); `written` = `true` / `false` | 類別, 做法, 時間, 作者, 狀態 | 書籤 when not written up |
 | 食材 `/ingredients` | `category`, `label`, `rating` (one each); `stub`, `variety` (switches) | 分類 / 品種, 冷藏, 用於, 評等 | 待補, rating |
 | 筆記 `/notes` | `kind`, `label` (both "any of") | 種類, 連結 (host only) | - |
 
@@ -165,7 +165,9 @@ empties.
 - **Recipe**: course (a link to the library filtered by it), 基底 for a
   base, 也可以當作, 書籤 when not written up; names; a meta line of servings,
   time, methods and equipment; the **status, changed in place**; labels;
-  description; 來源 (platform, creator and title, linked when there is a URL);
+  description; 來源 (platform; author, a link to the library filtered by
+  them; title, linked out when there is a URL, the URL's host standing in
+  for a missing title);
   其他版本 (`lib/versions.js`: the original first, marked 原版, then the
   siblings, never the recipe itself); 材料 and 步驟 grouped by section
   (`lib/sections.js`: one block per section in first-use order, rows keeping
@@ -263,7 +265,11 @@ typing stops: `sources` is `['ingredient']`, `['recipe']` or both, `exclude`
 keeps a row out (a recipe is not its own version), and `allowNew` adds
 「新增 'xxx'」 when no result's name equals the typed text exactly
 (`lib/typeahead.js`) - and only once the search has answered, so a quick Enter
-cannot make a stub named after something the library already has. Up / Down
+cannot make a stub named after something the library already has. Handed
+`items` instead - a list small enough to hold whole, the authors - it filters
+that in the browser (a name slot containing the typed text, ignoring case and
+width), asks the server nothing, and offers 「新增」 at once; `newHint` is the
+words beside 「新增」 saying what the save will make. Up / Down
 move, Enter picks - and never submits the form
 around it - Escape closes the list without closing a dialog it sits in. It only
 picks: `onSelect(option)` hands the caller `{ type, id, label, needsDetail,
@@ -283,8 +289,16 @@ Han characters is `name_cn`, otherwise `name_en`). A 新增 line shows 待補 un
 the save creates the stub. An entirely blank line is dropped; one with an
 amount, a note or typed-but-unpicked text (the row's `pending`, never sent)
 and nothing chosen is refused by number - 「第 n 行材料…還沒選食材或食譜」.
-A source row with no creator, title or URL is dropped the same way, as is a
-blank step.
+A blank step is dropped the same way.
+
+**A source's 作者** is the typeahead over `GET /api/authors`, fetched once and
+filtered in the browser. Picking one sends `author_id`; 「新增 'xxx'」 shows
+the name with 新作者 and sends `new_author` (`name_cn` or `name_en` by the
+lines' rule), which the save creates - or folds into an author already
+answering to that name. Leaving it empty sends `author_id: null`.
+`lib/recipeSources.js` builds the payload: a row with no author, title, URL
+or typed text is dropped, and one whose author was typed and never picked
+(`pendingAuthor`) is refused by number - 「第 n 個來源的作者打了…還沒選」.
 
 **The recipe's 狀態 and a source's 平台** are selects over the managed
 vocabularies (`GET /api/recipe-statuses`, `GET /api/source-platforms`). A new
@@ -322,13 +336,15 @@ cover and a thumbnail) and 移除.
 ## 設定 and 圖片
 
 `/edit/settings` is `pages/edit/Settings.jsx`: a tab each for 食材分類, 標籤,
-類別, 狀態, 來源, 做法 and 器材, with 圖片庫 - the way into `/edit/images` -
+類別, 狀態, 來源, 作者, 做法 and 器材, with 圖片庫 - the way into `/edit/images` -
 beside the heading. 狀態 is the recipe statuses (想試, 可煮, 常煮 …; the first
-is what a new recipe starts on) and 來源 the source platforms (YouTube, 網站,
-書 …); renaming either marks every recipe read stale, as a course does.
+is what a new recipe starts on), 來源 the source platforms (YouTube, 網站,
+書 …) and 作者 the sources' authors; renaming any of them marks every recipe
+read stale, as a course does. 作者 is listed by name, as 標籤 is, so it has no
+drag handle and a new author is added without a `sort_order`.
 
 - **The tab is in the URL**, `?tab=` with `categories`, `labels`, `courses`,
-  `statuses`, `platforms`, `methods` or `equipment` (`hooks/useUrlTab.js`), so a tab can be linked to
+  `statuses`, `platforms`, `authors`, `methods` or `equipment` (`hooks/useUrlTab.js`), so a tab can be linked to
   and survives a reload. A missing or unknown tab is the first, 食材分類, and
   the URL is left as it is. Choosing a tab **replaces** the history entry
   rather than pushing one: Back leaves 設定 instead of walking back through

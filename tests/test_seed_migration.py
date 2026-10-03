@@ -255,3 +255,117 @@ def test_the_status_and_platform_migration_maps_every_string_to_a_row_and_back(s
         "來源-other": "other",
     }
     assert tables == 0
+
+
+def test_the_author_migration_makes_one_author_per_distinct_creator_and_back(scratch):
+    """Sources already holding creators are the fixture: on an empty table the
+    insert and the matching touch nothing, and a migration that dropped the
+    column unfilled would pass. Two spellings of one name, a padded one and a
+    source with no creator at all are what make the de-duplication, the trim
+    and the null-skip each bite.
+
+    The first spelling wins, by source id - the one saved first."""
+    _alembic("upgrade", "v2ocabulary")
+    with scratch.begin() as conn:
+        status = conn.execute(text("SELECT id FROM recipe_status ORDER BY sort_order")).scalar()
+        platform = conn.execute(
+            text("SELECT id FROM source_platform ORDER BY sort_order")
+        ).scalar()
+        recipe = conn.execute(
+            text("INSERT INTO recipe (name_cn, status_id) VALUES ('菜', :s) RETURNING id"),
+            {"s": status},
+        ).scalar()
+        for i, (creator, title) in enumerate(
+            [
+                ("Babish", "一"),
+                ("阿基師", "二"),
+                ("babish", "三"),  # the same author, a later spelling
+                ("  阿基師 ", "四"),  # the same author, padded
+                ("Joshua Weissman", "五"),
+                ("たかし", "六"),  # kana counts as the Chinese slot, as in the form
+                (None, "七"),
+            ]
+        ):
+            conn.execute(
+                text(
+                    "INSERT INTO recipe_source (recipe_id, platform_id, creator, title, sort_order) "
+                    "VALUES (:r, :p, :c, :t, :i)"
+                ),
+                {"r": recipe, "p": platform, "c": creator, "t": title, "i": i},
+            )
+
+    _alembic("upgrade", "a1uthors")
+    with scratch.begin() as conn:
+        authors = sorted(
+            conn.execute(text("SELECT name_cn, name_en, sort_order FROM author")).all(),
+            key=lambda row: (row[0] or "", row[1] or ""),
+        )
+        named = dict(
+            conn.execute(
+                text(
+                    "SELECT rs.title, coalesce(a.name_cn, a.name_en) FROM recipe_source rs "
+                    "LEFT JOIN author a ON a.id = rs.author_id"
+                )
+            ).all()
+        )
+        columns = set(
+            conn.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'recipe_source'"
+                )
+            ).scalars()
+        )
+        # The new CHECK lets a source stand on its author alone.
+        babish = conn.execute(text("SELECT id FROM author WHERE name_en = 'Babish'")).scalar()
+        conn.execute(
+            text(
+                "INSERT INTO recipe_source (recipe_id, platform_id, author_id, sort_order) "
+                "VALUES (:r, :p, :a, 9)"
+            ),
+            {"r": recipe, "p": platform, "a": babish},
+        )
+
+    assert authors == [
+        (None, "Babish", 0),
+        (None, "Joshua Weissman", 0),
+        ("たかし", None, 0),
+        ("阿基師", None, 0),
+    ]
+    assert named == {
+        "一": "Babish",
+        "二": "阿基師",
+        "三": "Babish",
+        "四": "阿基師",
+        "五": "Joshua Weissman",
+        "六": "たかし",
+        "七": None,
+    }
+    assert "creator" not in columns and "author_id" in columns
+
+    _alembic("downgrade", "v2ocabulary")
+    with scratch.connect() as conn:
+        restored = dict(
+            conn.execute(
+                text("SELECT title, creator FROM recipe_source WHERE title IS NOT NULL")
+            ).all()
+        )
+        only_author = conn.execute(
+            text("SELECT creator FROM recipe_source WHERE title IS NULL")
+        ).scalar()
+        tables = conn.execute(
+            text("SELECT count(*) FROM information_schema.tables WHERE table_name = 'author'")
+        ).scalar()
+    # Back from the author's display name: the later spelling and the padding
+    # are not restored, which is the de-duplication doing what it was for.
+    assert restored == {
+        "一": "Babish",
+        "二": "阿基師",
+        "三": "Babish",
+        "四": "阿基師",
+        "五": "Joshua Weissman",
+        "六": "たかし",
+        "七": None,
+    }
+    assert only_author == "Babish"
+    assert tables == 0

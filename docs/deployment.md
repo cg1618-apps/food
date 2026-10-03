@@ -79,6 +79,10 @@ back as strings, mapping each row to its old key by name, and drops
 `recipe_status` and `source_platform`. A status or platform the owner created
 or renamed has no old key and lands on `want_to_try` or `other`.
 
+`a1uthors`'s downgrade puts `recipe_source.creator` back as each source's
+author's display name and drops `author`. A creator that was a later spelling
+of a name (babish after Babish) comes back as the first spelling.
+
 **So there is no route that keeps the data.** The real choice is:
 
 - **roll back**, and lose everything entered since the release, or
@@ -112,7 +116,8 @@ they ever do not, believe the box.
 | Recipes | `r1recipes` — twenty-three tables |
 | Kitchen notes | `k1notes` — twenty-six tables |
 | The starting ingredient list | `i3import` — no new table |
-| Statuses and source platforms as vocabularies | `v2ocabulary` — twenty-eight tables, the current head |
+| Statuses and source platforms as vocabularies | `v2ocabulary` — twenty-eight tables |
+| Authors as a vocabulary | `a1uthors` — twenty-nine tables, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

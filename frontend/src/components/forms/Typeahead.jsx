@@ -5,17 +5,22 @@
 // ingredient and recipe for every line of a recipe. This one asks the server
 // - the list endpoints' `q`, which matches every name slot and alias - after
 // the typing settles, and is driven from the keyboard: Up / Down move through
-// the options, Enter picks, Escape closes.
+// the options, Enter picks, Escape closes. Handed `items` - a list small
+// enough to hold whole, the authors - it filters that in the browser instead
+// and asks nothing.
 //
 // It only PICKS. What a pick means - a recipe line's target, a recipe's
 // "version of", a merge target - is the caller's, through `onSelect(option)`;
 // the box clears itself afterwards. Options are lib/typeahead.js's:
-// { type: 'ingredient' | 'recipe' | 'new', id, label, detail, needsDetail,
-// kind }.
+// { type: 'ingredient' | 'recipe' | 'item' | 'new', id, label, detail,
+// needsDetail, kind }.
 //
 //   sources      which libraries to search: ['ingredient'], ['recipe'] or both
+//   items        rows ({ id, display_name, name_cn, name_en }) to filter in
+//                the browser instead of searching; options are type 'item'
 //   onSelect     (option) => void
 //   allowNew     offer 「新增 'xxx'」 when nothing matches exactly
+//   newHint      the words beside 「新增」, saying what the save will make
 //   exclude      { ingredient: [ids], recipe: [ids] } never offered
 //   onQueryChange (text) => void - what is typed and not yet picked, '' after
 //                a pick. A caller that refuses to save over unpicked text
@@ -30,7 +35,7 @@ import { endpoints } from '../../api/endpoints'
 import { useApiQuery } from '../../hooks/useApi'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { cx } from '../../lib/cx'
-import { mergeResults, stepActive } from '../../lib/typeahead'
+import { localResults, mergeResults, stepActive } from '../../lib/typeahead'
 import { Badge, Chip, Input } from '../ui/primitives'
 
 const TYPE_WORDS = { ingredient: '食材', recipe: '食譜' }
@@ -67,9 +72,11 @@ export function Picked({ label, stub = false, tag, onClear, clearLabel = '更換
 
 export default function Typeahead({
   sources = ['ingredient', 'recipe'],
+  items,
   onSelect,
   onQueryChange,
   allowNew = false,
+  newHint = '（存檔時建立待補食材）',
   exclude,
   label = '搜尋',
   placeholder = '輸入名稱搜尋…',
@@ -82,8 +89,9 @@ export default function Typeahead({
   const [active, setActive] = useState(-1)
   const settled = useDebouncedValue(query.trim(), 250)
 
-  const searchIngredients = sources.includes('ingredient') && settled !== ''
-  const searchRecipes = sources.includes('recipe') && settled !== ''
+  const local = items !== undefined
+  const searchIngredients = !local && sources.includes('ingredient') && settled !== ''
+  const searchRecipes = !local && sources.includes('recipe') && settled !== ''
   const ingredients = useApiQuery(
     endpoints.ingredients.list(),
     { q: settled },
@@ -97,18 +105,22 @@ export default function Typeahead({
 
   const typed = query.trim()
   const searching =
-    typed !== settled || (searchIngredients && ingredients.isFetching) || (searchRecipes && recipes.isFetching)
+    !local &&
+    (typed !== settled || (searchIngredients && ingredients.isFetching) || (searchRecipes && recipes.isFetching))
   // 「新增」 waits for the search to answer: offered before it, a quick Enter
   // makes a stub named after something the library already has.
-  const options = typed
-    ? mergeResults({
-        ingredients: searchIngredients ? ingredients.data : [],
-        recipes: searchRecipes ? recipes.data : [],
-        query: typed,
-        exclude,
-        allowNew: allowNew && !searching,
-      })
-    : []
+  let options = []
+  if (typed && local) {
+    options = localResults({ items, query: typed, allowNew })
+  } else if (typed) {
+    options = mergeResults({
+      ingredients: searchIngredients ? ingredients.data : [],
+      recipes: searchRecipes ? recipes.data : [],
+      query: typed,
+      exclude,
+      allowNew: allowNew && !searching,
+    })
+  }
   const showList = open && typed !== ''
   const activeIndex = active < options.length ? active : -1
 
@@ -197,7 +209,7 @@ export default function Typeahead({
                 {option.type === 'new' ? (
                   <span>
                     新增「<strong>{option.label}</strong>」
-                    <span className="ml-1 text-xs text-text-faint">（存檔時建立待補食材）</span>
+                    <span className="ml-1 text-xs text-text-faint">{newHint}</span>
                   </span>
                 ) : (
                   <>
@@ -209,7 +221,7 @@ export default function Typeahead({
                     </span>
                     {option.needsDetail ? <Badge kind="stub" /> : null}
                     {option.kind === 'base' ? <Chip>基底</Chip> : null}
-                    {sources.length > 1 ? (
+                    {!local && sources.length > 1 ? (
                       <span className="shrink-0 text-xs text-text-faint">{TYPE_WORDS[option.type]}</span>
                     ) : null}
                   </>

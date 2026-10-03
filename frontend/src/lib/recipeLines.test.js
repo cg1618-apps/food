@@ -6,7 +6,7 @@ import {
   isStub,
   lineFromResponse,
   linesPayload,
-  newIngredientNames,
+  newNames,
   sectionsOf,
   targetFromOption,
 } from './recipeLines'
@@ -46,8 +46,8 @@ describe('recipe lines', () => {
   })
 
   it('files a typed Latin name as English and a Han one as Chinese', () => {
-    expect(newIngredientNames(' shiso ')).toEqual({ name_en: 'shiso' })
-    expect(newIngredientNames('紫蘇 leaf')).toEqual({ name_cn: '紫蘇 leaf' })
+    expect(newNames(' shiso ')).toEqual({ name_en: 'shiso' })
+    expect(newNames('紫蘇 leaf')).toEqual({ name_cn: '紫蘇 leaf' })
   })
 
   it('drops an entirely blank line but refuses one with an amount and no choice', () => {

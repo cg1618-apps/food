@@ -53,7 +53,6 @@ def create_app(dist: Path = DIST) -> FastAPI:
     app.include_router(label.edit)
     app.include_router(recipe.router)
     app.include_router(recipe.edit)
-    app.include_router(recipe.creators)
     app.include_router(kitchen_note.router)
     app.include_router(kitchen_note.edit)
     app.include_router(image.router)

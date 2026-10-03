@@ -1,7 +1,7 @@
 """Small managed vocabularies: recipe courses, recipe statuses, source
-platforms, cooking methods, equipment.
+platforms, cooking methods, equipment, authors.
 
-Five tables with one shape, declared once through a mixin. They are tables
+Six tables with one shape, declared once through a mixin. They are tables
 rather than lists in `app/constants.py` because the owner edits them - renaming
 煮 to 水煮 must be one row, not a deploy. The closed lists in constants are the
 ones the app's own logic branches on (storage state, recipe kind); these are
@@ -9,7 +9,7 @@ the ones it only displays and filters by.
 
 `declared_attr` builds each table's constraints from its own name and its own
 copied columns: `cls.name_cn` inside it is the subclass's column, not the
-mixin's, which is what lets one definition produce five correctly-bound
+mixin's, which is what lets one definition produce six correctly-bound
 expression indexes.
 """
 
@@ -70,3 +70,15 @@ class Equipment(Base, VocabularyMixin):
     """鍋子, 平底鍋, 氣炸鍋 …"""
 
     __tablename__ = "equipment"
+
+
+class Author(Base, VocabularyMixin):
+    """阿基師, 詹姆士, Babish … - who made a recipe source.
+
+    Listed by name, never hand-ordered: every author is created with
+    sort_order 0, so the factory's (sort_order, name) order is name order.
+    Grows from the recipe form as much as from 設定 - a name typed into a
+    source that no author answers to is created by the save.
+    """
+
+    __tablename__ = "author"

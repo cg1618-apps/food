@@ -14,7 +14,7 @@
 const API = '/api'
 const WRITE = '/api/edit'
 
-// The five vocabularies the backend builds from one factory
+// The six vocabularies the backend builds from one factory
 // (app/routers/vocabulary.py) share one URL shape.
 function vocabulary(resource) {
   return {
@@ -30,8 +30,6 @@ export const endpoints = {
     list: () => `${API}/recipes`,
     detail: (id) => `${API}/recipes/${id}`,
     cascade: (id) => `${API}/recipes/${id}/cascade`,
-    // Distinct creator names already used in sources, for suggestions.
-    creators: () => `${API}/recipe-creators`,
     create: () => `${WRITE}/recipes`,
     // PATCH; a body of only {status_id} is the in-place status change.
     update: (id) => `${WRITE}/recipes/${id}`,
@@ -87,6 +85,8 @@ export const endpoints = {
   platforms: vocabulary('source-platforms'),
   methods: vocabulary('cooking-methods'),
   equipment: vocabulary('equipment'),
+  // A source's author; listed by name, and grown by the recipe form too.
+  authors: vocabulary('authors'),
   vocabularies: {
     // Every closed list with its display label: preservation methods and
     // states, ratings, recipe kinds, note kinds.
