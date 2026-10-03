@@ -545,6 +545,24 @@ describe('設定', () => {
       await waitFor(() => expect(screen.getByRole('button', { name: '排序 「蒜」' }).disabled).toBe(false))
     })
 
+    it('turns the search box off while a change is saving, so a pick is never dropped', async () => {
+      let release
+      handler = (call) =>
+        call.method === 'PUT'
+          ? new Promise((resolve) => {
+              release = () => resolve(json([]))
+            })
+          : settingsData(call)
+      renderAt('/edit/settings?tab=common-ingredients')
+      const box = await screen.findByRole('combobox', { name: '加常用食材' })
+      expect(box.disabled).toBe(false)
+      fireEvent.click(screen.getByRole('button', { name: '從常用食材移除「薑」' }))
+      await waitFor(() => expect(puts()).toHaveLength(1))
+      expect(box.disabled).toBe(true)
+      release()
+      await waitFor(() => expect(box.disabled).toBe(false))
+    })
+
     it('removes one with its ✕, sending the rest', async () => {
       handler = (call) => (call.method === 'PUT' ? json([]) : settingsData(call))
       renderAt('/edit/settings?tab=common-ingredients')

@@ -31,6 +31,7 @@
 //                (a line naming nothing, a parent nobody chose) needs it: the
 //                box is otherwise the only thing that knows the text is there.
 //   label        the input's accessible name
+//   disabled     turns the box off (a list still saving its last change)
 //   placeholder, autoFocus, className
 import { keepPreviousData } from '@tanstack/react-query'
 import { useId, useState } from 'react'
@@ -87,6 +88,7 @@ export default function Typeahead({
   label = '搜尋',
   placeholder = '輸入名稱搜尋…',
   autoFocus = false,
+  disabled = false,
   className,
 }) {
   const listId = useId()
@@ -185,6 +187,7 @@ export default function Typeahead({
         aria-activedescendant={activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
         autoComplete="off"
         autoFocus={autoFocus}
+        disabled={disabled}
         placeholder={placeholder}
         value={query}
         onChange={(event) => {

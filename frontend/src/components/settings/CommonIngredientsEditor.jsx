@@ -106,6 +106,8 @@ export default function CommonIngredientsEditor() {
           label="加常用食材"
           placeholder="搜尋食材加入…"
           exclude={{ ingredient: ids }}
+          // Off while a change saves: change() ignores a pick made then.
+          disabled={saving}
           onSelect={(option) =>
             change([
               ...shown,
