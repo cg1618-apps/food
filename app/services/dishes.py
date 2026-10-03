@@ -25,6 +25,7 @@ from app.models import (
     RecipeLine,
     RecipeSource,
     Region,
+    ScheduleMeal,
 )
 from app.schemas.dish import LIST_FIELDS
 from app.services import images
@@ -254,7 +255,8 @@ def update(db: Session, dish_id: int, payload) -> Dish:
 
 def cascade_counts(db: Session, dish_id: int) -> dict[str, int]:
     """What the delete dialog shows: the aliases a delete takes with it, and
-    the two counts that refuse it - recipes of the dish, and recipes using it.
+    the three counts that refuse it - recipes of the dish, recipes using it,
+    and meals on the schedule naming it.
 
     Serves-as and label links cascade too but are not counted, as for a
     recipe; gallery rows go and the pictures stay.
@@ -263,4 +265,5 @@ def cascade_counts(db: Session, dish_id: int) -> dict[str, int]:
         "aliases": db.query(DishAlias).filter(DishAlias.dish_id == dish_id).count(),
         "recipes": db.query(Recipe).filter(Recipe.dish_id == dish_id).count(),
         "used_in": len(used_in(db, dish_id)),
+        "meals": db.query(ScheduleMeal).filter(ScheduleMeal.dish_id == dish_id).count(),
     }

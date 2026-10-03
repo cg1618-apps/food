@@ -99,6 +99,8 @@ describe('paths the backend actually serves', () => {
     [endpoints.tbd.update(4), '/api/edit/tbd/4'],
     [endpoints.tbd.remove(4), '/api/edit/tbd/4'],
     [endpoints.tbd.order(), '/api/edit/tbd/order'],
+    [endpoints.schedule.list(), '/api/schedule'],
+    [endpoints.schedule.update('2026-10-03'), '/api/edit/schedule/2026-10-03'],
     [endpoints.templates.list(), '/api/recipe-templates'],
     [endpoints.templates.detail(3), '/api/recipe-templates/3'],
     [endpoints.templates.order(), '/api/edit/recipe-templates/order'],

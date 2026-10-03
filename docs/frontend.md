@@ -6,7 +6,7 @@ is specific to food.
 
 ## Pages
 
-Navigation is 料理 · 食譜 · 食材 · 筆記 · TBD · 設定 - 料理 first, since a dish
+Navigation is 料理 · 食譜 · 食材 · 筆記 · 排程 · TBD · 設定 - 料理 first, since a dish
 is what you look for and its recipes hang off it: a top bar on a desktop, a bar
 fixed to the bottom of the screen on a phone (`components/layout/Layout.jsx`).
 The section a page belongs to - its edit pages included - is marked with
@@ -30,6 +30,7 @@ them readable at 360px with room for more.
 | Ingredient | `/ingredients/:id` | public |
 | Kitchen-note library | `/notes` | public |
 | Kitchen note | `/notes/:id` | public |
+| 排程, the weekly schedule (`?week=` the first Saturday shown) | `/schedule` | public |
 | TBD | `/tbd` | public |
 | Add / edit a dish | `/edit/dishes/new`, `/edit/dishes/:id` | Access |
 | Add / edit a recipe (a new one first asks how to start; `?dish=<id>` presets the dish) | `/edit/recipes/new`, `/edit/recipes/:id` | Access |
@@ -38,6 +39,7 @@ them readable at 360px with room for more.
 | Add / edit a note | `/edit/notes/new`, `/edit/notes/:id` | Access |
 | 設定 (`/settings` redirects here) | `/edit/settings` | Access |
 | Image library | `/edit/images` | Access |
+| Edit the schedule (`?week=` as `/schedule`) | `/edit/schedule` | Access |
 | Edit TBD | `/edit/tbd` | Access |
 
 Any other path is a "page not found" page, not a redirect.
@@ -169,13 +171,14 @@ which block, and which reads go stale:
 - on a 409 carrying `field` and `actual` it takes the server's number for that
   field, says so, and re-offers the button (「確認刪除」). Asking for a reload is
   what a prose-only error body forces;
-- a blocking count (`recipes` and `used_in` on a dish; `children` and
-  `recipes` on an ingredient) is said up front in words, but the button
+- a blocking count (`recipes`, `used_in` and `meals` on a dish; `children`
+  and `recipes` on an ingredient) is said up front in words, but the button
   stays: the refusal is the server's. Its 409 lists recipes, shown as links -
   under 它的食譜： those in `recipes` (a dish's own) and under 用到它的食譜：
-  those in `used_in`;
-- a recipe's dialog has nothing that blocks: lines name dishes, and the dish
-  stays;
+  those in `used_in` - and under 排了它的日子： the dates in `meals`, each
+  linked to its week on `/schedule`;
+- a recipe's dialog has nothing that blocks: lines name dishes, the dish
+  stays, and a meal on the schedule naming the recipe keeps its dish;
 - a kitchen note has no cascade, so its dialog is the plain question.
 
 ## Detail pages
@@ -651,6 +654,48 @@ an optional 顯示文字 per row) - with its own 儲存 and 刪除:
   sentence - the rule `hooks/useSortOrderMove.js` applies on 設定.
 
 完成 goes back to `/tbd`.
+
+## 排程
+
+The weekly schedule, after the owner's Plan sheet. **A week runs Saturday to
+Friday, and both pages show two** - the week `?week=` names (any date in it is
+moved to its Saturday; none, or not a date, is this week) and the one after.
+`lib/schedule.js` holds the date arithmetic, done in UTC on `YYYY-MM-DD`
+strings so a day can never shift; "today" is the browser's own date
+(`hooks/useShownWeeks.js`). `components/layout/WeekNav.jsx` is ← 上週 · 本週 ·
+下週 →, links that set `?week=`; 本週 drops it. The meal slots and their labels
+come from the fixed vocabulary `meal_slots`.
+
+**`/schedule`** (`pages/library/Schedule.jsx`) heads the page with the
+fortnight's range and 編輯, which opens `/edit/schedule` on the same week.
+Each week is a section titled with its range:
+
+- **on a desktop, a table with the sheet's columns in the sheet's order** -
+  星期幾 (the weekday and date), 要買?, 早退冰?, 中退冰?, 早, 中, 下午, 晚,
+  晚退冰?, 水果, 備註. A meal cell shows its text, its dish linked to the
+  dish, and its recipe as 食譜：… linked to the recipe;
+- **on a phone, a card per day** listing only the fields that hold something,
+  in the same order, and a dash when nothing is planned.
+
+Today's row and card are marked (`aria-current="date"`, the brand tint).
+
+**`/edit/schedule`** (`pages/edit/ScheduleForm.jsx`) is the same two weeks,
+a card per day: the four meals - each 內容 (free text), a 料理 picked by
+`Typeahead` over the dish library (existing dishes only), and, once a dish is
+picked, a select of **that dish's** recipes (read from `GET
+/api/dishes/{id}`) with 不指定食譜 first - then the six plain fields.
+
+- **Each card saves with its own 儲存** - one `PUT` of the whole day, blanks
+  as null and empty meals as null (`lib/schedule.js` `dayPayload`). Not on
+  blur: a phone does not reliably blur a field, and a save that silently did
+  not happen is the failure this page must not have.
+- **Nothing typed is lost silently.** A changed card says 未儲存 until it is
+  saved; while any card is unsaved the page counts them, the week buttons are
+  disabled, 完成 reads 放棄修改, and closing the tab asks. A dish typed into
+  the search but not picked refuses the save with a sentence.
+- A refusal shows the server's sentence on the card and keeps what was typed;
+  a save says 已儲存. A card keeps its own state, so another card's save never
+  throws it away.
 
 ## Layers
 

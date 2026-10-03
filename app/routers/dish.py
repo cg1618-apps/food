@@ -14,7 +14,7 @@ from app.errors import AppError, StaleCountError
 from app.models import Dish, DishImage
 from app.routers.recipe import recipe_ref, summary
 from app.routing import read_router, write_router
-from app.services import dishes, images
+from app.services import dishes, images, schedule
 
 router = read_router("dishes", "Dishes")
 edit = write_router("dishes", "Dishes")
@@ -97,8 +97,9 @@ def get_dish(dish_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{dish_id}/cascade", response_model=dict)
 def cascade_preview(dish_id: int, db: Session = Depends(get_db)):
-    """What deleting this would remove (`aliases`), and the two counts that
-    refuse it (`recipes`, `used_in`). Only `aliases` is echoed on the delete."""
+    """What deleting this would remove (`aliases`), and the three counts that
+    refuse it (`recipes`, `used_in`, `meals`). Only `aliases` is echoed on the
+    delete."""
     dishes.get(db, dish_id)
     return dishes.cascade_counts(db, dish_id)
 
@@ -126,18 +127,22 @@ def delete_dish(
 ):
     """Delete, with the alias count the user was shown echoed back.
 
-    A dish with recipes, or one a recipe's line names, is refused BEFORE the
-    database is asked, with those recipes on the body - the RESTRICT would
-    refuse too, but could only say that something refers to it, not what.
+    A dish with recipes, one a recipe's line names, or one a meal on the
+    schedule names is refused BEFORE the database is asked, with those recipes
+    and the meals' dates on the body - the RESTRICT would refuse too, but
+    could only say that something refers to it, not what.
     """
     dish = dishes.get(db, dish_id)
     users = dishes.used_in(db, dish_id)
-    if dish.recipes or users:
+    meal_dates = schedule.meal_dates(db, dish_id)
+    if dish.recipes or users or meal_dates:
         raise AppError(
             409,
-            "This dish still has recipes, or recipes use it, so it cannot be removed.",
+            "This dish still has recipes, recipes use it, or the schedule names it,"
+            " so it cannot be removed.",
             recipes=[{"id": r.id, "display_name": r.display_name} for r in dish.recipes],
             used_in=[{"id": r.id, "display_name": r.display_name} for r in users],
+            meals=[d.isoformat() for d in meal_dates],
         )
 
     actual = dishes.cascade_counts(db, dish_id)["aliases"]

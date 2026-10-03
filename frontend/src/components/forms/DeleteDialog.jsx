@@ -14,7 +14,8 @@
 //      its refusal is what carries the list;
 //   5. on a 409 refusing the delete outright, show what blocks it: the
 //      recipes in `recipes` (a dish's own) and `used_in` (the ones using
-//      it), with links, or the server's sentence (an
+//      it), with links; the dates in `meals` (a dish on the schedule), each
+//      linked to its week; or the server's sentence (an
 //      ingredient's child varieties are refused by the foreign key, whose
 //      409 carries only a sentence - the cascade's `children` count says how
 //      many).
@@ -32,6 +33,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { buildUrl, fetchJson } from '../../api/client'
 import { invalidateResources, useApiQuery } from '../../hooks/useApi'
 import { DELETE_TARGETS } from '../../lib/deleteTargets'
+import { shortDate, weekStart } from '../../lib/schedule'
 import Dialog from '../ui/Dialog'
 import { Button } from '../ui/primitives'
 import { ErrorNote, Loading } from '../ui/states'
@@ -58,6 +60,8 @@ export default function DeleteDialog({ kind, id, name, onClose, onDeleted }) {
   const [error, setError] = useState(null)
   // The recipes a refusal names, by what they are to the row.
   const [refusedBy, setRefusedBy] = useState([])
+  // The dates of the meals a refusal names - a dish on the schedule.
+  const [mealDates, setMealDates] = useState([])
   const [busy, setBusy] = useState(false)
 
   const counts = hasCascade && cascade.data ? { ...cascade.data, ...corrected } : {}
@@ -87,6 +91,7 @@ export default function DeleteDialog({ kind, id, name, onClose, onDeleted }) {
             ([, , rows]) => Array.isArray(rows) && rows.length,
           ),
         )
+        setMealDates(Array.isArray(caught.body?.meals) ? caught.body.meals : [])
       }
       setError(caught)
     } finally {
@@ -155,6 +160,21 @@ export default function DeleteDialog({ kind, id, name, onClose, onDeleted }) {
             </ul>
           </div>
         ))}
+
+        {mealDates.length ? (
+          <div className="space-y-1">
+            <p className="text-text-muted">排了它的日子：</p>
+            <ul className="flex flex-wrap gap-x-3 gap-y-0.5">
+              {mealDates.map((date) => (
+                <li key={date}>
+                  <Link to={`/schedule?week=${weekStart(date)}`} className="text-brand hover:underline">
+                    {shortDate(date)}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
     </Dialog>
   )

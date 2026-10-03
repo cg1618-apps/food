@@ -7,9 +7,10 @@ split later without a migration (docs/notes/decisions.md).
 
 What a dish OWNS - aliases, serves-as and label links, gallery rows -
 cascades with it. What it NAMES - a course, a region - is RESTRICT. What names
-IT - a recipe's `dish_id`, a recipe line's `sub_dish_id` - is RESTRICT too, so
-a dish with recipes, or one a recipe uses as an ingredient, cannot go from
-under them; the API refuses first, naming them.
+IT - a recipe's `dish_id`, a recipe line's `sub_dish_id`, a scheduled meal's
+`dish_id` - is RESTRICT too, so a dish with recipes, one a recipe uses as an
+ingredient, or one on the schedule cannot go from under them; the API refuses
+first, naming them.
 """
 
 from sqlalchemy import (

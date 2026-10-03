@@ -92,6 +92,12 @@ export const endpoints = {
     remove: (id) => `${WRITE}/tbd/${id}`,
     order: () => `${WRITE}/tbd/order`,
   },
+  // 排程: the weekly schedule. GET with ?start=YYYY-MM-DD&days=N answers
+  // every date in the range, stored or not; PUT replaces one whole day.
+  schedule: {
+    list: () => `${API}/schedule`,
+    update: (date) => `${WRITE}/schedule/${date}`,
+  },
   images: {
     list: () => `${API}/images`,
     detail: (id) => `${API}/images/${id}`,
@@ -133,7 +139,7 @@ export const endpoints = {
   stepGroups: vocabulary('step-groups'),
   vocabularies: {
     // Every closed list with its display label: preservation methods and
-    // states, ratings, dish kinds, note kinds, step kinds.
+    // states, ratings, dish kinds, note kinds, step kinds, meal slots.
     fixed: () => `${API}/vocabularies/fixed`,
   },
   // GET under the gated prefix: 204 when Access let the request through, and
