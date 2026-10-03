@@ -1,14 +1,14 @@
 # Data model
 
-What the database holds today: twenty-nine tables, at revision `a1uthors`.
+What the database holds today: thirty-three tables, at revision `g1roups`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
-`ingredient_preservation`, `label`, `ingredient_label`), the six managed
+`ingredient_preservation`, `label`, `ingredient_label`), the eight managed
 vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
 its three galleries (`image`, `ingredient_image`, `recipe_image`,
-`kitchen_note_image`), the recipe family's nine (`recipe`, `recipe_alias`,
+`kitchen_note_image`), the recipe family's eleven (`recipe`, `recipe_alias`,
 `recipe_serves_as`, `recipe_label`, `recipe_method`, `recipe_equipment`,
-`recipe_source`, `recipe_line`, `recipe_step`), and kitchen notes' two
-(`kitchen_note`, `kitchen_note_label`).
+`recipe_source`, `recipe_line_group`, `recipe_line`, `recipe_step_group`,
+`recipe_step`), and kitchen notes' two (`kitchen_note`, `kitchen_note_label`).
 
 ## Conventions shared by every table
 
@@ -158,7 +158,8 @@ is script execution. `title` is optional; rows are ordered by `sort_order`.
 ## The managed vocabularies
 
 `recipe_course`, `recipe_status`, `source_platform`, `cooking_method`,
-`equipment` and `author` share one shape, declared once
+`equipment`, `author`, `line_group` (材料分組) and `step_group` (步驟分組)
+share one shape, declared once
 in `VocabularyMixin` (`app/models/vocabulary.py`): `name_cn`, `name_en`,
 `sort_order`, at least one name (`ck_<table>_has_a_name`) and a case-insensitive
 unique index per name slot with default null handling, as on `ingredient`.
@@ -185,6 +186,8 @@ them:**
 | `recipe_course` | 主食, 配菜, 湯, 小吃點心, 甜點, 飲料, 醬料 |
 | `recipe_status` | 想試, 可煮, 常煮 (`v2ocabulary`) |
 | `source_platform` | YouTube, Shorts, 網站, 書, 其他 (`v2ocabulary`) |
+| `line_group` | 主料, 配料, 調味料 (`g1roups`) |
+| `step_group` | 備料, 烹飪, 醬汁 (`g1roups`) |
 | `cooking_method` | 煮, 壓力鍋煮, 煎, 炒, 炸, 氣炸, 烤, 蒸, 川燙, 涼拌, 微波, 混合 |
 | `equipment` | 鍋子, 壓力鍋, 平底鍋, 氣炸鍋, 烤箱, 油鍋, 果汁機, 電鍋, 微波爐, 保鮮盒, 碗 |
 | `ingredient_category` | 肉類, 海鮮, 蔬菜, 菇類, 水果, 蛋豆製品, 主食穀物, 調味料, 乳製品, 乾貨 (top level) |
@@ -227,6 +230,7 @@ things that would stop it being deleted:
 | `cooking_method` | `ingredient_heating` rows plus `recipe_method` links |
 | `equipment` | `recipe_equipment` links |
 | `author` | sources naming them (`recipe_source.author_id`) — counted as a platform's are |
+| `line_group`, `step_group` | recipe groups naming the value (`recipe_line_group.line_group_id`, `recipe_step_group.step_group_id`) — at most one per recipe |
 
 ## `image` and its galleries
 
@@ -318,6 +322,28 @@ are each optional — a book has no URL, a page may have no author worth
 naming — but at least one must be set (`ck_recipe_source_has_content`).
 Ordered by `sort_order`.
 
+## `recipe_line_group` and `recipe_step_group`
+
+One group of a recipe's ingredient lines (主料, 醬汁) or of its steps (備料,
+烹飪): a real row, not a label repeated on each line, so a group exists on its
+own — an empty one is kept — has its own place, and is renamed in one place.
+
+| Column | Notes |
+| --- | --- |
+| `recipe_id` | the owner, `CASCADE` |
+| `position` | the group's place among the recipe's groups, unique per recipe (`uq_recipe_line_group_position`, `uq_recipe_step_group_position`) |
+| `line_group_id` / `step_group_id` | → `line_group` / `step_group`, `RESTRICT`, indexed — the 設定 value the group is |
+| `name` | a one-off name, for a group that is no 設定 value |
+
+**Exactly one of the value and `name` is set** (`ck_recipe_line_group_one_name`,
+`ck_recipe_step_group_one_name`); the write path stores a name matching a
+value — trimmed, either name slot, any case — as that value. **A recipe holds
+a group once**: unique on `(recipe_id, value)` (`uq_recipe_line_group_value`,
+`uq_recipe_step_group_value`), and on `(recipe_id, lower(name))`
+(`uq_recipe_line_group_name`, `uq_recipe_step_group_name`). Both are NULLS
+DISTINCT, so the rows using the other arm never collide on the null. A
+group's `display_name` is the value's, else its `name`.
+
 ## `recipe_line`
 
 One ingredient line.
@@ -325,8 +351,8 @@ One ingredient line.
 | Column | Notes |
 | --- | --- |
 | `recipe_id` | the owner, `CASCADE` |
-| `position` | required, unique per recipe (`uq_recipe_line_position`) |
-| `section` | optional heading the line sits under — 醬汁, 醃料 |
+| `position` | required, unique per recipe (`uq_recipe_line_position`); runs through the whole recipe in display order — the ungrouped lines, then group by group |
+| `group_id` | → `recipe_line_group`, `SET NULL`, indexed; null is ungrouped |
 | `ingredient_id` | → `ingredient`, `RESTRICT` |
 | `sub_recipe_id` | → `recipe`, `RESTRICT` — another recipe used as an ingredient, usually a base; any `kind` is accepted |
 | `amount`, `note` | free text |
@@ -343,10 +369,16 @@ the write path.
 The same ingredient may appear on two lines — once for the meat, once for the
 sauce — so nothing is unique on it.
 
+**A line's group belongs to the same recipe.** The write path only ever
+builds them together; a single-column foreign key cannot say so, and a
+composite one could not be `SET NULL` without nulling `recipe_id` with it.
+
 ## `recipe_step`
 
 One step of the method: `position` (unique per recipe,
-`uq_recipe_step_position`), an optional `section`, and a required `body`.
+`uq_recipe_step_position`, running through the recipe as a line's does, so a
+step's number is its position plus one), `group_id` (→ `recipe_step_group`,
+`SET NULL`, null is ungrouped), and a required `body`.
 
 ## `kitchen_note`
 
@@ -385,7 +417,8 @@ Labels have two name slots, not three; a tag has no formal alternative form.
 | ingredient → its children | `RESTRICT` |
 | ingredient → the recipe lines that name it | `RESTRICT` |
 | category → its ingredients and child categories | `RESTRICT` |
-| recipe → its aliases, sources, lines, steps, gallery rows, and serves-as, label, method and equipment links | `CASCADE` |
+| recipe → its aliases, sources, line and step groups, lines, steps, gallery rows, and serves-as, label, method and equipment links | `CASCADE` |
+| line or step group → the lines or steps in it | `SET NULL` — they become ungrouped |
 | recipe → the lines in other recipes that name it as a base | `RESTRICT` |
 | recipe → its versions | `SET NULL` |
 | kitchen note → its label links and gallery rows | `CASCADE` |
@@ -394,6 +427,7 @@ Labels have two name slots, not three; a tag has no formal alternative form.
 | course → its serves-as links; label → any link | `CASCADE` |
 | cooking method → the heating rows and recipe links that use it | `RESTRICT` |
 | equipment → the recipe links that use it | `RESTRICT` |
+| 材料分組 or 步驟分組 value → the recipe groups naming it | `RESTRICT` |
 | image → the gallery rows that attach it | `RESTRICT` |
 
 The asymmetry is the point and it is the kind that reads as uniform: an alias
@@ -426,11 +460,11 @@ pages.
 | Recipe doc | `Link:` (sometimes two) | `recipe_source` rows |
 | Recipe doc | `人數` | `recipe.servings` |
 | Recipe doc | ingredient list, amounts | `recipe_line` (ingredient link + `amount`) |
-| Recipe doc | ingredient groups (漢堡醬, 調味料, for soup) | `recipe_line.section` |
+| Recipe doc | ingredient groups (漢堡醬, 調味料, for soup) | `recipe_line_group` (a `line_group` value or a one-off name) |
 | Recipe doc | `optional`, `自由添加`, `可省` | `recipe_line.is_optional` |
 | Recipe doc | `米酒or清酒`, `味醂可代替糖` | `recipe_line.note` |
 | Recipe doc | a sauce used inside a dish (蚵仔煎醬) | `recipe.kind = base`, nested via `recipe_line.sub_recipe_id` |
-| Recipe doc | `Steps for 備料 / 醬汁備料 / cooking / noodles` | `recipe_step.section` |
+| Recipe doc | `Steps for 備料 / 醬汁備料 / cooking / noodles` | `recipe_step_group` (a `step_group` value or a one-off name) |
 | Recipe doc | `* tips`, `Notes:`, unit conversions inside a recipe | `recipe.notes` |
 | Recipe doc | `保存期限約3天`, `放涼再裝, 冰冰箱保存` | `recipe.storage_notes` |
 | Recipe doc | section headers 主食 / 配菜 / 湯 / 小吃 / 甜點 / 飲料 / 醬料 | `recipe.course_id` |

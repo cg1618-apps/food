@@ -14,7 +14,7 @@
 const API = '/api'
 const WRITE = '/api/edit'
 
-// The six vocabularies the backend builds from one factory
+// The eight vocabularies the backend builds from one factory
 // (app/routers/vocabulary.py) share one URL shape.
 function vocabulary(resource) {
   return {
@@ -87,6 +87,10 @@ export const endpoints = {
   equipment: vocabulary('equipment'),
   // A source's author; listed by name, and grown by the recipe form too.
   authors: vocabulary('authors'),
+  // The groups a recipe's ingredient lines (材料分組) and steps (步驟分組)
+  // are picked from; a recipe may also name a group of its own.
+  lineGroups: vocabulary('line-groups'),
+  stepGroups: vocabulary('step-groups'),
   vocabularies: {
     // Every closed list with its display label: preservation methods and
     // states, ratings, recipe kinds, note kinds.

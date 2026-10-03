@@ -591,6 +591,61 @@ What the branch after module 1 chose, and what it turned down.
   `name_en` - the rule `lib/recipeLines.js` applies to any typed name, copied
   into the migration because a revision imports nothing from the app.
 
+### Line and step groups
+
+- **Groups are real per-recipe rows, not a label on each row.** The first
+  shape was a free-text `section` on every line and step, grouped by the page
+  on equal text. That is a label, not a group: an empty group could not
+  exist, renaming one meant editing every row, the order of groups was
+  whatever order their first rows happened to be in, and 醬汁 and 醬汁 with a
+  trailing space were two groups. `recipe_line_group` and
+  `recipe_step_group` make the group the thing the rows point at - it has a
+  position, may be empty, and is renamed once.
+- **A group is a 設定 value or a one-off name, exactly one.** Most recipes
+  reuse the same few groups (主料, 調味料 / 備料, 烹飪), which should be one
+  tap and one spelling; a few need their own (漢堡醬, 醃料), which should not
+  have to be added to 設定 first. One column each, a CHECK that exactly one is
+  set, and a name matching a value stored as the value - so "the same group"
+  has one representation and the uniques can refuse a recipe holding it
+  twice.
+- **Two lists, not one.** What groups ingredients (主料, 配料) is rarely what
+  groups the method (備料, 烹飪, 醬汁 - where 醬汁 is a stage, not a pile of
+  ingredients). One shared list would offer every step group under 材料 and
+  every line group under 步驟.
+- **A row's `group_id` is `SET NULL`, not `CASCADE`.** The save replaces
+  everything anyway, so either would serve it; `SET NULL` says what the form
+  says - a group going never takes its rows with it, they become ungrouped -
+  so the model and 移除分組 agree, and a group deleted by any other path
+  cannot quietly delete steps. `RESTRICT` would have made the save order
+  carry the rule.
+- **Positions run through the whole recipe, in display order.** Ungrouped
+  rows first, then group by group. Keeping the per-recipe unique on position
+  means `recipe.lines` and `recipe.steps` are still the whole list in reading
+  order for every reader that does not care about groups - "written up", the
+  delete counts, used-in, merge - and a step's number is its position plus
+  one.
+- **The wire keeps `lines` and `steps` as the ungrouped rows**, with
+  `line_groups` and `step_groups` beside them carrying their own. Nesting
+  every row in a group would have needed a synthetic "no group" group, which
+  is a group the owner never made.
+- **A PATCH replaces a pair together, and one half alone is a 422.**
+  `lines` without `line_groups` would have to guess: keep the stored groups
+  and their rows (so the recipe has lines the client did not send), or drop
+  them (so a client that never heard of groups deletes rows it never saw).
+  Refusing is the only answer that does not guess, and the form always sends
+  every list anyway.
+- **One drag system, extended.** Rows moving between groups is dnd-kit's
+  multiple-containers shape; rather than a second component, `Sortable.jsx`
+  grew a `SortableBoard` that the existing `SortableList` joins by naming its
+  container, so every handle, its keyboard path and its focus rule stay one
+  implementation. The keyboard crossing a group's edge is what makes moving
+  between groups possible without a pointer - and what the tests drive.
+- **`g1roups` keeps the old sections as groups.** Distinct non-blank sections,
+  trimmed and compared lower-cased, in first-use order, become groups; one
+  matching a seeded value's name becomes that value. Rows keep their relative
+  order and are re-positioned ungrouped-first, which is also how the old page
+  showed them.
+
 ## Kitchen notes
 
 - **A note has a title, not name slots.** It is a bookmark - a compilation, a

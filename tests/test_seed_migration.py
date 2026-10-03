@@ -369,3 +369,165 @@ def test_the_author_migration_makes_one_author_per_distinct_creator_and_back(scr
     }
     assert only_author == "Babish"
     assert tables == 0
+
+
+def _rows(conn, table: str, group_table: str, vocabulary: str, recipe: int, field: str):
+    """`(group display name or None, field)` for one recipe's rows, in position
+    order, with the positions themselves."""
+    return conn.execute(
+        text(
+            f"SELECT coalesce(v.name_cn, g.name), r.{field}, r.position FROM {table} r "
+            f"LEFT JOIN {group_table} g ON g.id = r.group_id "
+            f"LEFT JOIN {vocabulary} v ON v.id = g.{vocabulary}_id "
+            "WHERE r.recipe_id = :r ORDER BY r.position"
+        ),
+        {"r": recipe},
+    ).all()
+
+
+def test_the_group_migration_turns_sections_into_groups_and_back(scratch):
+    """Rows already carrying sections are the fixture: on empty tables the
+    grouping touches nothing, and a migration that dropped `section` unread
+    would pass. A section split by a later row (醬汁, 主料, 醬汁), a section
+    matching a seeded value in another case (主料 / 備料), a padded one, a
+    blank one and rows with none are what make the first-use order, the
+    vocabulary match, the trim and the ungrouped-first re-numbering each bite.
+    """
+    _alembic("upgrade", "a1uthors")
+    with scratch.begin() as conn:
+        status = conn.execute(text("SELECT id FROM recipe_status ORDER BY sort_order")).scalar()
+        category = conn.execute(
+            text("SELECT id FROM ingredient_category WHERE is_fallback")
+        ).scalar()
+        ingredient = conn.execute(
+            text("INSERT INTO ingredient (name_cn, category_id) VALUES ('測試用食材', :c) RETURNING id"),
+            {"c": category},
+        ).scalar()
+        recipe, other = (
+            conn.execute(
+                text("INSERT INTO recipe (name_cn, status_id) VALUES (:n, :s) RETURNING id"),
+                {"n": name, "s": status},
+            ).scalar()
+            for name in ("麻婆豆腐", "白飯")
+        )
+        for position, (section, note) in enumerate(
+            [
+                ("醬汁", "a"),
+                (None, "b"),
+                ("主料", "c"),
+                (" 醬汁 ", "d"),  # padded: the same group
+                ("  ", "e"),  # blank: no group
+                ("Sauce", "f"),
+                ("sauce", "g"),  # another case: the same one-off group
+            ]
+        ):
+            conn.execute(
+                text(
+                    "INSERT INTO recipe_line (recipe_id, position, section, ingredient_id, note) "
+                    "VALUES (:r, :p, :s, :i, :n)"
+                ),
+                {"r": recipe, "p": position, "s": section, "i": ingredient, "n": note},
+            )
+        for position, (section, body) in enumerate(
+            [("備料", "切"), (None, "看"), ("炒", "炒"), ("備料", "醃")]
+        ):
+            conn.execute(
+                text(
+                    "INSERT INTO recipe_step (recipe_id, position, section, body) "
+                    "VALUES (:r, :p, :s, :b)"
+                ),
+                {"r": recipe, "p": position, "s": section, "b": body},
+            )
+        conn.execute(
+            text("INSERT INTO recipe_step (recipe_id, position, body) VALUES (:r, 0, '煮')"),
+            {"r": other},
+        )
+
+    _alembic("upgrade", "g1roups")
+    with scratch.begin() as conn:
+        line_values = conn.execute(
+            text("SELECT name_cn FROM line_group ORDER BY sort_order")
+        ).scalars().all()
+        step_values = conn.execute(
+            text("SELECT name_cn FROM step_group ORDER BY sort_order")
+        ).scalars().all()
+        line_groups = conn.execute(
+            text(
+                "SELECT g.position, v.name_cn, g.name FROM recipe_line_group g "
+                "LEFT JOIN line_group v ON v.id = g.line_group_id "
+                "WHERE g.recipe_id = :r ORDER BY g.position"
+            ),
+            {"r": recipe},
+        ).all()
+        step_groups = conn.execute(
+            text(
+                "SELECT g.position, v.name_cn, g.name FROM recipe_step_group g "
+                "LEFT JOIN step_group v ON v.id = g.step_group_id "
+                "WHERE g.recipe_id = :r ORDER BY g.position"
+            ),
+            {"r": recipe},
+        ).all()
+        lines = _rows(conn, "recipe_line", "recipe_line_group", "line_group", recipe, "note")
+        steps = _rows(conn, "recipe_step", "recipe_step_group", "step_group", recipe, "body")
+        others = _rows(conn, "recipe_step", "recipe_step_group", "step_group", other, "body")
+        columns = set(
+            conn.execute(
+                text(
+                    "SELECT table_name || '.' || column_name FROM information_schema.columns "
+                    "WHERE table_name IN ('recipe_line', 'recipe_step')"
+                )
+            ).scalars()
+        )
+
+    assert line_values == ["主料", "配料", "調味料"]
+    assert step_values == ["備料", "烹飪", "醬汁"]
+    # First-use order; 主料 is the seeded value, the rest one-off names, the
+    # first spelling kept.
+    assert line_groups == [(0, None, "醬汁"), (1, "主料", None), (2, None, "Sauce")]
+    # 醬汁 is a step-group value, so on the step side it would match - but no
+    # step used it. 備料 matches; 炒 does not.
+    assert step_groups == [(0, "備料", None), (1, None, "炒")]
+    # Ungrouped first, then group by group; relative order kept inside each.
+    assert lines == [
+        (None, "b", 0),
+        (None, "e", 1),
+        ("醬汁", "a", 2),
+        ("醬汁", "d", 3),
+        ("主料", "c", 4),
+        ("Sauce", "f", 5),
+        ("Sauce", "g", 6),
+    ]
+    assert steps == [(None, "看", 0), ("備料", "切", 1), ("備料", "醃", 2), ("炒", "炒", 3)]
+    assert others == [(None, "煮", 0)]
+    assert "recipe_line.section" not in columns and "recipe_line.group_id" in columns
+    assert "recipe_step.section" not in columns and "recipe_step.group_id" in columns
+
+    _alembic("downgrade", "a1uthors")
+    with scratch.connect() as conn:
+        restored_lines = conn.execute(
+            text("SELECT section, note, position FROM recipe_line ORDER BY position")
+        ).all()
+        restored_steps = conn.execute(
+            text(
+                "SELECT section, body, position FROM recipe_step WHERE recipe_id = :r "
+                "ORDER BY position"
+            ),
+            {"r": recipe},
+        ).all()
+        tables = conn.execute(
+            text(
+                "SELECT count(*) FROM information_schema.tables WHERE table_name IN "
+                "('line_group', 'step_group', 'recipe_line_group', 'recipe_step_group')"
+            )
+        ).scalar()
+    assert restored_lines == [
+        (None, "b", 0),
+        (None, "e", 1),
+        ("醬汁", "a", 2),
+        ("醬汁", "d", 3),
+        ("主料", "c", 4),
+        ("Sauce", "f", 5),
+        ("Sauce", "g", 6),
+    ]
+    assert restored_steps == [(None, "看", 0), ("備料", "切", 1), ("備料", "醃", 2), ("炒", "炒", 3)]
+    assert tables == 0

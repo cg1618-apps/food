@@ -8,6 +8,11 @@ all-optional model applied with `exclude_unset`.
 A line carries no type field. Which kind of line it is comes from which target
 is set, and `extra="forbid"` turns a payload claiming a type into a 422 rather
 than something a later reader might trust.
+
+Lines and steps travel in pairs: `lines` are the ungrouped lines and
+`line_groups` the groups with theirs, and the same for `steps` and
+`step_groups`. A save replaces a pair together, so a PATCH sending one half
+without the other is a 422 rather than a guess about the half it left out.
 """
 
 from datetime import datetime
@@ -23,7 +28,9 @@ LIST_FIELDS = (
     "aliases",
     "sources",
     "lines",
+    "line_groups",
     "steps",
+    "step_groups",
     "serves_as_ids",
     "label_ids",
     "method_ids",
@@ -122,7 +129,6 @@ class SourceResponse(BaseModel):
 class LineIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    section: str | None = None
     ingredient_id: int | None = None
     sub_recipe_id: int | None = None
     new_ingredient: NewNameIn | None = None
@@ -130,7 +136,7 @@ class LineIn(BaseModel):
     note: str | None = None
     is_optional: bool = False
 
-    @field_validator("section", "amount", "note", mode="before")
+    @field_validator("amount", "note", mode="before")
     @classmethod
     def blank_is_absent(cls, value):
         return _normalise(value)
@@ -150,13 +156,7 @@ class LineIn(BaseModel):
 class StepIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    section: str | None = None
     body: str
-
-    @field_validator("section", mode="before")
-    @classmethod
-    def blank_is_absent(cls, value):
-        return _normalise(value)
 
     @field_validator("body")
     @classmethod
@@ -165,6 +165,53 @@ class StepIn(BaseModel):
         if not value:
             raise ValueError("A step needs some text")
         return value
+
+
+def _one_group_name(group, value_field: str):
+    # Mirrors ck_recipe_line_group_one_name / ck_recipe_step_group_one_name.
+    if (getattr(group, value_field) is None) == (group.name is None):
+        raise ValueError(f"A group names exactly one of {value_field} or name")
+    return group
+
+
+class LineGroupIn(BaseModel):
+    """One group of lines: a 材料分組 value, or a one-off name - a name that
+    matches a value is stored as that value - and the lines in it, in order.
+    Empty is allowed: the group is kept."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    line_group_id: int | None = None
+    name: str | None = None
+    lines: list[LineIn] = []
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def blank_is_absent(cls, value):
+        return _normalise(value)
+
+    @model_validator(mode="after")
+    def exactly_one_name(self):
+        return _one_group_name(self, "line_group_id")
+
+
+class StepGroupIn(BaseModel):
+    """One group of steps, as LineGroupIn, naming a 步驟分組 value."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    step_group_id: int | None = None
+    name: str | None = None
+    steps: list[StepIn] = []
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def blank_is_absent(cls, value):
+        return _normalise(value)
+
+    @model_validator(mode="after")
+    def exactly_one_name(self):
+        return _one_group_name(self, "step_group_id")
 
 
 class IngredientRef(BaseModel):
@@ -186,7 +233,6 @@ class RecipeRef(BaseModel):
 class LineResponse(BaseModel):
     id: int
     position: int
-    section: str | None = None
     ingredient: IngredientRef | None = None
     sub_recipe: RecipeRef | None = None
     amount: str | None = None
@@ -199,8 +245,28 @@ class StepResponse(BaseModel):
 
     id: int
     position: int
-    section: str | None = None
     body: str
+
+
+class LineGroupResponse(BaseModel):
+    """`group` is the 設定 value or null, `name` the one-off name or null -
+    exactly one is set - and `display_name` whichever it is."""
+
+    id: int
+    position: int
+    group: VocabRef | None = None
+    name: str | None = None
+    display_name: str = ""
+    lines: list[LineResponse] = []
+
+
+class StepGroupResponse(BaseModel):
+    id: int
+    position: int
+    group: VocabRef | None = None
+    name: str | None = None
+    display_name: str = ""
+    steps: list[StepResponse] = []
 
 
 class RecipeCreate(BaseModel):
@@ -222,7 +288,9 @@ class RecipeCreate(BaseModel):
     aliases: list[str] = []
     sources: list[SourceIn] = []
     lines: list[LineIn] = []
+    line_groups: list[LineGroupIn] = []
     steps: list[StepIn] = []
+    step_groups: list[StepGroupIn] = []
     serves_as_ids: list[int] = []
     label_ids: list[int] = []
     method_ids: list[int] = []
@@ -280,7 +348,9 @@ class RecipeUpdate(BaseModel):
     aliases: list[str] | None = None
     sources: list[SourceIn] | None = None
     lines: list[LineIn] | None = None
+    line_groups: list[LineGroupIn] | None = None
     steps: list[StepIn] | None = None
+    step_groups: list[StepGroupIn] | None = None
     serves_as_ids: list[int] | None = None
     label_ids: list[int] | None = None
     method_ids: list[int] | None = None
@@ -307,6 +377,19 @@ class RecipeUpdate(BaseModel):
     @classmethod
     def clean_aliases(cls, values: list[str] | None) -> list[str] | None:
         return None if values is None else _clean_aliases(values)
+
+    @model_validator(mode="after")
+    def pairs_travel_together(self):
+        """`lines` with `line_groups`, `steps` with `step_groups`: both or
+        neither, and neither half null. Replacing one half alone would have
+        to guess what happens to the rows in the other."""
+        for rows, groups in (("lines", "line_groups"), ("steps", "step_groups")):
+            sent = {rows, groups} & self.model_fields_set
+            if not sent:
+                continue
+            if len(sent) == 1 or getattr(self, rows) is None or getattr(self, groups) is None:
+                raise ValueError(f"{rows} and {groups} are replaced together; send both")
+        return self
 
 
 class RecipeSummary(BaseModel):
@@ -348,8 +431,11 @@ class RecipeResponse(BaseModel):
 
     aliases: list[str] = []
     sources: list[SourceResponse] = []
+    # The ungrouped rows; each group carries its own.
     lines: list[LineResponse] = []
+    line_groups: list[LineGroupResponse] = []
     steps: list[StepResponse] = []
+    step_groups: list[StepGroupResponse] = []
     serves_as: list[VocabRef] = []
     labels: list[VocabRef] = []
     methods: list[VocabRef] = []

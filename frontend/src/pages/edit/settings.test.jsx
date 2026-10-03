@@ -114,6 +114,11 @@ const AUTHORS = [
   { id: 3, display_name: '阿基師', name_cn: '阿基師', name_en: null, sort_order: 0, usage_count: 2 },
 ]
 
+const STEP_GROUPS = [
+  { id: 1, display_name: '備料', name_cn: '備料', name_en: null, sort_order: 10, usage_count: 3 },
+  { id: 2, display_name: '烹飪', name_cn: '烹飪', name_en: null, sort_order: 20, usage_count: 0 },
+]
+
 const LABELS = [
   {
     id: 7,
@@ -133,6 +138,7 @@ function settingsData({ url, method }) {
   if (url === '/api/recipe-statuses') return json(STATUSES)
   if (url === '/api/source-platforms') return json(PLATFORMS)
   if (url === '/api/authors') return json(AUTHORS)
+  if (url === '/api/step-groups') return json(STEP_GROUPS)
   if (url === '/api/ingredient-categories') return json(TREE)
   if (url === '/api/labels') return json(LABELS)
   return null
@@ -155,6 +161,8 @@ describe('設定', () => {
       '狀態',
       '來源',
       '作者',
+      '材料分組',
+      '步驟分組',
       '做法',
       '器材',
     ])
@@ -325,6 +333,19 @@ describe('設定', () => {
         { url: '/api/edit/authors', method: 'POST', body: { name_cn: '詹姆士', name_en: null } },
       ]),
     )
+  })
+
+  it('keeps 步驟分組 in hand order on a tab of its own, with its usage', async () => {
+    handler = settingsData
+    renderAt('/edit/settings?tab=step-groups')
+    expect(screen.getByRole('tab', { name: '步驟分組' }).getAttribute('aria-selected')).toBe('true')
+    const groups = await screen.findByRole('list', { name: '步驟分組' })
+    expect(within(groups).getAllByRole('listitem').map((row) => row.getAttribute('aria-label'))).toEqual([
+      '備料',
+      '烹飪',
+    ])
+    expect(within(groups).getByRole('listitem', { name: '備料' }).textContent).toContain('用在 3 個地方')
+    expect(within(groups).getByRole('button', { name: '排序 「烹飪」' })).toBeTruthy()
   })
 
   it('adds a value after the last one', async () => {

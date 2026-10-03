@@ -14,7 +14,7 @@
 // URL, the label, and what its panel renders.
 //
 // What a change here makes stale is named per vocabulary: a renamed course,
-// status, source platform or author is shown on every recipe, a renamed method on
+// status, source platform, author or 材料分組 / 步驟分組 is shown on every recipe, a renamed method on
 // recipes and on ingredient heating rows, a renamed label on all three kinds
 // of owner.
 import { endpoints } from '../../api/endpoints'
@@ -28,9 +28,10 @@ const RECIPES = endpoints.recipes.list()
 const INGREDIENTS = endpoints.ingredients.list()
 const NOTES = endpoints.notes.list()
 
-// The six factory vocabularies: one shape, one count (`usage_count`, the
+// The eight factory vocabularies: one shape, one count (`usage_count`, the
 // RESTRICT references that would stop a delete). Authors are listed by name
-// like labels, so they have no order to move by.
+// like labels, so they have no order to move by. `key` is the tab id and,
+// unless `vocabulary` says otherwise, the api/endpoints.js group.
 const FACTORY = [
   {
     key: 'courses',
@@ -60,6 +61,22 @@ const FACTORY = [
     addLabel: '新增作者',
     ordered: false,
     invalidate: [endpoints.authors.list(), RECIPES],
+  },
+  {
+    key: 'line-groups',
+    vocabulary: 'lineGroups',
+    title: '材料分組',
+    hint: '食譜的材料可以分組：主料、配料、調味料…。食譜表單加分組時，會先列出這裡的，依這裡的順序。',
+    addLabel: '新增材料分組',
+    invalidate: [endpoints.lineGroups.list(), RECIPES],
+  },
+  {
+    key: 'step-groups',
+    vocabulary: 'stepGroups',
+    title: '步驟分組',
+    hint: '食譜的步驟可以分組：備料、烹飪、醬汁…。食譜表單加分組時，會先列出這裡的，依這裡的順序。',
+    addLabel: '新增步驟分組',
+    invalidate: [endpoints.stepGroups.list(), RECIPES],
   },
   {
     key: 'methods',
@@ -124,10 +141,10 @@ function FactoryEditor({ vocabulary, ...section }) {
 const TABS = [
   { id: 'categories', label: '食材分類', render: () => <CategoryEditor /> },
   { id: 'labels', label: '標籤', render: () => <LabelEditor /> },
-  ...FACTORY.map(({ key, ...section }) => ({
+  ...FACTORY.map(({ key, vocabulary = key, ...section }) => ({
     id: key,
     label: section.title,
-    render: () => <FactoryEditor vocabulary={key} {...section} />,
+    render: () => <FactoryEditor vocabulary={vocabulary} {...section} />,
   })),
 ]
 

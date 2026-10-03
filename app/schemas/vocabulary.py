@@ -1,4 +1,4 @@
-"""Shapes shared by the six managed vocabularies."""
+"""Shapes shared by the eight managed vocabularies."""
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 

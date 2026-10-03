@@ -83,6 +83,11 @@ or renamed has no old key and lands on `want_to_try` or `other`.
 author's display name and drops `author`. A creator that was a later spelling
 of a name (babish after Babish) comes back as the first spelling.
 
+`g1roups`'s downgrade puts each grouped line's and step's group name back
+into `section` and drops the four group tables. A recipe's empty groups have
+no row to carry their name and are lost; a section that was a later spelling
+of a group's name comes back as the first spelling.
+
 **So there is no route that keeps the data.** The real choice is:
 
 - **roll back**, and lose everything entered since the release, or
@@ -117,7 +122,8 @@ they ever do not, believe the box.
 | Kitchen notes | `k1notes` — twenty-six tables |
 | The starting ingredient list | `i3import` — no new table |
 | Statuses and source platforms as vocabularies | `v2ocabulary` — twenty-eight tables |
-| Authors as a vocabulary | `a1uthors` — twenty-nine tables, the current head |
+| Authors as a vocabulary | `a1uthors` — twenty-nine tables |
+| Line and step groups | `g1roups` — thirty-three tables, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

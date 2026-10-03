@@ -85,7 +85,7 @@ def test_a_payload_claiming_a_type_is_refused_and_cannot_change_the_stored_one(
     created = create(client, lines=[{"ingredient_id": ingredient.id}])
     response = client.patch(
         f"/api/edit/recipes/{created['id']}",
-        json={"lines": [{"type": "recipe", "ingredient_id": ingredient.id}]},
+        json={"line_groups": [], "lines": [{"type": "recipe", "ingredient_id": ingredient.id}]},
     )
     assert response.status_code == 422
     line = client.get(f"/api/recipes/{created['id']}").json()["lines"][0]
@@ -96,7 +96,7 @@ def test_a_payload_claiming_a_type_is_refused_and_cannot_change_the_stored_one(
 def test_a_recipe_cannot_use_itself(client):
     created = create(client)
     response = client.patch(
-        f"/api/edit/recipes/{created['id']}", json={"lines": [{"sub_recipe_id": created["id"]}]}
+        f"/api/edit/recipes/{created['id']}", json={"line_groups": [], "lines": [{"sub_recipe_id": created["id"]}]}
     )
     assert response.status_code == 422
 
@@ -105,7 +105,7 @@ def test_a_two_recipe_cycle_is_refused(client):
     a = create(client, name_cn="A")
     b = create(client, name_cn="B", lines=[{"sub_recipe_id": a["id"]}])
     response = client.patch(
-        f"/api/edit/recipes/{a['id']}", json={"lines": [{"sub_recipe_id": b["id"]}]}
+        f"/api/edit/recipes/{a['id']}", json={"line_groups": [], "lines": [{"sub_recipe_id": b["id"]}]}
     )
     assert response.status_code == 422
     assert client.get(f"/api/recipes/{a['id']}").json()["lines"] == []
@@ -117,7 +117,7 @@ def test_a_cycle_through_three_recipes_is_refused(client):
     b = create(client, name_cn="B", lines=[{"sub_recipe_id": c["id"]}])
     a = create(client, name_cn="A", lines=[{"sub_recipe_id": b["id"]}])
     response = client.patch(
-        f"/api/edit/recipes/{c['id']}", json={"lines": [{"sub_recipe_id": a["id"]}]}
+        f"/api/edit/recipes/{c['id']}", json={"line_groups": [], "lines": [{"sub_recipe_id": a["id"]}]}
     )
     assert response.status_code == 422
 
@@ -131,7 +131,7 @@ def test_a_chain_without_a_cycle_is_fine(client):
     d = create(client, name_cn="D")
     response = client.patch(
         f"/api/edit/recipes/{b['id']}",
-        json={"lines": [{"sub_recipe_id": c["id"]}, {"sub_recipe_id": d["id"]}]},
+        json={"line_groups": [], "lines": [{"sub_recipe_id": c["id"]}, {"sub_recipe_id": d["id"]}]},
     )
     assert response.status_code == 200, response.text
     assert len(client.get(f"/api/recipes/{a['id']}").json()["lines"]) == 2
@@ -152,8 +152,8 @@ def test_a_new_name_typed_twice_in_one_save_is_one_stub(client, db, fallback_cat
     lines = create(
         client,
         lines=[
-            {"new_ingredient": {"name_cn": "香茅"}, "section": "醃料"},
-            {"new_ingredient": {"name_cn": "香茅", "name_en": "lemongrass"}, "section": "湯"},
+            {"new_ingredient": {"name_cn": "香茅"}},
+            {"new_ingredient": {"name_cn": "香茅", "name_en": "lemongrass"}},
             {"new_ingredient": {"name_en": "LEMONGRASS"}},
         ],
     )["lines"]

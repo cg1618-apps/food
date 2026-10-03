@@ -16,8 +16,11 @@
 
 import { blankToNull, keyed } from './rowList'
 
-export function emptyLine(section = '') {
-  return keyed({ target: null, pending: '', section, amount: '', note: '', is_optional: false })
+// Which group a line is in is where it sits in the form's grouped list
+// (lib/groupedRows.js), not a field of the line.
+
+export function emptyLine() {
+  return keyed({ target: null, pending: '', amount: '', note: '', is_optional: false })
 }
 
 /** A line as GET /api/recipes/{id} returns it -> a form row. */
@@ -41,7 +44,6 @@ export function lineFromResponse(line) {
   return keyed({
     target,
     pending: '',
-    section: line.section ?? '',
     amount: line.amount ?? '',
     note: line.note ?? '',
     is_optional: Boolean(line.is_optional),
@@ -74,25 +76,26 @@ function isBlank(line) {
 }
 
 /**
- * The form's lines -> the `lines` payload. A line left entirely blank is
+ * Some of the form's lines -> their payload. A line left entirely blank is
  * dropped (an "add" pressed once too often); a line with an amount, a note or
  * a typed name but nothing chosen is an error, named by its number, rather
- * than something silently thrown away.
+ * than something silently thrown away. `start` is how many lines the form
+ * shows before these - lines are numbered through every group.
  */
-export function linesPayload(rows) {
+export function linesPayload(rows, start = 0) {
   const out = []
   rows.forEach((line, index) => {
     if (isBlank(line)) return
     if (!line.target) {
       const typed = blankToNull(line.pending)
+      const number = start + index + 1
       throw new Error(
         typed
-          ? `第 ${index + 1} 行材料打了「${typed}」，但還沒選食材或食譜：從清單選一個，或選「新增」。`
-          : `第 ${index + 1} 行材料還沒選食材或食譜。`,
+          ? `第 ${number} 行材料打了「${typed}」，但還沒選食材或食譜：從清單選一個，或選「新增」。`
+          : `第 ${number} 行材料還沒選食材或食譜。`,
       )
     }
     const base = {
-      section: blankToNull(line.section),
       amount: blankToNull(line.amount),
       note: blankToNull(line.note),
       is_optional: Boolean(line.is_optional),
@@ -102,18 +105,6 @@ export function linesPayload(rows) {
     else out.push({ ...base, new_ingredient: newNames(line.target.label) })
   })
   return out
-}
-
-/** The distinct non-blank sections of some rows, in first-use order. */
-export function sectionsOf(...lists) {
-  const seen = new Set()
-  for (const rows of lists) {
-    for (const row of rows ?? []) {
-      const section = blankToNull(row.section)
-      if (section) seen.add(section)
-    }
-  }
-  return [...seen]
 }
 
 /** Whether a target is still only a name: a saved stub, or one this save makes. */

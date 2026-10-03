@@ -96,6 +96,13 @@ is load-bearing and says so. Some examples worth knowing about:
   spellings of one name, a padded one, a kana one and a source with none -
   are what prove the de-duplication, the trim, the slot rule and the
   null-skip; on an empty table the upgrade creates no author and passes.
+  And the `g1roups` test: lines and steps carrying sections before the
+  upgrade - one section split by another (醬汁, 主料, 醬汁), one matching a
+  seeded value, a padded one, a blank one, two spellings of one name and rows
+  with none - are what prove the first-use order, the vocabulary match, the
+  trim, the de-duplication and the ungrouped-first re-numbering, and the
+  downgrade's re-flattening; on empty tables the upgrade makes no group and
+  passes.
 - `recipe_statuses` and `source_platforms` (`tests/api/conftest.py`) are the
   rows `v2ocabulary` seeds, which `create_all` does not. `recipe.status_id`
   is NOT NULL, so every module that saves a recipe takes `recipe_statuses`
@@ -106,6 +113,12 @@ is load-bearing and says so. Some examples worth knowing about:
   mirror. Authors are not seeded and have no fixture: each test that needs
   one makes it, and the `new_author` reuse test's existing author is what
   makes "reuses, does not create" able to fail.
+- `line_groups` and `step_groups` (`tests/api/conftest.py`) are the
+  材料分組 and 步驟分組 values `g1roups` seeds. They are what let a one-off
+  group name be "stored as the 設定 value": with no value to match, every
+  name stays one-off and that test would pass for the wrong reason. The 409
+  test for a group value puts a recipe group on 主料 / 備料, and the unused
+  配料 / 烹飪 beside them delete, as the mirror.
 - `image_dir` (`tests/api/test_images.py`) is **autouse**, and points
   `IMAGE_DIR` at the test's own `tmp_path`. It has to be: the `/images` mount is
   built when the app is, and the `client` fixture builds the app, so a test that
@@ -166,16 +179,17 @@ the entire failure.
 | `tests/api/test_ingredient_crud.py` | create, read, update, delete and search over HTTP; re-sending existing aliases and storage rows on `PATCH` |
 | `tests/api/test_category_crud.py`, `test_label_crud.py` | the same round trip for categories and labels |
 | `tests/api/test_ingredient_storage.py` | storage state and range, heating, links, rating, the new list filters, the delete counts and the 409 that names the moved one, `/api/vocabularies/fixed` |
-| `tests/api/test_vocabularies.py` | the six vocabularies, parametrised over one factory, the in-use 409 for each, and authors in name order |
+| `tests/api/test_vocabularies.py` | the eight vocabularies, parametrised over one factory, the in-use 409 for each, and authors in name order |
 | `tests/api/test_images.py` | upload, re-encode, deduplication, ingredient and recipe galleries (kitchen-note galleries are in `test_kitchen_notes.py`), an image's owners, deletion, serving |
 | `tests/api/test_recipe_model.py` | every named recipe constraint, each refusal with its mirror; SET NULL on a version's parent; CASCADE and RESTRICT on delete |
 | `tests/api/test_recipe_crud.py` | the recipe round trip, `PATCH` list semantics, kind and status, the default status and the 422 with none, sources and their platforms, the version rule, delete refusals and stale counts |
 | `tests/api/test_recipe_lines.py` | line targets, the claimed-type refusal, the cycle guard, stub creation and reuse |
+| `tests/api/test_recipe_groups.py` | lines and steps in groups: order and positions, a name stored as its 設定 value, the empty group, duplicate and malformed groups, the `PATCH` pair rule, stubs, cycles and "used in" through grouped lines, the delete counts, the in-use 409, SET NULL from a group to its rows |
 | `tests/api/test_recipe_library.py` | the list's search (wildcards literal) and "any of" filters (`author_id` among them), the summary's authors, and the query count |
 | `tests/api/test_kitchen_notes.py` | every named kitchen-note constraint with its mirror, CASCADE on delete, the round trip, title, kind, link and label refusals, newest-first order, `q` over title and body (wildcards literal), the "any of" filters, the query count, the gallery and the image 409 naming a note |
 | `tests/api/test_ingredient_used_in.py` | "used in" over descendants, the list filter agreeing with it, the delete refusal, the query count |
 | `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, ordering after the target's rows, the fingerprint and its 409, refusals |
-| `tests/test_seed_migration.py` | the seeds, the storage migration's copy and lossy downgrade, `v2ocabulary`'s string-to-row mapping and `a1uthors`'s creator-to-author mapping, each with its downgrade, on a scratch database |
+| `tests/test_seed_migration.py` | the seeds, the storage migration's copy and lossy downgrade, `v2ocabulary`'s string-to-row mapping, `a1uthors`'s creator-to-author mapping and `g1roups`' sections-to-groups move, each with its downgrade, on a scratch database |
 | `tests/test_ingredient_import.py` | `i3import`: the committed CSV passes validation, each validation refusal with a good mirror, and the load on a scratch database — stubs, aliases, parents, categories, the skip rule, the cycle guard, a second run, the no-op downgrade |
 | `tests/unit/test_prod_compose.py` | the production compose file, including the image bind mount |
 

@@ -3,7 +3,7 @@
 // blocks a refusal, and the recipe form's save - one target per line, and a
 // new recipe's gallery PUT only after the POST has answered with an id.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -418,13 +418,12 @@ describe('RecipeForm', () => {
     const body = writes[0].body
     expect(body.name_cn).toBe('薑汁燒肉')
     expect(body.lines).toEqual([
-      { section: null, amount: null, note: null, is_optional: false, new_ingredient: { name_cn: '紫蘇' } },
-      { section: null, amount: null, note: null, is_optional: false, sub_recipe_id: 7 },
+      { amount: null, note: null, is_optional: false, new_ingredient: { name_cn: '紫蘇' } },
+      { amount: null, note: null, is_optional: false, sub_recipe_id: 7 },
     ])
-    expect(body.steps).toEqual([
-      { section: null, body: '醃肉' },
-      { section: null, body: '煎香' },
-    ])
+    expect(body.line_groups).toEqual([])
+    expect(body.steps).toEqual([{ body: '醃肉' }, { body: '煎香' }])
+    expect(body.step_groups).toEqual([])
     expect(writes[1].body).toEqual([{ image_id: 31, focus: null }])
   })
 
@@ -563,6 +562,176 @@ describe('RecipeForm', () => {
       'A recipe cannot use itself, directly or through another recipe.',
     )
     expect(screen.getByTestId('location').textContent).toBe('/edit/recipes/new')
+  })
+})
+
+describe('RecipeForm groups', () => {
+  const STEP_GROUPS = [
+    { id: 1, display_name: '備料', name_cn: '備料', name_en: null, sort_order: 10, usage_count: 0 },
+    { id: 2, display_name: '烹飪', name_cn: '烹飪', name_en: null, sort_order: 20, usage_count: 0 },
+  ]
+  const LINE_GROUPS = [
+    { id: 11, display_name: '主料', name_cn: '主料', name_en: null, sort_order: 10, usage_count: 0 },
+    { id: 12, display_name: 'Sauce', name_cn: null, name_en: 'Sauce', sort_order: 20, usage_count: 0 },
+  ]
+  const groupData = ({ url, method }) => {
+    if (url === '/api/step-groups') return json(STEP_GROUPS)
+    if (url === '/api/line-groups') return json(LINE_GROUPS)
+    if (url.startsWith('/api/ingredients?')) return json([GINGER])
+    if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
+    if (url === '/api/edit/recipes/5' && method === 'PATCH') return json({ id: 5, images: [] })
+    return json([])
+  }
+  const area = (title) => screen.getByRole('heading', { level: 2, name: title }).closest('section')
+  const postBody = () => calls.find((c) => c.method === 'POST' && c.url === '/api/edit/recipes').body
+
+  it('puts steps in groups from 設定 chips and by name, moves them by keyboard, and pastes into a group', async () => {
+    handler = groupData
+    wrap(<AppRoutes />, '/edit/recipes/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '麻婆豆腐' } })
+    const steps = area('步驟')
+
+    // A 設定 value, one tap; then a one-off name.
+    fireEvent.click(within(steps).getByRole('button', { name: '＋ 加分組' }))
+    fireEvent.click(await within(steps).findByRole('button', { name: '＋ 備料' }))
+    fireEvent.click(within(steps).getByRole('button', { name: '＋ 加分組' }))
+    // 備料 is used, so only 烹飪 is offered.
+    expect(within(steps).queryByRole('button', { name: '＋ 備料' })).toBeNull()
+    expect(within(steps).getByRole('button', { name: '＋ 烹飪' })).toBeTruthy()
+    fireEvent.change(within(steps).getByLabelText('自訂分組名稱'), { target: { value: '收尾' } })
+    fireEvent.click(within(steps).getByRole('button', { name: '加入' }))
+
+    // A row added inside a group belongs to it; rows are numbered through all.
+    fireEvent.click(within(steps).getByRole('button', { name: '＋ 加一個步驟' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '步驟 1' }), { target: { value: '看' } })
+    fireEvent.click(within(steps).getByRole('button', { name: '＋ 加一個步驟到「備料」' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '步驟 2' }), { target: { value: '切' } })
+    fireEvent.click(within(steps).getByRole('button', { name: '＋ 加一個步驟到「備料」' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '步驟 3' }), { target: { value: '醃' } })
+    const prep = () => screen.getByRole('region', { name: '步驟分組「備料」' })
+    const finish = () => screen.getByRole('region', { name: '步驟分組「收尾」' })
+    expect(within(prep()).getAllByRole('group').map((row) => row.getAttribute('aria-label'))).toEqual([
+      '步驟 2',
+      '步驟 3',
+    ])
+
+    // Up from a group's first row crosses into the area above it, and the
+    // moved row keeps the focus.
+    fireEvent.keyDown(screen.getByRole('button', { name: '排序 步驟 2' }), { key: 'ArrowUp' })
+    expect(within(prep()).getAllByRole('textbox').map((box) => box.value)).toEqual(['醃'])
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '排序 步驟 2' }))
+    expect(screen.getByRole('textbox', { name: '步驟 2' }).value).toBe('切')
+    // Down from a group's last row goes to the start of the group below,
+    // empty or not.
+    fireEvent.keyDown(screen.getByRole('button', { name: '排序 步驟 3' }), { key: 'ArrowDown' })
+    expect(within(prep()).queryAllByRole('textbox')).toEqual([])
+    expect(within(finish()).getAllByRole('textbox').map((box) => box.value)).toEqual(['醃'])
+
+    // Groups reorder by their own handle.
+    fireEvent.keyDown(screen.getByRole('button', { name: '排序 步驟分組「收尾」' }), { key: 'ArrowUp' })
+    expect(within(steps).getAllByRole('region').map((r) => r.getAttribute('aria-label'))).toEqual([
+      '步驟分組「收尾」',
+      '步驟分組「備料」',
+    ])
+
+    // Pasted steps go to the chosen group.
+    fireEvent.click(screen.getByRole('button', { name: '貼上多行' }))
+    fireEvent.change(screen.getByLabelText(/一行一個步驟/), { target: { value: '1. 擺盤' } })
+    const target = screen.getByLabelText('加到')
+    expect(target.value).toBe(within(target).getByRole('option', { name: '不分組' }).value)
+    fireEvent.change(target, { target: { value: within(target).getByRole('option', { name: '備料' }).value } })
+    fireEvent.click(screen.getByRole('button', { name: '加入 1 個步驟' }))
+
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+    const body = postBody()
+    expect(body.steps).toEqual([{ body: '看' }, { body: '切' }])
+    expect(body.step_groups).toEqual([
+      { name: '收尾', steps: [{ body: '醃' }] },
+      { step_group_id: 1, steps: [{ body: '擺盤' }] },
+    ])
+  })
+
+  it('takes a typed name that is a 設定 value as that value, and removing a group keeps its rows', async () => {
+    handler = groupData
+    wrap(<AppRoutes />, '/edit/recipes/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    const lines = area('材料')
+
+    fireEvent.click(within(lines).getByRole('button', { name: '＋ 加分組' }))
+    await within(lines).findByRole('button', { name: '＋ 主料' })
+    fireEvent.change(within(lines).getByLabelText('自訂分組名稱'), { target: { value: ' sauce ' } })
+    fireEvent.click(within(lines).getByRole('button', { name: '加入' }))
+    expect(screen.getByLabelText('材料分組 1 名稱').value).toBe('Sauce')
+
+    fireEvent.click(within(lines).getByRole('button', { name: '＋ 加一行材料到「Sauce」' }))
+    fireEvent.change(screen.getByRole('combobox', { name: '材料 1' }), { target: { value: '薑' } })
+    fireEvent.click(await screen.findByRole('option', { name: /^薑/ }))
+
+    fireEvent.click(within(lines).getByRole('button', { name: '＋ 加分組' }))
+    fireEvent.click(within(lines).getByRole('button', { name: '＋ 主料' }))
+    // Renaming the header to a name that is no 設定 value makes it a one-off.
+    fireEvent.change(screen.getByLabelText('材料分組 2 名稱'), { target: { value: '主料們' } })
+
+    expect(within(lines).getByText(/移除分組時，裡面的項目會移到最上面的不分組區，不會刪掉/)).toBeTruthy()
+    fireEvent.click(within(lines).getByRole('button', { name: '移除材料分組「Sauce」' }))
+    expect(screen.queryByRole('region', { name: '材料分組「Sauce」' })).toBeNull()
+    expect(within(lines).getByText('薑')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+    const body = postBody()
+    expect(body.lines).toEqual([{ amount: null, note: null, is_optional: false, ingredient_id: 1 }])
+    expect(body.line_groups).toEqual([{ name: '主料們', lines: [] }])
+  })
+
+  it('loads a saved recipe into its groups and sends them back unchanged', async () => {
+    const line = (id, ingredientId) => ({
+      id,
+      position: id,
+      ingredient: { id: ingredientId, display_name: `食材${ingredientId}`, needs_detail: false },
+      sub_recipe: null,
+      amount: null,
+      note: null,
+      is_optional: false,
+    })
+    const RECIPE = {
+      id: 5,
+      display_name: '麻婆豆腐',
+      name_cn: '麻婆豆腐',
+      kind: 'dish',
+      status: { id: 1, display_name: '想試' },
+      sources: [],
+      lines: [line(0, 1)],
+      line_groups: [
+        { id: 3, position: 0, group: { id: 11, display_name: '主料' }, name: null, display_name: '主料', lines: [line(1, 2)] },
+      ],
+      steps: [],
+      step_groups: [{ id: 4, position: 0, group: null, name: '收尾', display_name: '收尾', steps: [] }],
+      serves_as: [],
+      labels: [],
+      methods: [],
+      equipment: [],
+      images: [],
+      aliases: [],
+      variant_of: null,
+      versions: [],
+      used_in: [],
+      written_up: true,
+    }
+    handler = (call) =>
+      call.url === '/api/recipes/5' || call.method === 'PATCH' ? json(RECIPE) : groupData(call)
+    wrap(<AppRoutes />, '/edit/recipes/5')
+    expect(await screen.findByRole('region', { name: '材料分組「主料」' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/5'))
+    const body = calls.find((c) => c.method === 'PATCH').body
+    expect(body.lines).toEqual([{ amount: null, note: null, is_optional: false, ingredient_id: 1 }])
+    expect(body.line_groups).toEqual([
+      { line_group_id: 11, lines: [{ amount: null, note: null, is_optional: false, ingredient_id: 2 }] },
+    ])
+    expect(body.steps).toEqual([])
+    expect(body.step_groups).toEqual([{ name: '收尾', steps: [] }])
   })
 })
 
