@@ -68,7 +68,9 @@ export function LinkButton({ kind = 'outline', size = 'md', className, ...rest }
 // control so clicking the words focuses it without an id to keep in step.
 export function Field({ label, hint, className, children }) {
   return (
-    <label className={cx('block space-y-1', className)}>
+    // min-w-0: as a grid or flex item a Field would otherwise refuse to shrink
+    // below its input's intrinsic width and run out of its column.
+    <label className={cx('block min-w-0 space-y-1', className)}>
       <span className="text-sm font-medium text-text-muted">{label}</span>
       {children}
       {hint ? <span className="block text-xs text-text-faint">{hint}</span> : null}
