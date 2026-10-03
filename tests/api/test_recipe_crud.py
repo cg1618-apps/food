@@ -71,8 +71,8 @@ def test_a_recipe_round_trips_through_create_read_update_delete(
         sources=[
             {"platform_id": youtube.id, "author_id": vocab["author"].id, "url": "https://example.com/v"}
         ],
-        lines=[{"ingredient_id": ingredient.id, "amount": "1 小塊", "section": "爆香"}],
-        steps=[{"body": "蛋打散"}, {"section": "炒", "body": "下番茄"}],
+        lines=[{"ingredient_id": ingredient.id, "amount": "1 小塊"}],
+        steps=[{"body": "蛋打散"}, {"body": "下番茄"}],
         serves_as_ids=[vocab["side"].id],
         label_ids=[vocab["label"].id],
         method_ids=[vocab["method"].id],
@@ -147,7 +147,7 @@ def test_patch_leaves_absent_lists_alone_and_replaces_sent_ones(
     )
     body = client.patch(
         f"/api/edit/recipes/{created['id']}",
-        json={"steps": [{"body": "two"}, {"body": "three"}], "method_ids": []},
+        json={"steps": [{"body": "two"}, {"body": "three"}], "step_groups": [], "method_ids": []},
     ).json()
     assert [s["body"] for s in body["steps"]] == ["two", "three"]
     assert body["methods"] == []
@@ -168,7 +168,9 @@ def test_re_sending_the_same_lists_unchanged_does_not_collide_with_itself(
         "aliases": ["x", "y"],
         "sources": [{"platform_id": source_platforms["網站"].id, "url": "https://example.com"}],
         "lines": [{"ingredient_id": ingredient.id}, {"ingredient_id": ingredient.id, "amount": "2"}],
+        "line_groups": [],
         "steps": [{"body": "one"}, {"body": "two"}],
+        "step_groups": [],
         "label_ids": [vocab["label"].id],
         "serves_as_ids": [vocab["side"].id],
     }
@@ -503,7 +505,7 @@ def test_a_recipe_used_as_a_sub_recipe_cannot_be_deleted(client):
     assert client.get(f"/api/recipes/{base['id']}").status_code == 200
 
     # Mirror: once nothing names it, it deletes.
-    client.patch(f"/api/edit/recipes/{dish['id']}", json={"lines": []})
+    client.patch(f"/api/edit/recipes/{dish['id']}", json={"line_groups": [], "lines": []})
     response = client.delete(
         f"/api/edit/recipes/{base['id']}", params=delete_params(client, base["id"])
     )

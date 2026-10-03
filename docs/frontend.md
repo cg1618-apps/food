@@ -42,7 +42,7 @@ phone in a shop, signed out: selection notes, the preservation methods with
 their durations, where to get the thing. Everything else is a list or a form.
 
 **Every vocabulary shares one page**, 設定, a tab each. They are the
-same kind of work — maintaining a short list — and a page each would be eight
+same kind of work — maintaining a short list — and a page each would be ten
 screens with a handful of rows on them.
 
 **There is no route guard, and there must not be one.** The gate is Cloudflare
@@ -169,9 +169,10 @@ empties.
   them; title, linked out when there is a URL, the URL's host standing in
   for a missing title);
   其他版本 (`lib/versions.js`: the original first, marked 原版, then the
-  siblings, never the recipe itself); 材料 and 步驟 grouped by section
-  (`lib/sections.js`: one block per section in first-use order, rows keeping
-  their order; steps numbered through the whole recipe); 保存; 筆記; 用在
+  siblings, never the recipe itself); 材料 and 步驟 in their groups
+  (`lib/recipeGroups.js`: the ungrouped rows first, without a heading, then a
+  block per group under its name, in the recipe's group order; an empty group
+  is left out; steps numbered through every group); 保存; 筆記; 用在
   (the recipes naming a base directly). A line links to its ingredient or
   sub-recipe; an optional line is drawn faint with （可省略）; a stub
   ingredient carries 待補.
@@ -234,14 +235,17 @@ if the categories fail to load.
 - **Each save invalidates every read its write can move**, not only its own:
   a recipe save also marks the ingredient library and the category tree
   stale (a 新增 line files a stub in the fallback category, whose count
-  moves), the label, course, status, source platform, method and equipment
-  counts and the image library; an ingredient save, its delete and a merge move the category
+  moves), the label, course, status, source platform, method, equipment,
+  材料分組 and 步驟分組 counts and the image library; an ingredient save, its delete and a merge move the category
   tree, labels, methods (heating rows), recipes (line names, used-in) and
   images; a note moves labels and images.
 - **Every list is `components/forms/RowEditor.jsx`**: controlled `rows` /
   `onChange`, each row with a drag handle (⠿) and ✕, an add button under
   the list, and a render prop for the row's cells (`children(row, { index,
-  update })`). The list operations are one pure reducer, `lib/rowList.js`;
+  number, update })`). Inside a grouped editor (below) a RowEditor is one
+  container of a board: `container` names it and `start` is how many rows
+  come before it, so rows are numbered - and their controls named, 「材料 3」 -
+  through every group. The list operations are one pure reducer, `lib/rowList.js`;
   each row carries a browser-only `_key` so a reorder keeps React's state with
   its row, and the payload builders never send it.
 - **Every reorder is a drag**, through `components/ui/Sortable.jsx`
@@ -254,6 +258,16 @@ if the categories fail to load.
   gallery's grid), and focus follows the row - the keyboard path, and the one
   the tests drive, since jsdom cannot drag. A vertical list's drag is locked
   to the vertical axis.
+- **Rows that move between lists** share one `SortableBoard`: it is the one
+  drag area, each `SortableList` inside it names its `container` and opens no
+  drag area of its own, and `onMoveItem(from, to)` gets `{ container, index }`
+  places. `SortableContainers` makes the containers themselves reorderable by
+  a `DragHandle` of their own (`onMoveContainer(from, to)`). A dragged row
+  meets rows and the drop zone of an empty container; a dragged container
+  meets containers. The keyboard path crosses edges: Up on a container's
+  first row puts it at the end of the container above, Down on its last at
+  the start of the one below (`lib/boardMoves.js`), and focus follows the row
+  by its id.
 - **Choosing from a short vocabulary** - labels, methods, equipment,
   serves-as - is `ChipPicker.jsx`, toggle chips with `aria-pressed`.
 - **Aliases are one box**, split on any comma or 、 (`splitAliases`): they are
@@ -291,6 +305,23 @@ amount, a note or typed-but-unpicked text (the row's `pending`, never sent)
 and nothing chosen is refused by number - 「第 n 行材料…還沒選食材或食譜」.
 A blank step is dropped the same way.
 
+**材料 and 步驟 sit in groups** (`components/forms/GroupedRowEditor.jsx`,
+state and operations in `lib/groupedRows.js`). The ungrouped rows come first,
+with their own add button; then each group is a box: a header with its drag
+handle, its name and 移除分組, its rows, and its own add button
+(「＋ 加一行材料到「醬汁」」), so a row added there belongs to it. 「＋ 加分組」
+under the boxes offers the 設定 values (材料分組 or 步驟分組) this recipe does
+not use yet as one-tap chips, in 設定's order, and a box for a one-off name.
+A typed name that is a 設定 value, trimmed and in any case, is that value -
+in the add box and in a header's name box alike, which is how a group is
+renamed or repicked; one the recipe already has cannot be added again.
+**Removing a group keeps its rows**: they move to the end of the ungrouped
+rows, as the hint under 「＋ 加分組」 says. Rows drag within a group and
+between groups, groups drag by their header handle, and the keyboard path
+crosses a group's edge. The save sends `lines` + `line_groups` and `steps` +
+`step_groups` (each group `{line_group_id}` or `{name}` with its rows); a
+group left without a name is refused by its place - 「第 n 個材料分組還沒有名稱」.
+
 **A source's 作者** is the typeahead over `GET /api/authors`, fetched once and
 filtered in the browser. Picking one sends `author_id`; 「新增 'xxx'」 shows
 the name with 新作者 and sends `new_author` (`name_cn` or `name_en` by the
@@ -306,14 +337,13 @@ recipe starts on the first status and a new source row on the first platform:
 the form holds '' until one is chosen and shows, and sends, the first in its
 place, so a row added before the list has loaded still lands on the first.
 With no status at all the form leaves `status_id` out and the server's 422
-says why. Sections are free text with
-the recipe's own sections offered (a `datalist` shared by lines and steps); a
-new line or step starts in the section of the one above it.
+says why.
 
 **Steps** take 「貼上多行」 too: a dialog whose text becomes one step per
 non-blank line with the leading numbering stripped (`lib/steps.js` -
 `1.`, `1)`, `1、`, `(1)`, `①`, `一、`, `第一步`, `Step 1:`, bullets), because the
-page numbers steps itself.
+page numbers steps itself. 「加到」 picks where they go: 不分組 (the default)
+or one of the recipe's step groups, at its end.
 
 **Storage rows** show a min and a max. A row stored as one number (min = max,
 the i2storage migration's shape) keeps its min following the max until the
@@ -336,15 +366,19 @@ cover and a thumbnail) and 移除.
 ## 設定 and 圖片
 
 `/edit/settings` is `pages/edit/Settings.jsx`: a tab each for 食材分類, 標籤,
-類別, 狀態, 來源, 作者, 做法 and 器材, with 圖片庫 - the way into `/edit/images` -
-beside the heading. 狀態 is the recipe statuses (想試, 可煮, 常煮 …; the first
-is what a new recipe starts on), 來源 the source platforms (YouTube, 網站,
-書 …) and 作者 the sources' authors; renaming any of them marks every recipe
-read stale, as a course does. 作者 is listed by name, as 標籤 is, so it has no
+類別, 狀態, 來源, 作者, 材料分組, 步驟分組, 做法 and 器材, with 圖片庫 - the way
+into `/edit/images` - beside the heading. 狀態 is the recipe statuses (想試,
+可煮, 常煮 …; the first is what a new recipe starts on), 來源 the source
+platforms (YouTube, 網站, 書 …), 作者 the sources' authors, and 材料分組 /
+步驟分組 the groups a recipe's lines and steps are picked from (主料, 配料,
+調味料 / 備料, 烹飪, 醬汁 …), hand-ordered - the recipe form offers them in
+that order - and counted by the recipe groups using them; renaming any of
+them marks every recipe read stale, as a course does. 作者 is listed by name, as 標籤 is, so it has no
 drag handle and a new author is added without a `sort_order`.
 
 - **The tab is in the URL**, `?tab=` with `categories`, `labels`, `courses`,
-  `statuses`, `platforms`, `authors`, `methods` or `equipment` (`hooks/useUrlTab.js`), so a tab can be linked to
+  `statuses`, `platforms`, `authors`, `line-groups`, `step-groups`, `methods` or
+  `equipment` (`hooks/useUrlTab.js`), so a tab can be linked to
   and survives a reload. A missing or unknown tab is the first, 食材分類, and
   the URL is left as it is. Choosing a tab **replaces** the history entry
   rather than pushing one: Back leaves 設定 instead of walking back through

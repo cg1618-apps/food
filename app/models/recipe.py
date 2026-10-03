@@ -8,8 +8,13 @@ shape with each other more than with their owners.
 Three directions of deletion meet here and they differ on purpose (the table is
 in `docs/data-model.md`): what a recipe OWNS cascades with it; what it NAMES -
 an ingredient, a sub-recipe, a course, a status, a source platform, an
-author, a method, a piece of equipment - is RESTRICT, so nothing in use disappears from under a recipe; and its versions
+author, a method, a piece of equipment, a 材料分組 or 步驟分組 value - is
+RESTRICT, so nothing in use disappears from under a recipe; and its versions
 are SET NULL, because a version is a complete recipe in its own right.
+
+A line's or a step's own group is the fourth direction: SET NULL, so a group
+that goes takes no row with it - the row is ungrouped instead, which is what
+the form's 移除分組 does too.
 """
 
 from sqlalchemy import (
@@ -96,6 +101,10 @@ class Recipe(Base, NameFallbackMixin):
         cascade="all, delete-orphan",
         order_by="RecipeSource.sort_order",
     )
+    # Every line and step of the recipe, grouped or not, in position order -
+    # which is the order the page shows them: ungrouped first, then group by
+    # group. The groups are their own lists; a row names its group.
+    #
     # foreign_keys is required: recipe_line points at recipe twice, once as
     # its owner and once as the base it names.
     lines = relationship(
@@ -110,6 +119,18 @@ class Recipe(Base, NameFallbackMixin):
         back_populates="recipe",
         cascade="all, delete-orphan",
         order_by="RecipeStep.position",
+    )
+    line_groups = relationship(
+        "RecipeLineGroup",
+        back_populates="recipe",
+        cascade="all, delete-orphan",
+        order_by="RecipeLineGroup.position",
+    )
+    step_groups = relationship(
+        "RecipeStepGroup",
+        back_populates="recipe",
+        cascade="all, delete-orphan",
+        order_by="RecipeStepGroup.position",
     )
     images = relationship(
         "RecipeImage",
@@ -248,6 +269,94 @@ class RecipeSource(Base):
     )
 
 
+class RecipeLineGroup(Base, NameFallbackMixin):
+    """One group of a recipe's ingredient lines - its 醬汁, its 主料.
+
+    Real rows rather than a label on each line: a group exists on its own (an
+    empty one is kept), has its own place in the recipe, and is renamed once.
+    It names a 材料分組 value from 設定 or carries a one-off `name`, exactly
+    one of the two. The write path stores a typed name that matches a value
+    as that value, so the same group is never both.
+
+    A recipe may not hold one group twice: unique on the value, and on the
+    one-off name case-insensitively. Both uniques are NULLS DISTINCT, so the
+    rows using the other arm never collide on the NULL.
+
+    `display_name` is the value's, else the one-off name: the mixin reads
+    `name_cn` and `name_en`, which are the value's here.
+    """
+
+    __tablename__ = "recipe_line_group"
+
+    id = Column(Integer, primary_key=True)
+    recipe_id = Column(
+        Integer, ForeignKey("recipe.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    position = Column(Integer, nullable=False)
+    line_group_id = Column(
+        Integer, ForeignKey("line_group.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    name = Column(String, nullable=True)
+
+    recipe = relationship("Recipe", back_populates="line_groups")
+    # passive_deletes="all", as across every RESTRICT here.
+    group = relationship("LineGroup", passive_deletes="all")
+
+    __table_args__ = (
+        UniqueConstraint("recipe_id", "position", name="uq_recipe_line_group_position"),
+        UniqueConstraint("recipe_id", "line_group_id", name="uq_recipe_line_group_value"),
+        Index("uq_recipe_line_group_name", "recipe_id", func.lower(name), unique=True),
+        CheckConstraint(
+            "num_nonnulls(line_group_id, name) = 1", name="ck_recipe_line_group_one_name"
+        ),
+    )
+
+    @property
+    def name_cn(self):
+        return self.group.name_cn if self.group else self.name
+
+    @property
+    def name_en(self):
+        return self.group.name_en if self.group else None
+
+
+class RecipeStepGroup(Base, NameFallbackMixin):
+    """One group of a recipe's steps - its 備料, its 烹飪. The same shape and
+    rules as RecipeLineGroup, naming a 步驟分組 value instead."""
+
+    __tablename__ = "recipe_step_group"
+
+    id = Column(Integer, primary_key=True)
+    recipe_id = Column(
+        Integer, ForeignKey("recipe.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    position = Column(Integer, nullable=False)
+    step_group_id = Column(
+        Integer, ForeignKey("step_group.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    name = Column(String, nullable=True)
+
+    recipe = relationship("Recipe", back_populates="step_groups")
+    group = relationship("StepGroup", passive_deletes="all")
+
+    __table_args__ = (
+        UniqueConstraint("recipe_id", "position", name="uq_recipe_step_group_position"),
+        UniqueConstraint("recipe_id", "step_group_id", name="uq_recipe_step_group_value"),
+        Index("uq_recipe_step_group_name", "recipe_id", func.lower(name), unique=True),
+        CheckConstraint(
+            "num_nonnulls(step_group_id, name) = 1", name="ck_recipe_step_group_one_name"
+        ),
+    )
+
+    @property
+    def name_cn(self):
+        return self.group.name_cn if self.group else self.name
+
+    @property
+    def name_en(self):
+        return self.group.name_en if self.group else None
+
+
 class RecipeLine(Base):
     """One ingredient line: an ingredient, or another recipe, never both.
 
@@ -255,7 +364,9 @@ class RecipeLine(Base):
     stored discriminator that could disagree with them.
 
     Nothing is unique on the ingredient - the same one may appear twice, once
-    for the meat and once for the sauce - only on the position. The nesting
+    for the meat and once for the sauce - only on the position, which runs
+    through the whole recipe in the order the page shows it (ungrouped lines
+    first, then group by group), not restarting in each group. The nesting
     graph may not cycle; a CHECK sees one row, so it refuses only the direct
     case (a line naming its own recipe) and the write path refuses the rest.
     """
@@ -267,9 +378,14 @@ class RecipeLine(Base):
         Integer, ForeignKey("recipe.id", ondelete="CASCADE"), nullable=False, index=True
     )
     position = Column(Integer, nullable=False)
-    # A free-text heading the line sits under - 醬汁, 醃料. Lines sharing one
-    # are grouped by the UI; nothing else reads it.
-    section = Column(String, nullable=True)
+    # The recipe group the line sits in; null is ungrouped. SET NULL rather
+    # than CASCADE: a group going never takes its lines with it (the module
+    # docstring). The write path only ever names a group of the same recipe;
+    # a single-column key cannot say so, and a composite one could not be
+    # SET NULL without nulling recipe_id too.
+    group_id = Column(
+        Integer, ForeignKey("recipe_line_group.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     ingredient_id = Column(
         Integer, ForeignKey("ingredient.id", ondelete="RESTRICT"), nullable=True, index=True
     )
@@ -281,6 +397,7 @@ class RecipeLine(Base):
     is_optional = Column(Boolean, nullable=False, server_default=text("false"))
 
     recipe = relationship("Recipe", back_populates="lines", foreign_keys=[recipe_id])
+    group = relationship("RecipeLineGroup")
     # passive_deletes="all" on both, as across every RESTRICT here: the ORM
     # must not null the column before the DELETE, or the database never gets
     # to refuse and an ingredient in use disappears from under its recipes.
@@ -300,7 +417,8 @@ class RecipeLine(Base):
 
 
 class RecipeStep(Base):
-    """One step of the method, in order."""
+    """One step of the method, in order: the position runs through the whole
+    recipe as a line's does, so it is also the step's number less one."""
 
     __tablename__ = "recipe_step"
 
@@ -309,10 +427,14 @@ class RecipeStep(Base):
         Integer, ForeignKey("recipe.id", ondelete="CASCADE"), nullable=False, index=True
     )
     position = Column(Integer, nullable=False)
-    section = Column(String, nullable=True)
+    # As RecipeLine.group_id.
+    group_id = Column(
+        Integer, ForeignKey("recipe_step_group.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     body = Column(Text, nullable=False)
 
     recipe = relationship("Recipe", back_populates="steps")
+    group = relationship("RecipeStepGroup")
 
     __table_args__ = (
         UniqueConstraint("recipe_id", "position", name="uq_recipe_step_position"),

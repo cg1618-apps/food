@@ -18,13 +18,17 @@ from app.models import (
     CookingMethod,
     Equipment,
     IngredientHeating,
+    LineGroup,
     Recipe,
     RecipeCourse,
     RecipeEquipment,
+    RecipeLineGroup,
     RecipeMethod,
     RecipeSource,
     RecipeStatus,
+    RecipeStepGroup,
     SourcePlatform,
+    StepGroup,
 )
 
 
@@ -55,6 +59,23 @@ def _author_usage(db: Session) -> dict[int, int]:
     return dict(counts)
 
 
+def _nonnull(db: Session, column) -> dict[int, int]:
+    counts = _count(db, column)
+    counts.pop(None, None)
+    return dict(counts)
+
+
+def _line_group_usage(db: Session) -> dict[int, int]:
+    """Recipe groups naming the value - one per recipe, since a recipe may
+    not hold a group twice. A group with a one-off name counts for nothing."""
+    return _nonnull(db, RecipeLineGroup.line_group_id)
+
+
+def _step_group_usage(db: Session) -> dict[int, int]:
+    """As a line group's."""
+    return _nonnull(db, RecipeStepGroup.step_group_id)
+
+
 def _cooking_method_usage(db: Session) -> dict[int, int]:
     return dict(_count(db, IngredientHeating.method_id) + _count(db, RecipeMethod.method_id))
 
@@ -70,6 +91,8 @@ USAGE: dict[type, Callable[[Session], dict[int, int]]] = {
     CookingMethod: _cooking_method_usage,
     Equipment: _equipment_usage,
     Author: _author_usage,
+    LineGroup: _line_group_usage,
+    StepGroup: _step_group_usage,
 }
 
 

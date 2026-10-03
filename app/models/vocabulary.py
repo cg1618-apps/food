@@ -1,7 +1,8 @@
 """Small managed vocabularies: recipe courses, recipe statuses, source
-platforms, cooking methods, equipment, authors.
+platforms, cooking methods, equipment, authors, and the groups a recipe's
+ingredient lines and steps sit in.
 
-Six tables with one shape, declared once through a mixin. They are tables
+Eight tables with one shape, declared once through a mixin. They are tables
 rather than lists in `app/constants.py` because the owner edits them - renaming
 煮 to 水煮 must be one row, not a deploy. The closed lists in constants are the
 ones the app's own logic branches on (storage state, recipe kind); these are
@@ -9,7 +10,7 @@ the ones it only displays and filters by.
 
 `declared_attr` builds each table's constraints from its own name and its own
 copied columns: `cls.name_cn` inside it is the subclass's column, not the
-mixin's, which is what lets one definition produce six correctly-bound
+mixin's, which is what lets one definition produce eight correctly-bound
 expression indexes.
 """
 
@@ -82,3 +83,19 @@ class Author(Base, VocabularyMixin):
     """
 
     __tablename__ = "author"
+
+
+class LineGroup(Base, VocabularyMixin):
+    """主料, 配料, 調味料 … - the 材料分組 a recipe's ingredient lines are
+    grouped under. A recipe may also use a one-off group name that is not one
+    of these (`recipe_line_group.name`)."""
+
+    __tablename__ = "line_group"
+
+
+class StepGroup(Base, VocabularyMixin):
+    """備料, 烹飪, 醬汁 … - the 步驟分組 a recipe's steps are grouped under,
+    a separate list from LineGroup: what groups ingredients is rarely what
+    groups the method. One-off names as LineGroup."""
+
+    __tablename__ = "step_group"

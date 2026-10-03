@@ -1,5 +1,5 @@
-"""The six managed vocabularies share one router factory, so one parametrised
-suite covers all six. The fixtures that make refusals bite are the in-use
+"""The eight managed vocabularies share one router factory, so one parametrised
+suite covers all eight. The fixtures that make refusals bite are the in-use
 rows: a vocabulary value nothing uses deletes freely, and that is the mirror."""
 
 import pytest
@@ -11,6 +11,8 @@ RESOURCES = [
     "cooking-methods",
     "equipment",
     "authors",
+    "line-groups",
+    "step-groups",
 ]
 
 

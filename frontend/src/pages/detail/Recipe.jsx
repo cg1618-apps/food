@@ -3,7 +3,9 @@
 // One reading column, in the order a cook reads it: the pictures; course,
 // names and a meta line (servings, time, methods, equipment); the status,
 // changeable here; where it came from; other versions; the ingredients and
-// the steps, each grouped by section (lib/sections.js); notes; and for a base,
+// the steps, each in its groups (lib/recipeGroups.js) - the ungrouped rows
+// first, then a block per group under its name, steps numbered through every
+// group; notes; and for a base,
 // the recipes that use it. Every section with nothing in it is left out, so a
 // recipe saved as a bookmark is a short page rather than a page of empties.
 //
@@ -24,7 +26,7 @@ import { Badge, Chip, LinkButton, Section, Toggle } from '../../components/ui/pr
 import { ErrorNote } from '../../components/ui/states'
 import { fixedLabel, useApiMutation, useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
 import { linkHost } from '../../lib/format'
-import { groupBySection, numberedStepGroups } from '../../lib/sections'
+import { lineBlocks, stepBlocks } from '../../lib/recipeGroups'
 import { otherVersions } from '../../lib/versions'
 
 const names = (refs) => (refs?.length ? refs.map((ref) => ref.display_name).join('、') : null)
@@ -117,10 +119,10 @@ function LineTarget({ line }) {
   return null
 }
 
-function Lines({ lines }) {
-  return groupBySection(lines).map((group) => (
-    <div key={group.section ?? ''} className="space-y-1">
-      {group.section ? <h3 className="text-sm font-bold text-text-muted">{group.section}</h3> : null}
+function Lines({ blocks }) {
+  return blocks.map((group) => (
+    <div key={group.key} className="space-y-1">
+      {group.heading ? <h3 className="text-sm font-bold text-text-muted">{group.heading}</h3> : null}
       <ul className="divide-y divide-border">
         {group.rows.map((line) => (
           <li
@@ -140,10 +142,10 @@ function Lines({ lines }) {
   ))
 }
 
-function Steps({ steps }) {
-  return numberedStepGroups(steps).map((group) => (
-    <div key={group.section ?? ''} className="space-y-2">
-      {group.section ? <h3 className="text-sm font-bold text-text-muted">{group.section}</h3> : null}
+function Steps({ blocks }) {
+  return blocks.map((group) => (
+    <div key={group.key} className="space-y-2">
+      {group.heading ? <h3 className="text-sm font-bold text-text-muted">{group.heading}</h3> : null}
       <ol className="space-y-3">
         {group.rows.map((step) => (
           <li key={step.id} className="flex gap-3">
@@ -191,6 +193,8 @@ export default function Recipe() {
   ].filter(Boolean)
   const versions = otherVersions(recipe)
   const isBase = recipe.kind === 'base'
+  const lines = lineBlocks(recipe)
+  const steps = stepBlocks(recipe)
 
   return (
     <article className="mx-auto max-w-2xl space-y-8">
@@ -228,18 +232,18 @@ export default function Recipe() {
         </Section>
       ) : null}
 
-      {recipe.lines.length ? (
+      {lines.length ? (
         <Section title="材料">
           <div className="space-y-4">
-            <Lines lines={recipe.lines} />
+            <Lines blocks={lines} />
           </div>
         </Section>
       ) : null}
 
-      {recipe.steps.length ? (
+      {steps.length ? (
         <Section title="步驟">
           <div className="space-y-5">
-            <Steps steps={recipe.steps} />
+            <Steps blocks={steps} />
           </div>
         </Section>
       ) : null}

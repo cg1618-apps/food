@@ -39,6 +39,8 @@ from app.schemas.kitchen_note import (
 from app.schemas.label import LabelCreate, LabelResponse, LabelUpdate
 from app.schemas.recipe import (
     IngredientRef,
+    LineGroupIn,
+    LineGroupResponse,
     LineIn,
     LineResponse,
     NewNameIn,
@@ -49,6 +51,8 @@ from app.schemas.recipe import (
     RecipeUpdate,
     SourceIn,
     SourceResponse,
+    StepGroupIn,
+    StepGroupResponse,
     StepIn,
     StepResponse,
 )
@@ -88,6 +92,8 @@ __all__ = [
     "LabelCreate",
     "LabelResponse",
     "LabelUpdate",
+    "LineGroupIn",
+    "LineGroupResponse",
     "LineIn",
     "LineResponse",
     "LinkIn",
@@ -105,6 +111,8 @@ __all__ = [
     "RelatedIngredient",
     "SourceIn",
     "SourceResponse",
+    "StepGroupIn",
+    "StepGroupResponse",
     "StepIn",
     "StepResponse",
     "StorageRange",

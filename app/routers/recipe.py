@@ -49,10 +49,66 @@ def _summary(row: Recipe) -> schemas.RecipeSummary:
     )
 
 
+def _line(line) -> schemas.LineResponse:
+    return schemas.LineResponse(
+        id=line.id,
+        position=line.position,
+        ingredient=schemas.IngredientRef(
+            id=line.ingredient.id,
+            display_name=line.ingredient.display_name,
+            needs_detail=line.ingredient.needs_detail,
+        )
+        if line.ingredient
+        else None,
+        sub_recipe=recipe_ref(line.sub_recipe) if line.sub_recipe else None,
+        amount=line.amount,
+        note=line.note,
+        is_optional=line.is_optional,
+    )
+
+
+def _step(step) -> schemas.StepResponse:
+    return schemas.StepResponse(id=step.id, position=step.position, body=step.body)
+
+
+def _grouped(rows, groups, build_row, build_group):
+    """The ungrouped rows, and each group with its own: `rows` is the
+    recipe's whole list in position order, so each group's keep theirs."""
+    by_group: dict[int | None, list] = {}
+    for item in rows:
+        by_group.setdefault(item.group_id, []).append(build_row(item))
+    return by_group.get(None, []), [
+        build_group(group, by_group.get(group.id, [])) for group in groups
+    ]
+
+
+def _group_fields(group) -> dict:
+    return {
+        "id": group.id,
+        "position": group.position,
+        "group": _ref(group.group),
+        "name": group.name,
+        "display_name": group.display_name,
+    }
+
+
 def _response(row: Recipe, used_in: list[Recipe]) -> schemas.RecipeResponse:
     """Built explicitly rather than straight off the ORM row, as the
     ingredient's is: aliases are strings on the wire, a line's target is one of
-    two shapes, and `written_up` and `versions` are derived."""
+    two shapes, lines and steps are split by group, and `written_up` and
+    `versions` are derived."""
+    lines, line_groups = _grouped(
+        row.lines,
+        row.line_groups,
+        _line,
+        lambda group, rows: schemas.LineGroupResponse(**_group_fields(group), lines=rows),
+    )
+    steps, step_groups = _grouped(
+        row.steps,
+        row.step_groups,
+        _step,
+        lambda group, rows: schemas.StepGroupResponse(**_group_fields(group), steps=rows),
+    )
     return schemas.RecipeResponse(
         id=row.id,
         display_name=row.display_name,
@@ -79,26 +135,10 @@ def _response(row: Recipe, used_in: list[Recipe]) -> schemas.RecipeResponse:
             )
             for s in row.sources
         ],
-        lines=[
-            schemas.LineResponse(
-                id=line.id,
-                position=line.position,
-                section=line.section,
-                ingredient=schemas.IngredientRef(
-                    id=line.ingredient.id,
-                    display_name=line.ingredient.display_name,
-                    needs_detail=line.ingredient.needs_detail,
-                )
-                if line.ingredient
-                else None,
-                sub_recipe=recipe_ref(line.sub_recipe) if line.sub_recipe else None,
-                amount=line.amount,
-                note=line.note,
-                is_optional=line.is_optional,
-            )
-            for line in row.lines
-        ],
-        steps=[schemas.StepResponse.model_validate(s) for s in row.steps],
+        lines=lines,
+        line_groups=line_groups,
+        steps=steps,
+        step_groups=step_groups,
         serves_as=_vocab(row.serves_as),
         labels=_vocab(row.labels),
         methods=_vocab(row.methods),
@@ -193,8 +233,8 @@ def delete_recipe(
     recipe_id: int,
     aliases: int = Query(..., description="Alias count the dialog showed"),
     sources: int = Query(..., description="Source count the dialog showed"),
-    lines: int = Query(..., description="Ingredient-line count the dialog showed"),
-    steps: int = Query(..., description="Step count the dialog showed"),
+    lines: int = Query(..., description="Ingredient-line count the dialog showed, grouped or not"),
+    steps: int = Query(..., description="Step count the dialog showed, grouped or not"),
     db: Session = Depends(get_db),
 ):
     """Delete, with the counts the user was shown echoed back.

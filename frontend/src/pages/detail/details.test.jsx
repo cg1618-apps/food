@@ -45,13 +45,27 @@ const RECIPE = {
   aliases: [],
   sources: [],
   lines: [
-    { id: 1, position: 0, section: null, ingredient: { id: 10, display_name: '豆腐', needs_detail: false }, sub_recipe: null, amount: '1 盒', note: null, is_optional: false },
-    { id: 2, position: 1, section: '醬汁', ingredient: null, sub_recipe: { id: 7, display_name: '辣油', kind: 'base' }, amount: '2 匙', note: null, is_optional: false },
-    { id: 3, position: 2, section: '醬汁', ingredient: { id: 11, display_name: '花椒粉', needs_detail: true }, sub_recipe: null, amount: null, note: '現磨', is_optional: true },
+    { id: 1, position: 0, ingredient: { id: 10, display_name: '豆腐', needs_detail: false }, sub_recipe: null, amount: '1 盒', note: null, is_optional: false },
   ],
-  steps: [
-    { id: 1, position: 0, section: '醬汁', body: '炒香辣油' },
-    { id: 2, position: 1, section: null, body: '下豆腐' },
+  line_groups: [
+    {
+      id: 8,
+      position: 0,
+      group: null,
+      name: '醬汁',
+      display_name: '醬汁',
+      lines: [
+        { id: 2, position: 1, ingredient: null, sub_recipe: { id: 7, display_name: '辣油', kind: 'base' }, amount: '2 匙', note: null, is_optional: false },
+        { id: 3, position: 2, ingredient: { id: 11, display_name: '花椒粉', needs_detail: true }, sub_recipe: null, amount: null, note: '現磨', is_optional: true },
+      ],
+    },
+    // Empty: kept by the server, nothing to read here.
+    { id: 9, position: 1, group: { id: 2, display_name: '配料' }, name: null, display_name: '配料', lines: [] },
+  ],
+  steps: [{ id: 1, position: 0, body: '看一遍' }],
+  step_groups: [
+    { id: 4, position: 0, group: { id: 1, display_name: '備料' }, name: null, display_name: '備料', steps: [{ id: 2, position: 1, body: '切豆腐' }] },
+    { id: 5, position: 1, group: null, name: '炒', display_name: '炒', steps: [{ id: 3, position: 2, body: '炒香辣油' }, { id: 4, position: 3, body: '下豆腐' }] },
   ],
   serves_as: [],
   labels: [],
@@ -168,21 +182,32 @@ describe('the recipe page', () => {
     handler = ({ url, method }) => (method === 'GET' && url === '/api/recipes/5' ? json(RECIPE) : null)
   })
 
-  it('groups lines and steps by section and marks optional and stub lines', async () => {
+  it('shows lines and steps in their groups and marks optional and stub lines', async () => {
     renderAt('/recipes/5')
     expect(await screen.findByRole('heading', { level: 1, name: '麻婆豆腐' })).toBeTruthy()
 
     const lines = screen.getByRole('heading', { name: '材料' }).closest('section')
-    expect(within(lines).getByRole('heading', { level: 3, name: '醬汁' })).toBeTruthy()
+    // Ungrouped first, without a heading; then each group under its name; an
+    // empty group is left out.
+    expect(within(lines).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['醬汁'])
+    expect(within(lines).getAllByRole('listitem').map((li) => li.textContent.slice(0, 2))).toEqual([
+      '豆腐',
+      '辣油',
+      '花椒',
+    ])
     expect(within(lines).getByRole('link', { name: '辣油' }).getAttribute('href')).toBe('/recipes/7')
     const optional = within(lines).getByText('（可省略）').closest('li')
     expect(optional.className).toContain('text-text-faint')
     expect(within(optional).getByText('待補')).toBeTruthy()
 
     const steps = screen.getByRole('heading', { name: '步驟' }).closest('section')
+    expect(within(steps).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['備料', '炒'])
+    // Numbered through every group.
     expect(within(steps).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      '1第 1 步：炒香辣油',
-      '2第 2 步：下豆腐',
+      '1第 1 步：看一遍',
+      '2第 2 步：切豆腐',
+      '3第 3 步：炒香辣油',
+      '4第 4 步：下豆腐',
     ])
   })
 

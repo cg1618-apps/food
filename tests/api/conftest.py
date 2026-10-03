@@ -174,3 +174,31 @@ def source_platforms(db):
     db.add_all(rows.values())
     db.flush()
     return rows
+
+
+@pytest.fixture
+def line_groups(db):
+    """The three 材料分組 the migration seeds, by name_cn, in their order."""
+    from app.models import LineGroup
+
+    rows = {
+        name: LineGroup(name_cn=name, sort_order=(i + 1) * 10)
+        for i, name in enumerate(["主料", "配料", "調味料"])
+    }
+    db.add_all(rows.values())
+    db.flush()
+    return rows
+
+
+@pytest.fixture
+def step_groups(db):
+    """The three 步驟分組 the migration seeds, by name_cn, in their order."""
+    from app.models import StepGroup
+
+    rows = {
+        name: StepGroup(name_cn=name, sort_order=(i + 1) * 10)
+        for i, name in enumerate(["備料", "烹飪", "醬汁"])
+    }
+    db.add_all(rows.values())
+    db.flush()
+    return rows

@@ -27,18 +27,22 @@ from app.models.recipe import (
     RecipeEquipment,
     RecipeLabel,
     RecipeLine,
+    RecipeLineGroup,
     RecipeMethod,
     RecipeServesAs,
     RecipeSource,
     RecipeStep,
+    RecipeStepGroup,
 )
 from app.models.vocabulary import (
     Author,
     CookingMethod,
     Equipment,
+    LineGroup,
     RecipeCourse,
     RecipeStatus,
     SourcePlatform,
+    StepGroup,
 )
 
 __all__ = [
@@ -58,6 +62,7 @@ __all__ = [
     "KitchenNoteImage",
     "KitchenNoteLabel",
     "Label",
+    "LineGroup",
     "Recipe",
     "RecipeAlias",
     "RecipeCourse",
@@ -65,10 +70,13 @@ __all__ = [
     "RecipeImage",
     "RecipeLabel",
     "RecipeLine",
+    "RecipeLineGroup",
     "RecipeMethod",
     "RecipeServesAs",
     "RecipeSource",
     "RecipeStatus",
     "RecipeStep",
+    "RecipeStepGroup",
     "SourcePlatform",
+    "StepGroup",
 ]

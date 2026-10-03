@@ -2,8 +2,14 @@
 
 Every write validates everything it can BEFORE it changes anything: names,
 the course, the status, every source's platform and author, the version rule,
-every id in the vocabulary lists, every line target and the cycle guard. Only
-then are stubs and new authors created and the row touched.
+every id in the vocabulary lists, every group's value or name, every line
+target and the cycle guard. Only then are stubs and new authors created and
+the row touched.
+
+Lines and steps are each a pair on the wire - the ungrouped rows, and the
+groups with theirs - and are stored as one recipe-wide list of rows, each
+naming its group or none, positioned in the order the page shows them:
+ungrouped first, then group by group.
 One request is one transaction, and the ordering is what makes a refused save
 leave nothing behind even in a session that is never rolled back - the test
 session is one such, and an autoflush is all it takes to half-write a row.
@@ -24,6 +30,7 @@ from app.models import (
     IngredientAlias,
     IngredientCategory,
     Label,
+    LineGroup,
     Recipe,
     RecipeAlias,
     RecipeCourse,
@@ -31,11 +38,14 @@ from app.models import (
     RecipeImage,
     RecipeLabel,
     RecipeLine,
+    RecipeLineGroup,
     RecipeMethod,
     RecipeSource,
     RecipeStatus,
     RecipeStep,
+    RecipeStepGroup,
     SourcePlatform,
+    StepGroup,
 )
 from app.schemas.recipe import LIST_FIELDS
 from app.services.hierarchy import MAX_DEPTH
@@ -65,6 +75,8 @@ def _loaded(query):
         selectinload(Recipe.lines).selectinload(RecipeLine.ingredient),
         selectinload(Recipe.lines).selectinload(RecipeLine.sub_recipe),
         selectinload(Recipe.steps),
+        selectinload(Recipe.line_groups).selectinload(RecipeLineGroup.group),
+        selectinload(Recipe.step_groups).selectinload(RecipeStepGroup.group),
         selectinload(Recipe.images).selectinload(RecipeImage.image),
         selectinload(Recipe.labels),
         selectinload(Recipe.methods),
@@ -361,6 +373,72 @@ def _reachable_from(db: Session, start_ids: set[int]) -> set[int]:
     return seen
 
 
+# Per pair: the groups field, the vocabulary its groups name, the id field
+# naming it, the rows field inside a group, and the word a 422 uses.
+_PAIRS = {
+    "lines": ("line_groups", LineGroup, "line_group_id", "lines", "line group (材料分組)"),
+    "steps": ("step_groups", StepGroup, "step_group_id", "steps", "step group (步驟分組)"),
+}
+
+
+def _flat(lists: dict, rows_field: str) -> list:
+    """Every row of a pair in the order it is stored: the ungrouped rows,
+    then each group's. Indexes into this are what stub resolution keys by."""
+    groups_field, _, _, inner, _ = _PAIRS[rows_field]
+    rows = list(lists.get(rows_field) or [])
+    for group in lists.get(groups_field) or []:
+        rows.extend(getattr(group, inner))
+    return rows
+
+
+def _resolve_groups(db: Session, rows_field: str, entries) -> list[tuple[int | None, str | None]]:
+    """`(value id, one-off name)` per group, exactly one of the two set.
+
+    Read-only, so it runs with the checks. Every id sent must exist; a name
+    matching a value's name_cn or name_en, trimmed and case-insensitively,
+    becomes that value. After that a recipe may not hold one group twice -
+    the same value, or the same one-off name in any case - which the uniques
+    on the group tables would refuse anyway, but only as "something clashed".
+    """
+    _, model, id_field, _, what = _PAIRS[rows_field]
+    ids = [getattr(e, id_field) for e in entries if getattr(e, id_field) is not None]
+    fetch_all(db, model, ids, what)
+    lowered = [e.name.lower() for e in entries if e.name is not None]
+    by_name: dict[str, int] = {}
+    if lowered:
+        values = (
+            db.query(model)
+            .filter(or_(func.lower(model.name_cn).in_(lowered), func.lower(model.name_en).in_(lowered)))
+            .order_by(model.id)
+        )
+        for value in values:
+            for name in (value.name_cn, value.name_en):
+                if name:
+                    by_name.setdefault(name.lower(), value.id)
+
+    resolved = []
+    seen: set = set()
+    for entry in entries:
+        value_id, name = getattr(entry, id_field), entry.name
+        if value_id is None and name.lower() in by_name:
+            value_id, name = by_name[name.lower()], None
+        key = ("value", value_id) if value_id is not None else ("name", name.lower())
+        if key in seen:
+            raise AppError(422, f"A recipe cannot hold the same {what} twice; merge them into one.")
+        seen.add(key)
+        resolved.append((value_id, name))
+    return resolved
+
+
+def _check_groups(db: Session, lists: dict) -> dict[str, list]:
+    """Rows field -> its resolved groups, for every pair that was sent."""
+    return {
+        rows_field: _resolve_groups(db, rows_field, lists[groups_field])
+        for rows_field, (groups_field, *_rest) in _PAIRS.items()
+        if lists.get(groups_field) is not None
+    }
+
+
 def _check_line_targets(db: Session, recipe_id: int | None, entries) -> None:
     """Every id a line names exists, and no sub-recipe makes a cycle.
 
@@ -515,36 +593,60 @@ def _apply_sources(recipe: Recipe, entries, author_ids: dict[int, int]) -> None:
     ]
 
 
-def _apply_lines(db: Session, recipe: Recipe, entries, new_ids: dict[int, int]) -> None:
-    """Replace the lines, positions from list order.
+def _apply_pair(db: Session, recipe: Recipe, lists: dict, rows_field: str, resolved, make_row):
+    """Replace one pair - the rows and their groups - together.
 
-    Cleared and flushed BEFORE the new rows are assigned: the unit of work
-    INSERTs before it DELETEs, so re-sending the same lines collides with
-    uq_recipe_line_position on position 0 otherwise.
+    Rows are positioned through the whole recipe in display order: the
+    ungrouped ones, then each group's. `make_row(index, entry, group)` builds
+    one, `index` being its place in `_flat`.
+
+    Each table is cleared and flushed BEFORE the new rows are assigned, rows
+    before groups: the unit of work INSERTs before it DELETEs, so re-sending
+    the same lines collides with uq_recipe_line_position on position 0
+    otherwise, and a group's position likewise.
     """
-    recipe.lines = []
+    groups_field, _, id_field, inner, _ = _PAIRS[rows_field]
+    group_model = RecipeLineGroup if rows_field == "lines" else RecipeStepGroup
+    setattr(recipe, rows_field, [])
     db.flush()
-    recipe.lines = [
-        RecipeLine(
-            position=i,
-            section=e.section,
-            ingredient_id=new_ids.get(i, e.ingredient_id),
+    setattr(recipe, groups_field, [])
+    db.flush()
+
+    rows = [make_row(i, e, None) for i, e in enumerate(lists[rows_field])]
+    groups = []
+    for position, (entry, (value_id, name)) in enumerate(zip(lists[groups_field], resolved, strict=True)):
+        group = group_model(position=position, name=name, **{id_field: value_id})
+        groups.append(group)
+        rows.extend(make_row(len(rows), e, group) for e in getattr(entry, inner))
+    setattr(recipe, groups_field, groups)
+    setattr(recipe, rows_field, rows)
+
+
+def _apply_lines(db: Session, recipe: Recipe, lists: dict, resolved, new_ids: dict[int, int]) -> None:
+    """Replace the lines and their groups; a `new_ingredient` line takes its
+    resolved id."""
+
+    def line(index, e, group):
+        return RecipeLine(
+            position=index,
+            group=group,
+            ingredient_id=new_ids.get(index, e.ingredient_id),
             sub_recipe_id=e.sub_recipe_id,
             amount=e.amount,
             note=e.note,
             is_optional=e.is_optional,
         )
-        for i, e in enumerate(entries)
-    ]
+
+    _apply_pair(db, recipe, lists, "lines", resolved, line)
 
 
-def _apply_steps(db: Session, recipe: Recipe, entries) -> None:
-    """Replace the steps; cleared and flushed first, as `_apply_lines`."""
-    recipe.steps = []
-    db.flush()
-    recipe.steps = [
-        RecipeStep(position=i, section=e.section, body=e.body) for i, e in enumerate(entries)
-    ]
+def _apply_steps(db: Session, recipe: Recipe, lists: dict, resolved) -> None:
+    """Replace the steps and their groups."""
+
+    def step(index, e, group):
+        return RecipeStep(position=index, group=group, body=e.body)
+
+    _apply_pair(db, recipe, lists, "steps", resolved, step)
 
 
 def _check_and_fetch(db: Session, recipe_id: int | None, lists: dict) -> dict:
@@ -556,7 +658,7 @@ def _check_and_fetch(db: Session, recipe_id: int | None, lists: dict) -> dict:
     if lists.get("sources") is not None:
         _check_sources(db, lists["sources"])
     if lists.get("lines") is not None:
-        _check_line_targets(db, recipe_id, lists["lines"])
+        _check_line_targets(db, recipe_id, _flat(lists, "lines"))
     return fetched
 
 
@@ -564,23 +666,29 @@ def _resolve_new(db: Session, lists: dict) -> dict[str, dict[int, int]]:
     """The first write of a save: stubs for new ingredients, rows for new
     authors. Runs only after every check has passed."""
     return {
-        "lines": _resolve_new_ingredients(db, lists.get("lines") or []),
+        "lines": _resolve_new_ingredients(db, _flat(lists, "lines")),
         "sources": _resolve_new_authors(db, lists.get("sources") or []),
     }
 
 
 def _apply_lists(
-    db: Session, recipe: Recipe, lists: dict, fetched: dict, new_ids: dict[str, dict[int, int]]
+    db: Session,
+    recipe: Recipe,
+    lists: dict,
+    fetched: dict,
+    groups: dict[str, list],
+    new_ids: dict[str, dict[int, int]],
 ) -> None:
-    lines = lists.get("lines")
+    """Every sent list. A pair is applied when it was sent - the schema has
+    already refused one half without the other."""
     if lists.get("aliases") is not None:
         _apply_aliases(recipe, lists["aliases"])
     if lists.get("sources") is not None:
         _apply_sources(recipe, lists["sources"], new_ids["sources"])
-    if lines is not None:
-        _apply_lines(db, recipe, lines, new_ids["lines"])
-    if lists.get("steps") is not None:
-        _apply_steps(db, recipe, lists["steps"])
+    if "lines" in groups:
+        _apply_lines(db, recipe, lists, groups["lines"], new_ids["lines"])
+    if "steps" in groups:
+        _apply_steps(db, recipe, lists, groups["steps"])
     for field, rows in fetched.items():
         setattr(recipe, _LINKED[field][0], rows)
 
@@ -595,6 +703,7 @@ def create(db: Session, payload) -> Recipe:
         _check_status(db, status_id)
     _check_version(db, None, payload.variant_of_id)
     fetched = _check_and_fetch(db, None, lists)
+    groups = _check_groups(db, lists)
     new_ids = _resolve_new(db, lists)  # the first write
 
     scalars = payload.model_dump(exclude=set(LIST_FIELDS))
@@ -604,7 +713,7 @@ def create(db: Session, payload) -> Recipe:
     recipe = Recipe(**scalars)
     db.add(recipe)
     db.flush()
-    _apply_lists(db, recipe, lists, fetched, new_ids)
+    _apply_lists(db, recipe, lists, fetched, groups, new_ids)
     db.commit()
     return get(db, recipe.id)
 
@@ -627,11 +736,12 @@ def update(db: Session, recipe_id: int, payload) -> Recipe:
     if "variant_of_id" in scalars:
         _check_version(db, recipe.id, scalars["variant_of_id"])
     fetched = _check_and_fetch(db, recipe.id, lists)
+    groups = _check_groups(db, lists)
     new_ids = _resolve_new(db, lists)  # the first write
 
     for field, value in scalars.items():
         setattr(recipe, field, value)
-    _apply_lists(db, recipe, lists, fetched, new_ids)
+    _apply_lists(db, recipe, lists, fetched, groups, new_ids)
     db.commit()
     return get(db, recipe_id)
 
@@ -641,7 +751,9 @@ def cascade_counts(db: Session, recipe_id: int) -> dict[str, int]:
 
     Serves-as, label, method and equipment links cascade too but are not
     counted - they remove nothing the user would miss - and neither are gallery
-    rows, as for an ingredient: the pictures survive.
+    rows, as for an ingredient: the pictures survive. Nor are the line and
+    step groups: the lines and steps inside them are counted, which is what
+    the user would miss.
     """
     return {
         "aliases": db.query(RecipeAlias).filter(RecipeAlias.recipe_id == recipe_id).count(),

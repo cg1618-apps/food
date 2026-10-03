@@ -291,11 +291,18 @@ ingredient's does, and answers the full recipe.
 - `aliases` — sorted strings;
 - `sources` — `{id, platform, author, url, title, sort_order}`, `platform`
   being `{id, display_name}` and `author` `{id, display_name}` or null;
-- `lines` — `{id, position, section, ingredient, sub_recipe, amount, note,
-  is_optional}`, where exactly one of `ingredient`
+- `lines` — the lines in no group, `{id, position, ingredient, sub_recipe,
+  amount, note, is_optional}`, where exactly one of `ingredient`
   (`{id, display_name, needs_detail}`) and `sub_recipe`
   (`{id, display_name, kind}`) is set;
-- `steps` — `{id, position, section, body}`;
+- `line_groups` — the recipe's 材料分組, in order, each `{id, position, group,
+  name, display_name, lines}`: `group` is the 設定 value (`{id,
+  display_name}`) or null, `name` the one-off name or null — exactly one is
+  set — `display_name` is whichever it is, and `lines` the group's lines, as
+  above. An empty group is listed with `lines: []`;
+- `steps` — the steps in no group, `{id, position, body}`;
+- `step_groups` — the 步驟分組, `{id, position, group, name, display_name,
+  steps}`, as `line_groups`;
 - `serves_as`, `labels`, `methods`, `equipment` — `{id, display_name}` lists;
 - `images` — as an ingredient's;
 - `variant_of` — the original this is a version of, `{id, display_name,
@@ -304,19 +311,29 @@ ingredient's does, and answers the full recipe.
   versions, or a version's siblings (its original is `variant_of`);
 - `used_in` — recipes with a line naming this one **directly**. A dish using a
   base that uses this base is not listed;
-- `written_up` — true when it has at least one line or step. Derived, never
-  sent.
+- `written_up` — true when it has at least one line or step, grouped or not.
+  Derived, never sent.
+
+A line's or step's `position` runs through the whole recipe in the order the
+page shows it — the ungrouped rows, then group by group — so a step's number
+is its position plus one. A group's `position` is its place among the groups.
 
 **`POST` takes the whole recipe; `PATCH` takes any subset.** A recipe is
 filed under a course by `course_id` and a status by `status_id`. Defaults on
 create are `kind: dish` and, when `status_id` is left out, the first status in
 sort order (the oldest among equals); with no status at all to give, the create
 is a 422 saying so. The lists are `aliases`, `sources`,
-`lines`, `steps`, `serves_as_ids`, `label_ids`, `method_ids` and
-`equipment_ids`: on `PATCH` each one sent replaces the stored list and each one
-absent is left alone. Sources, lines and steps take their order from the list —
-a request naming `sort_order` or `position` is a 422 — and re-sending the same
-lines and steps succeeds. A `PATCH` carrying only `status_id` is the status
+`lines`, `line_groups`, `steps`, `step_groups`, `serves_as_ids`, `label_ids`,
+`method_ids` and `equipment_ids`: on `PATCH` each one sent replaces the stored
+list and each one absent is left alone. Sources, lines, steps and groups take
+their order from the list — a request naming `sort_order` or `position` is a
+422 — and re-sending the same lines, steps and groups succeeds.
+
+**Lines and steps are each a pair, replaced together.** `lines` is the
+ungrouped lines and `line_groups` the groups with theirs; `steps` and
+`step_groups` likewise. A `PATCH` sends both halves of a pair or neither —
+one without the other, or either as null, is a 422 — because replacing one
+half alone would have to guess what becomes of the rows in the other. A `PATCH` carrying only `status_id` is the status
 change; nothing else is needed for it.
 
 A source is `{platform_id, author_id, new_author, url, title}`: `platform_id`
@@ -326,12 +343,19 @@ author, `url` and `title`; `url` must be `http` or `https`. `new_author`
 save resolves: an author whose `name_cn` or `name_en` equals a typed name,
 ignoring case, is reused, and otherwise one is created (with `sort_order` 0,
 as every author). Names resolved earlier in the same save count, so one new
-name on two sources is one author. A step is `{section, body}` with a
-non-blank `body`.
+name on two sources is one author. A step is `{body}` with a non-blank
+`body`.
+
+A group is `{line_group_id, name, lines}` (or `{step_group_id, name, steps}`):
+exactly one of the 設定 value's id and a one-off `name`, and its rows, which
+may be none — an empty group is kept. A `name` equal to a value's `name_cn`
+or `name_en`, trimmed and ignoring case, is stored as that value. A recipe may
+not hold the same group twice: the same value, a value and its name, or one
+one-off name in two cases.
 
 **A line names exactly one of `ingredient_id`, `sub_recipe_id` or
-`new_ingredient`** (`{name_cn, name_en}`, at least one), plus `section`,
-`amount`, `note` and `is_optional`. There is no type field, and a payload
+`new_ingredient`** (`{name_cn, name_en}`, at least one), plus `amount`,
+`note` and `is_optional`, wherever it sits — ungrouped or in a group. There is no type field, and a payload
 sending one is a 422: the stored kind of line is whichever column is set.
 
 `new_ingredient` reuses an ingredient whose name slot or alias equals a typed
@@ -346,10 +370,12 @@ earlier line asked for:
 - a `kind` outside its list, and an explicit null for `kind`, `status_id` or a
   source's `platform_id`;
 - a source sending both `author_id` and `new_author`;
+- a group naming both a value and a name, or neither; the same group twice in
+  one recipe; on `PATCH`, one half of a lines or steps pair without the other;
 - creating a recipe without `status_id` when there is no status at all;
 - no name left on the merged row;
 - **an id inside the body that names nothing** — `course_id`, `status_id`,
-  `variant_of_id`, a source's `platform_id` or `author_id`, any of the four id lists, `ingredient_id` or `sub_recipe_id` in a line. The
+  `variant_of_id`, a source's `platform_id` or `author_id`, any of the four id lists, a group's `line_group_id` or `step_group_id`, `ingredient_id` or `sub_recipe_id` in a line. The
   detail names the id. The URL's own recipe missing is 404;
 - a line whose recipe is reachable from its `sub_recipe_id` through sub-recipe
   lines, at any depth — itself included;
@@ -358,7 +384,9 @@ earlier line asked for:
   own. Versions are one level deep.
 
 **`GET .../cascade` answers `{aliases, sources, lines, steps, used_in}`.** The
-first four are what the delete removes and are echoed back; `used_in` is a
+first four are what the delete removes and are echoed back — `lines` and
+`steps` count every row, grouped or not; the groups themselves go too and are
+not counted; `used_in` is a
 count of the recipes naming this one, and blocks the delete rather than being
 removed by it.
 
@@ -418,7 +446,7 @@ answers the full note.
 
 ## Vocabularies
 
-Six managed vocabularies share one shape, so one description covers them:
+Eight managed vocabularies share one shape, so one description covers them:
 
 | Route | |
 | --- | --- |
@@ -428,6 +456,8 @@ Six managed vocabularies share one shape, so one description covers them:
 | `GET /api/cooking-methods` | |
 | `GET /api/equipment` | |
 | `GET /api/authors` | |
+| `GET /api/line-groups` | 材料分組 |
+| `GET /api/step-groups` | 步驟分組 |
 | `POST /api/edit/<same>` | |
 | `PATCH /api/edit/<same>/{id}` | |
 | `DELETE /api/edit/<same>/{id}` | |
@@ -446,7 +476,9 @@ goes with the course); for a status, the recipes in it; for a source platform,
 the sources naming it, so one recipe with two sources from one book counts
 twice; for an author, likewise the sources naming them; for a cooking method,
 ingredient heating rows plus recipes using it; for equipment, recipes using
-it.
+it; for a 材料分組 or 步驟分組 value, the recipe groups naming it — one per
+recipe, since a recipe holds a group once. A recipe group with a one-off name
+counts for no value. Renaming a value renames every recipe group using it.
 
 **`GET /api/vocabularies/fixed`** serves every closed list the interface
 renders, as `{value, label}` pairs under `preservation_methods`,

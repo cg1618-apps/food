@@ -13,12 +13,20 @@
 // A source's author is picked the same way from the authors list, which is
 // small enough to fetch once and filter in the browser; 「新增」 there makes
 // the author on save, and a name the server already knows is reused.
-// Steps take a pasted block too: 「貼上多行」 splits it into one step per line
-// and strips the numbering (lib/steps.js).
+// Steps take a pasted block too: 「貼上多行」 splits it into one step per line,
+// strips the numbering (lib/steps.js) and adds them to the group chosen in
+// the dialog, or to the ungrouped steps.
+//
+// 材料 and 步驟 each sit in groups (components/forms/GroupedRowEditor.jsx):
+// the ungrouped rows first, then a box per group, picked from 設定's
+// 材料分組 / 步驟分組 or named for this recipe only. Rows are numbered through
+// every group, as the recipe's page numbers its steps.
 //
 // POST takes the whole recipe and PATCH replaces each list wholesale, so the
-// form always sends every list. Saving goes to the recipe's page.
-import { useId, useState } from 'react'
+// form always sends every list - lines with line_groups, steps with
+// step_groups, the pairs the server replaces together. Saving goes to the
+// recipe's page.
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { endpoints } from '../../api/endpoints'
@@ -26,6 +34,7 @@ import ChipPicker from '../../components/forms/ChipPicker'
 import DeleteDialog from '../../components/forms/DeleteDialog'
 import FormActions from '../../components/forms/FormActions'
 import GalleryPicker from '../../components/forms/GalleryPicker'
+import GroupedRowEditor from '../../components/forms/GroupedRowEditor'
 import RowEditor from '../../components/forms/RowEditor'
 import Typeahead, { Picked } from '../../components/forms/Typeahead'
 import Dialog from '../../components/ui/Dialog'
@@ -34,7 +43,16 @@ import { ErrorNote, Loading } from '../../components/ui/states'
 import { useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
 import { useOwnerSave } from '../../hooks/useOwnerSave'
 import { galleryChanged, galleryFromImages } from '../../lib/gallery'
-import { emptyLine, isStub, lineFromResponse, linesPayload, sectionsOf, targetFromOption } from '../../lib/recipeLines'
+import {
+  UNGROUPED,
+  emptyGrouped,
+  groupsFromResponse,
+  groupsPayload,
+  rowsOf,
+  setRows,
+  updateRowByKey,
+} from '../../lib/groupedRows'
+import { emptyLine, isStub, lineFromResponse, linesPayload, targetFromOption } from '../../lib/recipeLines'
 import { authorFromOption, sourceRow, sourcesPayload } from '../../lib/recipeSources'
 import { blankToNull, keyed, splitAliases } from '../../lib/rowList'
 import { splitSteps } from '../../lib/steps'
@@ -54,6 +72,8 @@ const INVALIDATE = [
   endpoints.platforms.list(),
   endpoints.methods.list(),
   endpoints.equipment.list(),
+  endpoints.lineGroups.list(),
+  endpoints.stepGroups.list(),
   endpoints.images.list(),
 ]
 
@@ -70,8 +90,9 @@ const EMPTY = {
   time: '',
   variant_of: null,
   sources: [],
-  lines: [],
-  steps: [],
+  // { ungrouped, groups } each (lib/groupedRows.js).
+  lines: emptyGrouped(),
+  steps: emptyGrouped(),
   label_ids: [],
   method_ids: [],
   equipment_ids: [],
@@ -82,7 +103,11 @@ const EMPTY = {
   gallery: [],
 }
 
-const stepRow = (entry = {}) => keyed({ section: entry.section ?? '', body: entry.body ?? '' })
+const stepRow = (entry = {}) => keyed({ body: entry.body ?? '' })
+
+// A step left blank is an "add" pressed once too often, not a step.
+const stepsPayload = (rows) =>
+  rows.filter((row) => blankToNull(row.body)).map((row) => ({ body: row.body.trim() }))
 
 const ids = (refs) => (refs ?? []).map((ref) => ref.id)
 
@@ -99,8 +124,14 @@ function fromRecipe(row) {
     time: row.time ?? '',
     variant_of: row.variant_of ? { id: row.variant_of.id, label: row.variant_of.display_name } : null,
     sources: (row.sources ?? []).map(sourceRow),
-    lines: (row.lines ?? []).map(lineFromResponse),
-    steps: (row.steps ?? []).map(stepRow),
+    lines: {
+      ungrouped: (row.lines ?? []).map(lineFromResponse),
+      groups: groupsFromResponse(row.line_groups, 'lines', lineFromResponse),
+    },
+    steps: {
+      ungrouped: (row.steps ?? []).map(stepRow),
+      groups: groupsFromResponse(row.step_groups, 'steps', stepRow),
+    },
     label_ids: ids(row.labels),
     method_ids: ids(row.methods),
     equipment_ids: ids(row.equipment),
@@ -116,7 +147,6 @@ export default function RecipeForm() {
   const { id } = useParams()
   const isNew = id === undefined
   const navigate = useNavigate()
-  const sectionListId = useId()
 
   const existing = useApiQuery(endpoints.recipes.detail(id), null, { enabled: !isNew })
   const courses = useApiQuery(endpoints.courses.list())
@@ -126,6 +156,8 @@ export default function RecipeForm() {
   const equipment = useApiQuery(endpoints.equipment.list())
   const labels = useApiQuery(endpoints.labels.list())
   const authors = useApiQuery(endpoints.authors.list())
+  const lineGroups = useApiQuery(endpoints.lineGroups.list())
+  const stepGroups = useApiQuery(endpoints.stepGroups.list())
   const fixed = useFixedVocabularies()
   const { save, saving } = useOwnerSave({ group: endpoints.recipes, invalidate: INVALIDATE })
 
@@ -152,17 +184,13 @@ export default function RecipeForm() {
   // RowEditor's update() would build the second change from the rows the
   // first had not yet replaced.
   const setLinePending = (key, pending) =>
-    setForm((previous) => ({
-      ...previous,
-      lines: previous.lines.map((line) => (line._key === key ? { ...line, pending } : line)),
-    }))
+    setForm((previous) => ({ ...previous, lines: updateRowByKey(previous.lines, key, { pending }) }))
   // The same for a source's author box.
   const setSourcePending = (key, pendingAuthor) =>
     setForm((previous) => ({
       ...previous,
       sources: previous.sources.map((row) => (row._key === key ? { ...row, pendingAuthor } : row)),
     }))
-  const sections = sectionsOf(form.lines, form.steps)
   const firstId = (query) => (query.data?.length ? String(query.data[0].id) : '')
   const statusId = form.status_id || firstId(statuses)
   const platformOf = (row) => row.platform_id || firstId(platforms)
@@ -183,11 +211,20 @@ export default function RecipeForm() {
       time: blankToNull(form.time),
       variant_of_id: form.variant_of?.id ?? null,
       sources: sourcesPayload(form.sources, platformOf),
-      lines: linesPayload(form.lines),
-      // A step left blank is an "add" pressed once too often, not a step.
-      steps: form.steps
-        .filter((row) => blankToNull(row.body))
-        .map((row) => ({ section: blankToNull(row.section), body: row.body.trim() })),
+      lines: linesPayload(form.lines.ungrouped),
+      line_groups: groupsPayload(form.lines, {
+        idField: 'line_group_id',
+        inner: 'lines',
+        what: '材料分組',
+        rowsPayload: linesPayload,
+      }),
+      steps: stepsPayload(form.steps.ungrouped),
+      step_groups: groupsPayload(form.steps, {
+        idField: 'step_group_id',
+        inner: 'steps',
+        what: '步驟分組',
+        rowsPayload: stepsPayload,
+      }),
       label_ids: form.label_ids,
       method_ids: form.method_ids,
       equipment_ids: form.equipment_ids,
@@ -247,14 +284,6 @@ export default function RecipeForm() {
 
       {!isNew && existing.isPending ? <Loading /> : null}
       {!isNew && existing.error ? <ErrorNote error={existing.error} /> : null}
-
-      {/* Shared suggestions: a section typed once is offered on every line
-          and step. */}
-      <datalist id={sectionListId}>
-        {sections.map((section) => (
-          <option key={section} value={section} />
-        ))}
-      </datalist>
 
       {isNew || existing.data ? (
         <>
@@ -385,14 +414,16 @@ export default function RecipeForm() {
           </Section>
 
           <Section title="材料">
-            <RowEditor
-              rows={form.lines}
-              onChange={(rows) => setField('lines', rows)}
-              newRow={() => emptyLine(form.lines.at(-1)?.section ?? '')}
+            <GroupedRowEditor
+              value={form.lines}
+              onChange={(value) => setField('lines', value)}
+              values={lineGroups.data}
+              newRow={() => emptyLine()}
               addLabel="加一行材料"
               itemLabel="材料"
+              groupLabel="材料分組"
             >
-              {(line, { update, index }) => (
+              {(line, { update, number }) => (
                 <div className="grid gap-2 sm:grid-cols-6">
                   <div className="sm:col-span-3">
                     {line.target ? (
@@ -405,7 +436,7 @@ export default function RecipeForm() {
                     ) : (
                       <Typeahead
                         allowNew
-                        label={`材料 ${index + 1}`}
+                        label={`材料 ${number}`}
                         placeholder="食材或食譜…"
                         exclude={{ recipe: id ? [Number(id)] : [] }}
                         onSelect={(option) => update({ target: targetFromOption(option) })}
@@ -421,19 +452,11 @@ export default function RecipeForm() {
                     className="sm:col-span-1"
                   />
                   <Input
-                    aria-label="分段"
-                    placeholder="分段，例如 醬汁"
-                    list={sectionListId}
-                    value={line.section}
-                    onChange={(event) => update({ section: event.target.value })}
-                    className="sm:col-span-2"
-                  />
-                  <Input
                     aria-label="材料備註"
                     placeholder="備註，例如 切絲"
                     value={line.note}
                     onChange={(event) => update({ note: event.target.value })}
-                    className="sm:col-span-5"
+                    className="sm:col-span-2"
                   />
                   <label className="flex items-center gap-1.5 text-sm">
                     <input
@@ -445,46 +468,39 @@ export default function RecipeForm() {
                   </label>
                 </div>
               )}
-            </RowEditor>
+            </GroupedRowEditor>
           </Section>
 
           <Section title="步驟">
-            <RowEditor
-              rows={form.steps}
-              onChange={(rows) => setField('steps', rows)}
-              newRow={() => stepRow({ section: form.steps.at(-1)?.section ?? '' })}
+            <GroupedRowEditor
+              value={form.steps}
+              onChange={(value) => setField('steps', value)}
+              values={stepGroups.data}
+              newRow={() => stepRow()}
               addLabel="加一個步驟"
               itemLabel="步驟"
+              groupLabel="步驟分組"
               actions={
                 <Button size="sm" onClick={() => setPasting(true)}>
                   貼上多行
                 </Button>
               }
             >
-              {(row, { update, index }) => (
+              {(row, { update, number }) => (
                 <div className="flex gap-2">
                   <span className="w-6 shrink-0 pt-1.5 text-right font-display font-bold text-text-faint">
-                    {index + 1}
+                    {number}
                   </span>
-                  <div className="grid min-w-0 flex-1 gap-2">
-                    <TextArea
-                      aria-label={`步驟 ${index + 1}`}
-                      rows={2}
-                      value={row.body}
-                      onChange={(event) => update({ body: event.target.value })}
-                    />
-                    <Input
-                      aria-label="步驟分段"
-                      placeholder="分段（可留空）"
-                      list={sectionListId}
-                      value={row.section}
-                      onChange={(event) => update({ section: event.target.value })}
-                      className="sm:max-w-xs"
-                    />
-                  </div>
+                  <TextArea
+                    aria-label={`步驟 ${number}`}
+                    rows={2}
+                    value={row.body}
+                    onChange={(event) => update({ body: event.target.value })}
+                    className="min-w-0 flex-1"
+                  />
                 </div>
               )}
-            </RowEditor>
+            </GroupedRowEditor>
           </Section>
 
           <Section title="標籤、做法、器材">
@@ -550,10 +566,11 @@ export default function RecipeForm() {
 
       {pasting ? (
         <PasteSteps
+          groups={form.steps.groups}
           onClose={() => setPasting(false)}
-          onAdd={(bodies) => {
-            const section = form.steps.at(-1)?.section ?? ''
-            setField('steps', [...form.steps, ...bodies.map((body) => stepRow({ section, body }))])
+          onAdd={(bodies, container) => {
+            const rows = [...rowsOf(form.steps, container), ...bodies.map((body) => stepRow({ body }))]
+            setField('steps', setRows(form.steps, container, rows))
             setPasting(false)
           }}
         />
@@ -572,9 +589,11 @@ export default function RecipeForm() {
 }
 
 // 「貼上多行」: one step per line, numbering stripped, previewed by count
-// before anything is added.
-function PasteSteps({ onAdd, onClose }) {
+// before anything is added - at the end of the chosen group, 不分組 unless
+// another is picked.
+function PasteSteps({ groups, onAdd, onClose }) {
   const [text, setText] = useState('')
+  const [container, setContainer] = useState(UNGROUPED)
   const bodies = splitSteps(text)
   return (
     <Dialog
@@ -584,7 +603,7 @@ function PasteSteps({ onAdd, onClose }) {
       footer={
         <>
           <Button onClick={onClose}>取消</Button>
-          <Button kind="primary" disabled={!bodies.length} onClick={() => onAdd(bodies)}>
+          <Button kind="primary" disabled={!bodies.length} onClick={() => onAdd(bodies, container)}>
             加入 {bodies.length} 個步驟
           </Button>
         </>
@@ -592,6 +611,16 @@ function PasteSteps({ onAdd, onClose }) {
     >
       <Field label="一行一個步驟" hint="開頭的編號（1.、1)、①、一、、第一步）會自動拿掉。">
         <TextArea rows={10} value={text} onChange={(event) => setText(event.target.value)} autoFocus />
+      </Field>
+      <Field label="加到">
+        <Select value={container} onChange={(event) => setContainer(event.target.value)}>
+          <option value={UNGROUPED}>不分組</option>
+          {groups.map((group, index) => (
+            <option key={group._key} value={group._key}>
+              {group.name.trim() || `第 ${index + 1} 組`}
+            </option>
+          ))}
+        </Select>
       </Field>
     </Dialog>
   )
