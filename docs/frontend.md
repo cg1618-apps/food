@@ -6,7 +6,7 @@ is specific to food.
 
 ## Pages
 
-Navigation is 料理 · 食譜 · 食材 · 筆記 · 排程 · TBD · 設定 - 料理 first, since a dish
+Navigation is 料理 · 食譜 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定 - 料理 first, since a dish
 is what you look for and its recipes hang off it: a top bar on a desktop, a bar
 fixed to the bottom of the screen on a phone (`components/layout/Layout.jsx`).
 The section a page belongs to - its edit pages included - is marked with
@@ -31,6 +31,7 @@ them readable at 360px with room for more.
 | Kitchen-note library | `/notes` | public |
 | Kitchen note | `/notes/:id` | public |
 | 排程, the weekly schedule (the front page; `/` redirects here; `?week=` the first Saturday shown) | `/schedule` | public |
+| 加熱 | `/heating` | public |
 | TBD | `/tbd` | public |
 | Add / edit a dish | `/edit/dishes/new`, `/edit/dishes/:id` | Access |
 | Add / edit a recipe (a new one first asks how to start; `?dish=<id>` presets the dish) | `/edit/recipes/new`, `/edit/recipes/:id` | Access |
@@ -40,6 +41,7 @@ them readable at 360px with room for more.
 | 設定 (`/settings` redirects here) | `/edit/settings` | Access |
 | Image library | `/edit/images` | Access |
 | Edit the schedule (`?week=` as `/schedule`) | `/edit/schedule` | Access |
+| Edit 加熱 | `/edit/heating` | Access |
 | Edit TBD | `/edit/tbd` | Access |
 
 Any other path is a "page not found" page, not a redirect.
@@ -654,6 +656,22 @@ an optional 顯示文字 per row) - with its own 儲存 and 刪除:
   sentence - the rule `hooks/useSortOrderMove.js` applies on 設定.
 
 完成 goes back to `/tbd`.
+
+## 加熱
+
+Notes on how to heat or reheat a food - a frozen toast, a sausage, something
+for the microwave - each a name and how to heat it, in the owner's order. It
+is TBD's page with a different card, and works the same way.
+
+**`/heating`** (`pages/library/Heating.jsx`) is one list, read whole: each
+note's name, with how to heat it under it, line breaks kept. 編輯 goes to
+`/edit/heating`, and the empty state offers the same link.
+
+**`/edit/heating`** (`pages/edit/HeatingForm.jsx`) is the same list,
+editable in place. Every note is a card - 名稱 and 怎麼加熱 - with its own
+儲存 and 刪除, and everything about saving, deleting, 「＋ 新增」 and reordering
+by the drag handle is as on `/edit/tbd` above. A card with no name says so in
+place and sends nothing. 完成 goes back to `/heating`.
 
 ## 排程
 

@@ -97,6 +97,9 @@ it. No ingredient is touched.
 `t1bd`'s downgrade drops `tbd_link` and `tbd_entry`, and every entry on the
 TBD page with them. Nothing else is touched.
 
+`h1eating`'s downgrade drops `heating_note`, and every note on the 加熱 page
+with it. Nothing else is touched.
+
 **`d1ishes` restructures every recipe**, so its two directions are worth
 reading before either runs.
 
@@ -187,7 +190,8 @@ they ever do not, believe the box.
 | Dishes, regions; recipes as ways of making a dish | `d1ishes` — thirty-nine tables |
 | Recipe templates | `t2emplates` — forty tables |
 | The weekly schedule | `s3chedule` — forty-two tables |
-| Schedule marks as booleans, several dishes per meal | `s4chedule` — forty-three tables, the current head |
+| Schedule marks as booleans, several dishes per meal | `s4chedule` — forty-three tables |
+| 加熱 | `h1eating` — forty-four tables, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

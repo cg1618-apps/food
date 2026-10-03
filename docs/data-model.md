@@ -1,6 +1,6 @@
 # Data model
 
-What the database holds today: forty-three tables, at revision `s4chedule`.
+What the database holds today: forty-four tables, at revision `h1eating`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the nine managed
 vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
@@ -10,7 +10,7 @@ its four galleries (`image`, `ingredient_image`, `dish_image`, `recipe_image`,
 `recipe_method`, `recipe_equipment`, `recipe_source`, `recipe_line_group`,
 `recipe_line`, `recipe_step_group`, `recipe_step`), `recipe_template`, kitchen notes' two (`kitchen_note`, `kitchen_note_label`),
 `common_ingredient`, the 常用食材 list, TBD's two (`tbd_entry`,
-`tbd_link`), and the schedule's three (`schedule_day`, `schedule_meal`,
+`tbd_link`), 加熱's `heating_note`, and the schedule's three (`schedule_day`, `schedule_meal`,
 `schedule_meal_item`).
 
 ## Conventions shared by every table
@@ -191,6 +191,17 @@ rows being replaced inside the same flush.
 **An entry has a name or at least one link.** A CHECK cannot see the child
 table, so that rule is the service's (`app/services/tbd.py`), answered as a
 422 in the app's error shape.
+
+## `heating_note`
+
+加熱: a standalone page of notes on how to heat or reheat a food. Nothing
+references the table and it references nothing - a note names its food in
+words, not by pointing at an ingredient or a dish.
+
+A NOT NULL `name` (`ck_heating_note_has_a_name` refuses a blank one), an
+optional `body` (free text, line breaks kept; blank is stored as null), a NOT
+NULL `sort_order` - the owner's order on the page, as `tbd_entry`'s - and
+`created_at` / `updated_at`.
 
 ## The managed vocabularies
 

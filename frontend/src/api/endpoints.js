@@ -83,6 +83,15 @@ export const endpoints = {
     remove: (id) => `${WRITE}/kitchen-notes/${id}`,
     images: (id) => `${WRITE}/kitchen-notes/${id}/images`,
   },
+  // 加熱: a standalone page of heating notes, shaped as TBD's - read whole,
+  // written one note at a time, PUT {ids} saves the order after a drag.
+  heating: {
+    list: () => `${API}/heating`,
+    create: () => `${WRITE}/heating`,
+    update: (id) => `${WRITE}/heating/${id}`,
+    remove: (id) => `${WRITE}/heating/${id}`,
+    order: () => `${WRITE}/heating/order`,
+  },
   // TBD: a standalone page of names and links. Read whole; written one entry
   // at a time, and PUT {ids} saves the order of them all after a drag.
   tbd: {

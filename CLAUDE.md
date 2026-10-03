@@ -26,6 +26,8 @@ words:
   information;
 - a **random picker**, for when nothing suggests itself;
 - a **restaurant library**;
+- **加熱** — how to heat or reheat a food: a frozen toast, a sausage,
+  something for the microwave;
 - **TBD** — a page of loose notes, a name and links each, related to nothing
   else in the app.
 
@@ -38,7 +40,7 @@ reference work.
 ## Status
 
 **Modules 1 and 2 are built, with dishes, recipe templates, kitchen notes,
-the weekly schedule and TBD.** The schema is at revision `s4chedule` (the
+the weekly schedule, 加熱 and TBD.** The schema is at revision `h1eating` (the
 head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
@@ -70,10 +72,13 @@ head).
   one of that dish's recipes; read two weeks at a time at `/schedule` (a
   table on a desktop, a card per day on a phone, a mark shown only when
   true) and edited a day at a time at `/edit/schedule`.
+- **加熱** - a standalone page of heating notes, each a name and how to heat
+  it, in the owner's order; read at `/heating`, edited in place at
+  `/edit/heating`.
 - **TBD** - a standalone page of entries, each an optional name and any
   number of links, in the owner's order; read at `/tbd`, edited in place at
   `/edit/tbd`.
-- **The notebook UI** - 料理 · 食譜 · 食材 · 筆記 · 排程 · TBD · 設定: the four libraries
+- **The notebook UI** - 料理 · 食譜 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定: the four libraries
   (search and filters in the URL, a sidebar or a phone drawer, covers or a
   table), their detail pages, their add and edit forms with the gallery
   picker, one delete dialog, ingredient merge, 設定 for every vocabulary

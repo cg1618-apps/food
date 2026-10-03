@@ -13,6 +13,7 @@ from app.routers import (
     dish,
     edit_session,
     health,
+    heating,
     image,
     ingredient,
     ingredient_category,
@@ -70,6 +71,8 @@ def create_app(dist: Path = DIST) -> FastAPI:
     app.include_router(schedule.edit)
     app.include_router(tbd.router)
     app.include_router(tbd.edit)
+    app.include_router(heating.router)
+    app.include_router(heating.edit)
     app.include_router(image.router)
     app.include_router(image.edit)
     for vocabulary_router in vocabulary.ROUTERS:
