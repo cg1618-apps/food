@@ -1,4 +1,4 @@
-"""One factory, eight vocabularies. Reads are public; writes sit behind Access.
+"""One factory, nine vocabularies. Reads are public; writes sit behind Access.
 
 A delete of a value still in use is refused here with a 409 that carries the
 count, before the database is asked. The RESTRICT foreign keys are the
@@ -20,6 +20,7 @@ from app.models import (
     LineGroup,
     RecipeCourse,
     RecipeStatus,
+    Region,
     SourcePlatform,
     StepGroup,
 )
@@ -95,6 +96,9 @@ def build(model, resource: str, tag: str, noun: str) -> tuple[APIRouter, APIRout
 
 
 course_router, course_edit = build(RecipeCourse, "recipe-courses", "Recipe courses", "course")
+# Hand-ordered like courses: the order is the one the dish form and the
+# filters offer them in.
+region_router, region_edit = build(Region, "regions", "Regions", "region")
 status_router, status_edit = build(RecipeStatus, "recipe-statuses", "Recipe statuses", "status")
 platform_router, platform_edit = build(
     SourcePlatform, "source-platforms", "Source platforms", "source platform"
@@ -123,6 +127,8 @@ def fixed_vocabularies():
 ROUTERS = [
     course_router,
     course_edit,
+    region_router,
+    region_edit,
     status_router,
     status_edit,
     platform_router,

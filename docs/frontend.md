@@ -6,7 +6,8 @@ is specific to food.
 
 ## Pages
 
-Navigation is 食譜 · 食材 · 筆記 · TBD · 設定: a top bar on a desktop, a bar
+Navigation is 料理 · 食譜 · 食材 · 筆記 · TBD · 設定 - 料理 first, since a dish
+is what you look for and its recipes hang off it: a top bar on a desktop, a bar
 fixed to the bottom of the screen on a phone (`components/layout/Layout.jsx`).
 The section a page belongs to - its edit pages included - is marked with
 `aria-current="page"`; `lib/nav.js` holds that match.
@@ -21,6 +22,8 @@ them readable at 360px with room for more.
 
 | Page | Route | Gate |
 | --- | --- | --- |
+| Dish library | `/dishes` | public |
+| Dish | `/dishes/:id` | public |
 | Recipe library (the front page; `/` redirects here) | `/recipes` | public |
 | Recipe | `/recipes/:id` | public |
 | Ingredient library | `/ingredients` | public |
@@ -28,7 +31,8 @@ them readable at 360px with room for more.
 | Kitchen-note library | `/notes` | public |
 | Kitchen note | `/notes/:id` | public |
 | TBD | `/tbd` | public |
-| Add / edit a recipe | `/edit/recipes/new`, `/edit/recipes/:id` | Access |
+| Add / edit a dish | `/edit/dishes/new`, `/edit/dishes/:id` | Access |
+| Add / edit a recipe (`?dish=<id>` presets the dish) | `/edit/recipes/new`, `/edit/recipes/:id` | Access |
 | Add / edit an ingredient | `/edit/ingredients/new`, `/edit/ingredients/:id` | Access |
 | Add / edit a note | `/edit/notes/new`, `/edit/notes/:id` | Access |
 | 設定 (`/settings` redirects here) | `/edit/settings` | Access |
@@ -40,8 +44,10 @@ Any other path is a "page not found" page, not a redirect.
 **The first release's paths redirect**, query string included, so bookmarks
 survive: `/library/ingredient` → `/ingredients`, `/ingredient/:id` →
 `/ingredients/:id`, `/edit/ingredient/...` → `/edit/ingredients/...`,
-`/edit/vocabularies` → `/edit/settings`. `routes.test.jsx` pins every route
-and every redirect.
+`/edit/vocabularies` → `/edit/settings`. `/edit/dishes/:id/edit` - the dish
+form's path as its design named it - redirects to `/edit/dishes/:id`, the
+shape every other edit page has. `routes.test.jsx` pins every route and every
+redirect.
 
 Media's detail route is `/<type>/:publicId/:slug?`; the cosmetic slug and the
 second id went with the integer-primary-key decision, so ours is
@@ -84,7 +90,7 @@ to fetch". So:
 
 ## Libraries
 
-The three libraries - recipes, ingredients, kitchen notes - are one scaffold,
+The four libraries - dishes, recipes, ingredients, kitchen notes - are one scaffold,
 `components/layout/LibraryLayout.jsx`, with each page supplying its data, its
 words and its filters:
 
@@ -116,15 +122,25 @@ words and its filters:
 - **Two empties, two directions**: an empty library offers the add button; a
   filter or search that matches nothing offers 清除搜尋與篩選.
 - **A label chip carries its own library's count** - `ingredient_count`,
-  `recipe_count` or `note_count` from `GET /api/labels` - not the total.
+  `dish_count` or `note_count` from `GET /api/labels` - not the total. The
+  recipe library shows `dish_count`: a recipe's labels are its dish's.
 - The list keeps the previous result on screen while a new filter loads
   (`keepPreviousData`), so the grid does not blank on every click.
 
 | Library | URL keys | Table columns | Badges |
 | --- | --- | --- | --- |
-| 食譜 `/recipes` | `course`, `status` (ids, sent as `status_id`), `kind`, `method`, `equipment`, `author` (ids, sent as `author_id`), `label` (all "any of"); `written` = `true` / `false` | 類別, 做法, 時間, 作者, 狀態 | 書籤 when not written up |
+| 料理 `/dishes` | `kind`, `course`, `region`, `label` (all "any of") | 種類, 類別, 地區, 食譜 (how many) | - |
+| 食譜 `/recipes` | `dish` (ids, sent as `dish_id`), `kind`, `course`, `status` (ids, sent as `status_id`), `method`, `equipment`, `author` (ids, sent as `author_id`), `label` (all "any of"); `written` = `true` / `false`. `kind`, `course` and `label` are the dish's | 類別, 做法, 時間, 作者, 狀態 | 書籤 when not written up |
 | 食材 `/ingredients` | `category`, `label`, `rating` (one each); `stub`, `variety` (switches) | 分類 / 品種, 冷藏, 用於, 評等 | 待補, rating |
 | 筆記 `/notes` | `kind`, `label` (both "any of") | 種類, 連結 (host only) | - |
+
+**A dish card** (`pages/library/DishLibrary.jsx`) is the dish's cover - its
+own first picture, else its first recipe's, as the API answers it - its name,
+its English name under it when that differs, and a meta line of kind ·
+course · region · 「N 份食譜」 (還沒有食譜 for none). Its view is remembered
+under `cg1618:food:dishes-view`. **A recipe card** is the recipe's display
+name, with its dish's name under it when the two differ - the table view
+draws the same subtitle under the name.
 
 **The ingredient category filter is exact.** Choosing 蔬菜 lists what is filed
 under 蔬菜 itself, not under its child categories; that is the API's
@@ -142,8 +158,8 @@ is invisible and stubs accumulate forever.
 
 **Delete is a dialog, not a page**, and not `window.confirm` — it has to show
 counts and to correct itself. One component, `components/forms/DeleteDialog.jsx`,
-deletes every kind of row (`<DeleteDialog kind="recipe" | "ingredient" | "note"
-id name onClose onDeleted? />`; `onDeleted` defaults to the kind's library), and
+deletes every kind of row (`<DeleteDialog kind="dish" | "recipe" | "ingredient"
+| "note" id name onClose onDeleted? />`; `onDeleted` defaults to the kind's library), and
 `lib/deleteTargets.js` says per kind which `cascade` counts it shows and echoes,
 which block, and which reads go stale:
 
@@ -152,14 +168,18 @@ which block, and which reads go stale:
 - on a 409 carrying `field` and `actual` it takes the server's number for that
   field, says so, and re-offers the button (「確認刪除」). Asking for a reload is
   what a prose-only error body forces;
-- a blocking count (`used_in` on a recipe; `children` and `recipes` on an
-  ingredient) is said up front in words, but the button stays: the refusal is
-  the server's, and its 409 lists the recipes in `used_in`, shown as links;
+- a blocking count (`recipes` and `used_in` on a dish; `children` and
+  `recipes` on an ingredient) is said up front in words, but the button
+  stays: the refusal is the server's. Its 409 lists recipes, shown as links -
+  under 它的食譜： those in `recipes` (a dish's own) and under 用到它的食譜：
+  those in `used_in`;
+- a recipe's dialog has nothing that blocks: lines name dishes, and the dish
+  stays;
 - a kitchen note has no cascade, so its dialog is the plain question.
 
 ## Detail pages
 
-`/recipes/:id`, `/ingredients/:id` and `/notes/:id` are one reading column
+`/dishes/:id`, `/recipes/:id`, `/ingredients/:id` and `/notes/:id` are one reading column
 each, built from `components/layout/Detail.jsx`: `DetailStatus` (loading; a
 404 as "not found" with a link back to the library; any other error),
 `Prose` (written notes with their line breaks, no markdown), `LabelLinks`
@@ -172,30 +192,41 @@ thumbnails that swap it in place, every one cropped at its focus.
 list. A recipe saved only as a bookmark is a short page, not a page of
 empties.
 
-- **Recipe**: course (a link to the library filtered by it), 基底 for a
-  base, 也可以當作, 書籤 when not written up; names; a meta line of servings,
-  time, methods and equipment; the **status, changed in place**; labels;
-  description; 來源 (platform; author, a link to the library filtered by
-  them; title, linked out when there is a URL, the URL's host standing in
-  for a missing title);
-  其他版本 (`lib/versions.js`: the original first, marked 原版, then the
-  siblings, never the recipe itself); 材料 and 步驟 in their groups
+- **Dish** (`pages/detail/Dish.jsx`): its gallery; its kind (醬料 drawn in
+  the brand tone), course and region - each a link to the dish library
+  filtered by it - and 也可以當作; the name and its other name slots; labels
+  (to `/dishes?label=`); the description; then **食譜**, the dish's recipes
+  as cover cards (the recipe's own cover, its display name, authors · status,
+  書籤 when not written up), with **「＋ 新增食譜」** opening
+  `/edit/recipes/new?dish=<id>` - the one section drawn even when empty
+  (還沒有食譜。), since its button is how a new dish gets a recipe; and
+  **用在**, the recipes whose lines name this dish, which is what a sauce's
+  page is mostly for.
+- **Recipe**: its **dish, a link**, with the dish's kind (醬料 only), course,
+  region and 也可以當作 beside it and the dish's labels under the status -
+  shown read-only, since they are the dish's and edited there; 書籤 when not
+  written up; the recipe's display name, and 「<dish> 的一份食譜」 under it
+  when the recipe has its own name; a meta line of servings, time, methods
+  and equipment; the **status, changed in place**; 來源 (platform; author, a
+  link to the library filtered by them; title, linked out when there is a
+  URL, the URL's host standing in for a missing title); **其他版本**, the
+  dish's other recipes (`other_recipes`); 材料 and 步驟 in their groups
   (`lib/recipeGroups.js`: the ungrouped rows first, without a heading, then a
   block per group under its name, in the recipe's group order; an empty group
   is left out; ordinary steps numbered through every group, an optional
   step carrying a 可省略 chip in the number's place with its text muted, a
-  備註 drawn as a ruled, tinted callout with no number); 保存; 筆記; 用在
-  (the recipes naming a base directly). A line links to its ingredient or
-  sub-recipe; an optional line is drawn faint with （可省略）; a stub
-  ingredient carries 待補.
+  備註 drawn as a ruled, tinted callout with no number); 保存; 筆記. A line
+  links to its ingredient or to its dish (`/dishes/:id`); an optional line is
+  drawn faint with （可省略）; a stub ingredient carries 待補.
 - **The status change** is `PATCH /api/edit/recipes/{id}` with `{status_id}`
   alone. The toggle offers the statuses 設定 manages, in their order
   (`GET /api/recipe-statuses`); it shows the chosen value while the
   request runs and the stored one again, with the server's sentence, if it
   fails. On success the recipe the PATCH answers with goes straight into the
   detail read's cache (`useApiMutation`'s `onSaved`), so the new status
-  stays on screen even if the refetch after it fails, and every recipe read
-  and the statuses' counts are invalidated.
+  stays on screen even if the refetch after it fails, and every recipe read,
+  the statuses' counts and the dish reads (a dish page lists its recipes'
+  statuses) are invalidated.
 - **Ingredient**: category (`/ingredients?category=<id>`) and, for a
   variety, its parent; names, rating, 待補; aliases; how many recipes use it
   and how many varieties it has; labels. A stub adds a 待補 note linking to
@@ -225,7 +256,7 @@ result list, which would otherwise be clipped by the body's scroll.
 
 ## Forms
 
-`/edit/recipes/...`, `/edit/ingredients/...` and `/edit/notes/...` are one page
+`/edit/dishes/...`, `/edit/recipes/...`, `/edit/ingredients/...` and `/edit/notes/...` are one page
 per entity, in sections on the reading column (`Section`), ending in
 `components/forms/FormActions.jsx`: the error, then 儲存 / 取消 / 刪除. **The
 error sits directly above the save button** with the server's own sentence -
@@ -245,10 +276,14 @@ if the categories fail to load.
   the row saved and the gallery did not, the new id is kept, so 儲存 again
   PATCHes it rather than creating a second row.
 - **Each save invalidates every read its write can move**, not only its own:
-  a recipe save also marks the ingredient library and the category tree
-  stale (a 新增 line files a stub in the fallback category, whose count
-  moves), the label, course, status, source platform, method, equipment,
-  材料分組 and 步驟分組 counts and the image library; an ingredient save, its delete and a merge move the category
+  a recipe save also marks the dish reads stale (its dish's recipe count,
+  cover and 用在; a 新增 dish is a new row), the ingredient library and the
+  category tree (a 新增 line files a stub in the fallback category, whose
+  count moves), the authors, status, source platform, method, equipment,
+  材料分組 and 步驟分組 counts and the image library; a dish save, and a dish
+  delete, mark the dish and recipe reads stale (every recipe of it shows its
+  name) and the label, course, region and image counts; a recipe delete
+  marks the dish reads too; an ingredient save, its delete and a merge move the category
   tree, labels, methods (heating rows), recipes (line names, used-in),
   images and 常用食材 (a renamed, deleted or merged ingredient is a changed
   chip); a note moves labels and images.
@@ -281,18 +316,22 @@ if the categories fail to load.
   first row puts it at the end of the container above, Down on its last at
   the start of the one below (`lib/boardMoves.js`), and focus follows the row
   by its id.
-- **Choosing from a short vocabulary** - labels, methods, equipment,
-  serves-as - is `ChipPicker.jsx`, toggle chips with `aria-pressed`.
+- **Choosing from a short vocabulary** - a dish's labels and serves-as, a
+  recipe's methods and equipment - is `ChipPicker.jsx`, toggle chips with `aria-pressed`.
 - **Aliases are one box**, split on any comma or 、 (`splitAliases`): they are
   unordered and never displayed, so a row editor's ordering would be noise.
 
 **The typeahead** (`components/forms/Typeahead.jsx`) searches the list
 endpoints' `q` - every name slot and alias, on the server - 250 ms after the
-typing stops: `sources` is `['ingredient']`, `['recipe']` or both, `exclude`
-keeps a row out (a recipe is not its own version), and `allowNew` adds
-「新增 'xxx'」 when no result's name equals the typed text exactly
-(`lib/typeahead.js`) - and only once the search has answered, so a quick Enter
-cannot make a stub named after something the library already has. Handed
+typing stops: `sources` is `['ingredient']`, `['dish']` or both (the
+default), `exclude` keeps a row out (a recipe's lines never offer its own
+dish), and `allowNew` adds 「新增 'xxx'」 when no result's name equals the
+typed text exactly (`lib/typeahead.js`) - and only once the search has
+answered, so a quick Enter cannot make a stub named after something the
+library already has. `allowNewDish` adds a new-dish option the same way
+(type `new-dish`; labelled 「新增料理」 when 「新增」 is offered beside it,
+`newDishHint` saying what the save will make). A sauce among the results
+carries a 醬料 chip. Handed
 `items` instead - a list small enough to hold whole, the authors - it filters
 that in the browser (a name slot containing the typed text, ignoring case and
 width), asks the server nothing, and offers 「新增」 at once; `newHint` is the
@@ -300,22 +339,44 @@ words beside 「新增」 saying what the save will make. Up / Down
 move, Enter picks - and never submits the form
 around it - Escape closes the list without closing a dialog it sits in. It only
 picks: `onSelect(option)` hands the caller `{ type, id, label, needsDetail,
-kind }` and the box clears. `Picked`, from the same file, is how every caller
+kind }` - `type` one of `ingredient`, `dish`, `item`, `new`, `new-dish` - and
+the box clears. `Picked`, from the same file, is how every caller
 shows the choice in its place, with 待補 for a stub and 更換 to search again.
 
 **Typed but not picked is never dropped.** `onQueryChange(text)` tells the
 caller what is in the box ('' after a pick), and every caller refuses to save
 over it: a recipe line holding text is not blank (below); the ingredient's
-品種 parent and the recipe's 另一版 refuse the save with a sentence naming
-the text (選一個，或把文字清掉); the merge picker says it under the box.
+品種 parent and the recipe's 料理 refuse the save with a sentence naming the
+text; the merge picker says it under the box.
 
-**Recipe lines** hold a `target` - an ingredient, a recipe, or `{ type: 'new',
-label }` - from which `lib/recipeLines.js` builds exactly one of
-`ingredient_id`, `sub_recipe_id` or `new_ingredient` per line (a typed name in
-Han characters is `name_cn`, otherwise `name_en`). A 新增 line shows 待補 until
-the save creates the stub. An entirely blank line is dropped; one with an
-amount, a note or typed-but-unpicked text (the row's `pending`, never sent)
-and nothing chosen is refused by number - 「第 n 行材料…還沒選食材或食譜」.
+**A recipe's 料理** is the form's first section, with the recipe's optional
+**名稱** beside it (blank shows the dish's name) and 狀態, 份量 and 時間 under
+them. The dish is picked with the typeahead over the dish library alone;
+「新增」 names a dish the save creates - **a 料理 unless 「新料理的種類」, the
+toggle shown under a new dish, says 醬料** - and a name the server already
+knows is reused instead (`new_dish`). Picked, it shows its kind, or 新料理 /
+新醬料 for one the save makes. `?dish=<id>` - the dish page's 「＋ 新增食譜」 -
+reads that dish and starts the form with it chosen, once and never over a
+dish chosen meanwhile; 取消 then goes back to the dish. With no dish, the save
+is refused - 「這份食譜是哪道料理？」. The fields that are the dish's - names,
+kind, course, serves-as, labels, description, aliases - are the dish form's,
+not this one's.
+
+**The dish form** (`pages/edit/DishForm.jsx`) is the names, 種類 (a 料理 /
+醬料 toggle), 類別 and 地區 selects, 也可以當作 (never the dish's own course)
+and 標籤 chips, 簡介, 別名 and the gallery; saving goes to the dish's page.
+
+**Recipe lines** hold a `target` - an ingredient, a dish, `{ type: 'new',
+label }` or `{ type: 'new-dish', label, kind }` - from which
+`lib/recipeLines.js` builds exactly one of `ingredient_id`, `sub_dish_id`,
+`new_ingredient` or `new_dish` per line (a typed name in Han characters is
+`name_cn`, otherwise `name_en`). A line's typeahead searches ingredients and
+dishes and offers both 「新增」 (a stub ingredient) and 「新增料理」 (a dish,
+**a 醬料** - `SAUCE`, the line default). A 新增 line shows 待補 until the save
+creates the stub; a 新增料理 line is tagged 新醬料, and a picked dish its
+kind. An entirely blank line is dropped; one with an amount, a note or
+typed-but-unpicked text (the row's `pending`, never sent) and nothing chosen
+is refused by number - 「第 n 行材料…還沒選食材或料理」.
 A blank step is dropped the same way.
 
 **Each step has a kind**, switched by a 步驟 / 可省略 / 備註 `Toggle`
@@ -400,8 +461,10 @@ cover and a thumbnail) and 移除.
 ## 設定 and 圖片
 
 `/edit/settings` is `pages/edit/Settings.jsx`: a tab each for 食材分類,
-常用食材, 標籤, 類別, 狀態, 來源, 作者, 材料分組, 步驟分組, 做法 and 器材, with 圖片庫 - the way
-into `/edit/images` - beside the heading. 狀態 is the recipe statuses (想試,
+常用食材, 標籤, 類別, 地區, 狀態, 來源, 作者, 材料分組, 步驟分組, 做法 and 器材, with 圖片庫 - the way
+into `/edit/images` - beside the heading. 類別 and 地區 file a dish (地區 is
+台式, 中式, 日式 …, hand-ordered, the order the dish form and filters offer);
+renaming either marks the dish and recipe reads stale. 狀態 is the recipe statuses (想試,
 可煮, 常煮 …; the first is what a new recipe starts on), 來源 the source
 platforms (YouTube, 網站, 書 …), 作者 the sources' authors, and 材料分組 /
 步驟分組 the groups a recipe's lines and steps are picked from (主料, 配料,
@@ -411,7 +474,7 @@ them marks every recipe read stale, as a course does. 作者 is listed by name, 
 drag handle and a new author is added without a `sort_order`.
 
 - **The tab is in the URL**, `?tab=` with `categories`, `common-ingredients`,
-  `labels`, `courses`,
+  `labels`, `courses`, `regions`,
   `statuses`, `platforms`, `authors`, `line-groups`, `step-groups`, `methods` or
   `equipment` (`hooks/useUrlTab.js`), so a tab can be linked to
   and survives a reload. A missing or unknown tab is the first, 食材分類, and
@@ -453,8 +516,8 @@ Each value is a `components/settings/NameRow.jsx`:
   siblings, and carries its children with it; moving it under another parent
   is 改名's 上層.
 - **刪除** asks in `ConfirmModal`, saying the count it knows. A refusal is
-  explained **in the row**: for a course, status, source platform, method or
-  piece of equipment with the 409's `usage_count` (the server's number, newer than the page's); for a
+  explained **in the row**: for a course, region, status, source platform,
+  method or piece of equipment with the 409's `usage_count` (the server's number, newer than the page's); for a
   category with what is under it - its ingredients and child categories, both
   `RESTRICT`. The button stays even when the page already knows the delete
   will be refused: the refusal is the server's. The fallback category (預設)
@@ -477,15 +540,16 @@ failure puts the stored list back with the server's sentence above it. A
 change makes only `GET /api/common-ingredients` stale - which is what the
 recipe form's chips read.
 
-Label rows show where each label is used - 食材, 食譜 and 筆記 separately; the
+Label rows show where each label is used - 食材, 料理 and 筆記 separately; the
 other vocabularies show `usage_count`. A change invalidates the vocabulary
-and every owner that shows its names (a label: ingredients, recipes and
-notes; a method: recipes and ingredients).
+and every owner that shows its names (a label: ingredients, dishes, recipes -
+which show their dish's - and notes; a course or region: dishes and recipes;
+a method: recipes and ingredients).
 
 `/edit/images` is `pages/edit/ImageLibrary.jsx`, media's admin image page
 without what food lacks: a grid of thumbnails (centred, `data-focus="none"` -
 a focus belongs to an owner, not the file), each with its size and either
-its owners as links (食材 / 食譜 / 筆記, `lib/imageOwners.js`) or 未使用 and
+its owners as links (食材 / 料理 / 食譜 / 筆記, `lib/imageOwners.js`) or 未使用 and
 刪除. **Only an unused image offers delete**, as in media: taking a picture
 off a recipe is done on the recipe's form. The owners come from each attached
 image's detail, read only for the tiles that have any; the list itself

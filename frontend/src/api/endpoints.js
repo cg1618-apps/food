@@ -14,7 +14,7 @@
 const API = '/api'
 const WRITE = '/api/edit'
 
-// The eight vocabularies the backend builds from one factory
+// The nine vocabularies the backend builds from one factory
 // (app/routers/vocabulary.py) share one URL shape.
 function vocabulary(resource) {
   return {
@@ -26,6 +26,16 @@ function vocabulary(resource) {
 }
 
 export const endpoints = {
+  // 料理: a dish or a sauce in general; its recipes are the ways of making it.
+  dishes: {
+    list: () => `${API}/dishes`,
+    detail: (id) => `${API}/dishes/${id}`,
+    cascade: (id) => `${API}/dishes/${id}/cascade`,
+    create: () => `${WRITE}/dishes`,
+    update: (id) => `${WRITE}/dishes/${id}`,
+    remove: (id) => `${WRITE}/dishes/${id}`,
+    images: (id) => `${WRITE}/dishes/${id}/images`,
+  },
   recipes: {
     list: () => `${API}/recipes`,
     detail: (id) => `${API}/recipes/${id}`,
@@ -96,6 +106,8 @@ export const endpoints = {
     remove: (id) => `${WRITE}/labels/${id}`,
   },
   courses: vocabulary('recipe-courses'),
+  // 地區: where a dish comes from.
+  regions: vocabulary('regions'),
   statuses: vocabulary('recipe-statuses'),
   platforms: vocabulary('source-platforms'),
   methods: vocabulary('cooking-methods'),
@@ -108,7 +120,7 @@ export const endpoints = {
   stepGroups: vocabulary('step-groups'),
   vocabularies: {
     // Every closed list with its display label: preservation methods and
-    // states, ratings, recipe kinds, note kinds.
+    // states, ratings, dish kinds, note kinds, step kinds.
     fixed: () => `${API}/vocabularies/fixed`,
   },
   // GET under the gated prefix: 204 when Access let the request through, and

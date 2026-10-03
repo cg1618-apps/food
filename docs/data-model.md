@@ -1,14 +1,14 @@
 # Data model
 
-What the database holds today: thirty-six tables, at revision `t1bd`.
+What the database holds today: thirty-nine tables, at revision `d1ishes`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
-`ingredient_preservation`, `label`, `ingredient_label`), the eight managed
+`ingredient_preservation`, `label`, `ingredient_label`), the nine managed
 vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
-its three galleries (`image`, `ingredient_image`, `recipe_image`,
-`kitchen_note_image`), the recipe family's eleven (`recipe`, `recipe_alias`,
-`recipe_serves_as`, `recipe_label`, `recipe_method`, `recipe_equipment`,
-`recipe_source`, `recipe_line_group`, `recipe_line`, `recipe_step_group`,
-`recipe_step`), kitchen notes' two (`kitchen_note`, `kitchen_note_label`),
+its four galleries (`image`, `ingredient_image`, `dish_image`, `recipe_image`,
+`kitchen_note_image`), the dish family's four (`dish`, `dish_alias`,
+`dish_serves_as`, `dish_label`), the recipe family's eight (`recipe`,
+`recipe_method`, `recipe_equipment`, `recipe_source`, `recipe_line_group`,
+`recipe_line`, `recipe_step_group`, `recipe_step`), kitchen notes' two (`kitchen_note`, `kitchen_note_label`),
 `common_ingredient`, the 常用食材 list, and TBD's two (`tbd_entry`,
 `tbd_link`).
 
@@ -19,7 +19,8 @@ There is no second public identifier — media has one because its Google Sheets
 restore needs to permute ids inside a transaction, and food has no such channel.
 
 **Names are slots, not a single column.** `name_cn` and `name_en` everywhere,
-plus `name_alt` on `ingredient`. At least one must be non-null, enforced by a
+plus `name_alt` on `ingredient` and `dish`. A recipe is the exception: one
+optional `name`, falling back to its dish's. At least one must be non-null, enforced by a
 `ck_<table>_has_a_name` CHECK using `num_nonnulls`.
 
 **`name_cn` leads display**, then `name_en`, then `name_alt`. The rule lives in
@@ -192,16 +193,17 @@ table, so that rule is the service's (`app/services/tbd.py`), answered as a
 
 ## The managed vocabularies
 
-`recipe_course`, `recipe_status`, `source_platform`, `cooking_method`,
-`equipment`, `author`, `line_group` (材料分組) and `step_group` (步驟分組)
-share one shape, declared once
+`recipe_course` (類別), `region` (地區), `recipe_status`, `source_platform`,
+`cooking_method`, `equipment`, `author`, `line_group` (材料分組) and
+`step_group` (步驟分組) share one shape, declared once
 in `VocabularyMixin` (`app/models/vocabulary.py`): `name_cn`, `name_en`,
 `sort_order`, at least one name (`ck_<table>_has_a_name`) and a case-insensitive
 unique index per name slot with default null handling, as on `ingredient`.
 
 They are tables rather than lists in `app/constants.py` because the owner edits
 them: renaming 煮 to 水煮 is one row, not a deploy. The closed lists in
-constants are the ones the app's own logic branches on (storage state, rating);
+constants are the ones the app's own logic branches on (storage state, rating,
+dish kind);
 these are the ones it only displays and filters by.
 
 **`author` is listed by name, not by hand.** Every author has `sort_order` 0,
@@ -219,6 +221,7 @@ them:**
 | Table | Seeded rows |
 | --- | --- |
 | `recipe_course` | 主食, 配菜, 湯, 小吃點心, 甜點, 飲料, 醬料 |
+| `region` | 台式, 中式, 日式, 韓式, 泰式, 西式 (`d1ishes`), hand-ordered |
 | `recipe_status` | 想試, 可煮, 常煮 (`v2ocabulary`) |
 | `source_platform` | YouTube, Shorts, 網站, 書, 其他 (`v2ocabulary`) |
 | `line_group` | 主料, 配料, 調味料 (`g1roups`) |
@@ -259,7 +262,8 @@ things that would stop it being deleted:
 
 | Vocabulary | Counted |
 | --- | --- |
-| `recipe_course` | recipes filed in it (`recipe.course_id`); serves-as links `CASCADE` and do not count |
+| `recipe_course` | dishes filed in it (`dish.course_id`); serves-as links `CASCADE` and do not count |
+| `region` | dishes from it (`dish.region_id`) |
 | `recipe_status` | recipes in it (`recipe.status_id`) |
 | `source_platform` | sources naming it (`recipe_source.platform_id`) — two sources from one book count twice |
 | `cooking_method` | `ingredient_heating` rows plus `recipe_method` links |
@@ -277,18 +281,19 @@ are one row. `storage_key` and `thumb_key` are paths under the image directory
 pixels are on disk, not in the database.
 
 **A gallery is a join table per owner type, with real foreign keys.**
-`ingredient_image`, `recipe_image` and `kitchen_note_image` exist. Media has one
+`ingredient_image`, `dish_image`, `recipe_image` and `kitchen_note_image`
+exist. Media has one
 polymorphic table with an `owner_type` and an `owner_id` that nothing
 constrains.
 
 | Column | Notes |
 | --- | --- |
-| `ingredient_id` / `recipe_id` / `kitchen_note_id` | the owner, `CASCADE` |
+| `ingredient_id` / `dish_id` / `recipe_id` / `kitchen_note_id` | the owner, `CASCADE` |
 | `image_id` | `RESTRICT` |
 | `position` | 0 is the cover; unique per owner |
 | `focus` | `"X% Y%"` with each 0–100, or null for centred |
 
-The three gallery tables have the same shape. Deleting an owner removes its
+The four gallery tables have the same shape. Deleting an owner removes its
 gallery rows and never the pictures. An image
 that is still attached cannot be deleted: the API answers 409 naming the owners,
 and the foreign key is the backstop. `focus` is per attachment, because one
@@ -296,58 +301,71 @@ picture may be cropped differently in two galleries. An image may appear once in
 a gallery (`uq_<owner>_image_once`) and a position once
 (`uq_<owner>_image_position`).
 
-## `recipe`
+## `dish`
 
-One recipe: a dish, or a base — a sauce, a stock, a dough — cooked to be used
-inside other recipes.
+A dish or a sauce in general - 照燒雞腿排, 照燒醬 - whoever cooks it. Its
+recipes are the specific ways of making it.
 
 | Column | Notes |
 | --- | --- |
 | `id` | |
-| `name_cn`, `name_en`, `name_alt` | at least one required (`ck_recipe_has_a_name`); **not unique** |
-| `kind` | `dish` or `base` (`RECIPE_KINDS`), default `dish` |
-| `course_id` | optional, → `recipe_course`, `RESTRICT` |
-| `variant_of_id` | optional, → `recipe`, `SET NULL` |
-| `status_id` | **required**, → `recipe_status`, `RESTRICT`. No server default: a recipe created without one is given the first status in sort order by the write path |
-| `servings`, `time` | free text — `2-3 人`, `1hr` |
-| `description`, `storage_notes`, `notes` | |
+| `name_cn`, `name_en`, `name_alt` | at least one required (`ck_dish_has_a_name`); **not unique** |
+| `kind` | `dish` (料理) or `sauce` (醬料) (`DISH_KINDS`), server default `dish` |
+| `course_id` | optional, → `recipe_course`, `RESTRICT`, indexed |
+| `region_id` | optional, → `region`, `RESTRICT`, indexed |
+| `description` | |
 | `created_at`, `updated_at` | |
 
-**Names are not unique**, unlike every other named table here, and there is no
-name index: versions of one dish share its name.
+**One table holds both kinds.** A dish and a sauce carry the same fields at
+the same level; `kind` files them, so the libraries can be filtered now and
+split later without a migration.
 
-**`variant_of_id` makes a recipe a version of another.** A recipe may not be a
-version of itself (`ck_recipe_not_its_own_version`). Versions are one level
-deep — a version has no versions and does not point at one — which needs
-another row to check and so lives on the write path. Deleting the original
-leaves its versions standing with `variant_of_id` cleared, because each is a
-complete recipe in its own right.
+**Names are not unique**, unlike every other named table but the recipe's,
+and there is no name index: two unrelated recipes of one name became two
+dishes of one name when the table was created. A name typed into the recipe
+form reuses the oldest dish answering to it exactly (a name slot or an alias,
+any case), which keeps the ordinary case to one row.
+
+`dish_alias` is as `ingredient_alias`: anything you might type to find a dish,
+never displayed, unique per dish (`uq_dish_alias`) and looked up on
+`lower(value)`. `dish_serves_as` (→ `recipe_course`) and `dish_label`
+(→ `label`) are link tables keyed on the dish and the other side, `CASCADE`
+on both sides, the other side's column indexed on its own. A serves-as link
+is a hint, not where the dish is filed, so it never refuses deleting a
+course. Its gallery is `dish_image`, above.
+
+## `recipe`
+
+One specific way of making a dish - 照燒雞腿排 as one author makes it.
+
+| Column | Notes |
+| --- | --- |
+| `id` | |
+| `dish_id` | **required**, → `dish`, `RESTRICT`, indexed |
+| `name` | optional - what tells this recipe from its dish's others |
+| `status_id` | **required**, → `recipe_status`, `RESTRICT`. No server default: a recipe created without one is given the first status in sort order by the write path |
+| `servings`, `time` | free text — `2-3 人`, `1hr` |
+| `storage_notes`, `notes` | |
+| `created_at`, `updated_at` | |
+
+**A recipe's `display_name` is its own `name`, else its dish's display name**
+(`Recipe.display_name`, `app/models/recipe.py`). The dish's names, kind,
+course, region, labels, serves-as and description are the dish's; a recipe
+reads them through `dish_id`.
+
+**Deleting a recipe never deletes its dish**, even the last one: a dish is
+worth keeping on its own.
 
 **"Written up" is derived, never stored**: a recipe with at least one line or
 step.
 
-## `recipe_alias`
-
-As `ingredient_alias`: anything you might type to find a recipe, never
-displayed, unique per recipe (`uq_recipe_alias`) and looked up on
-`lower(value)`.
-
-## `recipe_serves_as`, `recipe_label`, `recipe_method`, `recipe_equipment`
+## `recipe_method`, `recipe_equipment`
 
 Link tables, each a composite primary key of the recipe and the other side.
 The key leads with `recipe_id`, so the other side's column carries its own
 index (`ix_<table>_<column>`) for "which recipes use this" and for the
-`CASCADE` or `RESTRICT` check when that row is deleted. The recipe side always
-`CASCADE`s. The other side differs:
-
-| Table | Other side |
-| --- | --- |
-| `recipe_serves_as` | `recipe_course`, `CASCADE` — the other courses a dish can stand in for |
-| `recipe_label` | `label`, `CASCADE`, as `ingredient_label` |
-| `recipe_method` | `cooking_method`, `RESTRICT` |
-| `recipe_equipment` | `equipment`, `RESTRICT` |
-
-A serves-as link may repeat the recipe's own course.
+`RESTRICT` check when that row is deleted. The recipe side `CASCADE`s; the
+other side - `cooking_method`, `equipment` - is `RESTRICT`.
 
 ## `recipe_source`
 
@@ -389,17 +407,19 @@ One ingredient line.
 | `position` | required, unique per recipe (`uq_recipe_line_position`); runs through the whole recipe in display order — the ungrouped lines, then group by group |
 | `group_id` | → `recipe_line_group`, `SET NULL`, indexed; null is ungrouped |
 | `ingredient_id` | → `ingredient`, `RESTRICT` |
-| `sub_recipe_id` | → `recipe`, `RESTRICT` — another recipe used as an ingredient, usually a base; any `kind` is accepted |
+| `sub_dish_id` | → `dish`, `RESTRICT`, indexed — a dish used as an ingredient, usually a 醬料; any `kind` is accepted |
 | `amount`, `note` | free text |
 | `is_optional` | default false |
 
-**A line names exactly one of `ingredient_id` and `sub_recipe_id`**
+**A line names exactly one of `ingredient_id` and `sub_dish_id`**
 (`ck_recipe_line_one_target`). Which kind of line it is comes from which column
-is set; there is no stored discriminator to disagree with them.
+is set; there is no stored discriminator to disagree with them. A line names
+the dish, never one recipe of it: 照燒醬 is used, however it is made.
 
-**A line may not name its own recipe** (`ck_recipe_line_not_itself`). Longer
-cycles through nested recipes need a recursive query and are refused on
-the write path.
+**A line may not name its own recipe's dish, and dishes may not nest in a
+loop** - dish A uses dish B when a recipe of A has a line naming B. A CHECK
+sees one row and cannot see the recipe's dish, so both are refused on the
+write path.
 
 The same ingredient may appear on two lines — once for the meat, once for the
 sauce — so nothing is unique on it.
@@ -442,12 +462,12 @@ an image's owner list shows - is the title.
 `kitchen_note_label` links labels, both sides `CASCADE`, with `label_id`
 indexed on its own. Its gallery is `kitchen_note_image`, above.
 
-## `label`, `ingredient_label`, `recipe_label` and `kitchen_note_label`
+## `label`, `ingredient_label`, `dish_label` and `kitchen_note_label`
 
 Cross-cutting tags — 辛, 素, 常備, 貴. A label is not a category: a category
 says where a thing sits in one taxonomy and every ingredient has exactly one, a
 label says something that cuts across the tree and an ingredient may carry any
-number or none.
+number or none. A recipe has no labels of its own: it shows its dish's.
 
 Labels have two name slots, not three; a tag has no formal alternative form.
 
@@ -460,13 +480,15 @@ Labels have two name slots, not three; a tag has no formal alternative form.
 | ingredient → its children | `RESTRICT` |
 | ingredient → the recipe lines that name it | `RESTRICT` |
 | category → its ingredients and child categories | `RESTRICT` |
-| recipe → its aliases, sources, line and step groups, lines, steps, gallery rows, and serves-as, label, method and equipment links | `CASCADE` |
+| dish → its aliases, gallery rows, and serves-as and label links | `CASCADE` |
+| dish → its recipes | `RESTRICT` |
+| dish → the recipe lines that name it | `RESTRICT` |
+| recipe → its sources, line and step groups, lines, steps, gallery rows, and method and equipment links | `CASCADE` |
+| recipe → its dish | none — deleting a recipe leaves the dish |
 | line or step group → the lines or steps in it | `SET NULL` — they become ungrouped |
-| recipe → the lines in other recipes that name it as a base | `RESTRICT` |
-| recipe → its versions | `SET NULL` |
 | kitchen note → its label links and gallery rows | `CASCADE` |
 | TBD entry → its links | `CASCADE` |
-| course → the recipes filed in it | `RESTRICT` |
+| course or region → the dishes filed in it | `RESTRICT` |
 | status → the recipes in it; source platform or author → the sources naming it | `RESTRICT` |
 | course → its serves-as links; label → any link | `CASCADE` |
 | cooking method → the heating rows and recipe links that use it | `RESTRICT` |
@@ -500,26 +522,26 @@ pages.
 
 | Reference | Column / feature | Lands in |
 | --- | --- | --- |
-| Recipe doc | title, `(YT 詹姆士)` suffix | `recipe.name_cn`; source platform + author |
+| Recipe doc | title, `(YT 詹姆士)` suffix | `dish.name_cn`, `recipe.name` when one dish has several; source platform + author |
 | Recipe doc | `Link:` (sometimes two) | `recipe_source` rows |
 | Recipe doc | `人數` | `recipe.servings` |
 | Recipe doc | ingredient list, amounts | `recipe_line` (ingredient link + `amount`) |
 | Recipe doc | ingredient groups (漢堡醬, 調味料, for soup) | `recipe_line_group` (a `line_group` value or a one-off name) |
 | Recipe doc | `optional`, `自由添加`, `可省` | `recipe_line.is_optional` |
 | Recipe doc | `米酒or清酒`, `味醂可代替糖` | `recipe_line.note` |
-| Recipe doc | a sauce used inside a dish (蚵仔煎醬) | `recipe.kind = base`, nested via `recipe_line.sub_recipe_id` |
+| Recipe doc | a sauce used inside a dish (蚵仔煎醬) | `dish.kind = sauce`, named by `recipe_line.sub_dish_id` |
 | Recipe doc | `Steps for 備料 / 醬汁備料 / cooking / noodles` | `recipe_step_group` (a `step_group` value or a one-off name) |
 | Recipe doc | `* tips`, `Notes:`, unit conversions inside a recipe | `recipe.notes` |
 | Recipe doc | `保存期限約3天`, `放涼再裝, 冰冰箱保存` | `recipe.storage_notes` |
-| Recipe doc | section headers 主食 / 配菜 / 湯 / 小吃 / 甜點 / 飲料 / 醬料 | `recipe.course_id` |
-| Recipe sheets | 品項 | `recipe.name_cn` |
-| Recipe sheets | first column (飯 / 麵 / 肉 / 麵包 …) | recipe labels |
+| Recipe doc | section headers 主食 / 配菜 / 湯 / 小吃 / 甜點 / 飲料 / 醬料 | `dish.course_id` |
+| Recipe sheets | 品項 | `dish.name_cn` |
+| Recipe sheets | first column (飯 / 麵 / 肉 / 麵包 …) | dish labels |
 | Recipe sheets | 烹調方式 | `recipe_method` → `cooking_method` |
 | Recipe sheets | 器具 | `recipe_equipment` → `equipment` |
 | Recipe sheets | 來源 (YT / shorts / website / book), creator, URL | `recipe_source` → `source_platform`, `author` |
-| Recipe sheets | 可當主食 / 可當配菜 / 可當點心 | `recipe_serves_as` → `recipe_course` |
+| Recipe sheets | 可當主食 / 可當配菜 / 可當點心 | `dish_serves_as` → `recipe_course` |
 | Recipe sheets | Recipe O / X | derived: has lines or steps ("written up" vs 書籤) |
-| Recipe sheets | 備註, `冷藏: 1 week`, `包含醬` | `recipe.notes` / `recipe.storage_notes` / a nested base |
+| Recipe sheets | 備註, `冷藏: 1 week`, `包含醬` | `recipe.notes` / `recipe.storage_notes` / a line naming a sauce |
 | Recipe sheets | 語言 | not modelled — empty in every row |
 | 合輯, Tips sheets | title, creator, URL | `kitchen_note` (kind 合輯 / 技巧 / 參考) |
 | 可煮 sheet | dish, time | `recipe.status_id` → 可煮, `recipe.time` |

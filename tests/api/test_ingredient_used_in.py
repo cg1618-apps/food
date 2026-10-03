@@ -2,10 +2,10 @@
 and the delete refusal that follows from it.
 
 "Used in" counts distinct recipes with a line naming the ingredient or any
-ingredient below it, and goes no deeper through sub-recipes than zero. The
+ingredient below it, and goes no deeper through sub-dishes than zero. The
 fixture `soy` is load-bearing for every test here: a parent with two children,
 so that a recipe naming BOTH children is the case that tells "distinct
-recipes" from "lines", and a base recipe naming one child is the case that
+recipes" from "lines", and a sauce recipe naming one child is the case that
 tells depth zero from "any depth".
 """
 
@@ -21,7 +21,8 @@ ZERO = {"aliases": 0, "preservation": 0, "heating": 0, "links": 0}
 
 
 def create_recipe(client, name, lines):
-    response = client.post("/api/edit/recipes", json={"name_cn": name, "lines": lines})
+    body = {"new_dish": {"name_cn": name}, "lines": lines}
+    response = client.post("/api/edit/recipes", json=body)
     assert response.status_code == 201, response.text
     return response.json()
 
@@ -41,7 +42,7 @@ def soy(client, db, fallback_category):
         client, "紅燒肉", [{"ingredient_id": light.id}, {"ingredient_id": dark.id}]
     )
     sauce = create_recipe(client, "醬汁", [{"ingredient_id": light.id}])
-    noodles = create_recipe(client, "拌麵", [{"sub_recipe_id": sauce["id"]}])
+    noodles = create_recipe(client, "拌麵", [{"sub_dish_id": sauce["dish"]["id"]}])
     return {
         "parent": parent.id,
         "light": light.id,
@@ -64,8 +65,8 @@ def test_a_recipe_using_two_children_counts_once_on_the_parent(client, soy):
     assert rows[soy["parent"]]["used_in_count"] == 2
 
 
-def test_a_recipe_whose_sub_recipe_uses_the_ingredient_does_not_count(client, soy):
-    # 拌麵 uses 醬汁, which uses 生抽: depth zero through sub-recipes.
+def test_a_recipe_whose_sauce_uses_the_ingredient_does_not_count(client, soy):
+    # 拌麵 uses the dish 醬汁, whose recipe uses 生抽: depth zero through sub-dishes.
     assert "拌麵" not in used_in(client, soy["light"])
     assert used_in(client, soy["light"]) == ["紅燒肉", "醬汁"]
     assert used_in(client, soy["dark"]) == ["紅燒肉"]

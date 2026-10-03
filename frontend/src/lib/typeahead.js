@@ -1,11 +1,12 @@
 // Frontend: what the typeahead offers, from what the server answered.
 //
 // The search itself is the list endpoints' `q`, which matches every name slot
-// and every alias on the server (ingredients and recipes alike). This turns
+// and every alias on the server (ingredients and dishes alike). This turns
 // the two answers into one list of options: ingredients first, because a
-// recipe line names an ingredient far more often than a base, each source
+// recipe line names an ingredient far more often than a sauce, each source
 // capped so a common syllable cannot bury the other; then 「新增 'xxx'」 when
-// it is allowed and nothing matches the typed text exactly.
+// it is allowed and nothing matches the typed text exactly - a new ingredient,
+// a new dish, or one of each when the caller allows both.
 //
 // A short list the caller already holds - the authors - is filtered here in
 // the browser instead (localResults), with the same 「新增」 rule.
@@ -29,7 +30,7 @@ export function isExactMatch(row, query) {
 }
 
 // The names under the display name, so two rows that display alike can be
-// told apart - "醬油" the ingredient beside "醬油" the base recipe.
+// told apart - "醬油" the ingredient beside "醬油" the sauce.
 function secondary(row) {
   return [row.name_cn, row.name_en, row.name_alt]
     .filter((name) => name && name !== row.display_name)
@@ -39,26 +40,29 @@ function secondary(row) {
 /**
  * The options for `query`.
  *
- *   ingredients, recipes  the server's answers (either may be absent)
- *   exclude               { ingredient: [ids], recipe: [ids] } never offered -
- *                         a recipe is not its own version, an ingredient not
- *                         merged into itself
- *   allowNew              offer 「新增」 when nothing matches exactly
- *   limit                 per source
+ *   ingredients, dishes  the server's answers (either may be absent)
+ *   exclude              { ingredient: [ids], dish: [ids] } never offered -
+ *                        a recipe's own dish on its lines, an ingredient not
+ *                        merged into itself
+ *   allowNew             offer 「新增」 when nothing matches exactly
+ *   allowNewDish         offer 「新增 料理」 as well (type 'new-dish')
+ *   limit                per source
  *
- * Each option: { key, type: 'ingredient' | 'recipe' | 'new', id, label,
- * detail, needsDetail, kind }. A 'new' option's `label` is the typed text.
+ * Each option: { key, type: 'ingredient' | 'dish' | 'new' | 'new-dish', id,
+ * label, detail, needsDetail, kind }. A new option's `label` is the typed
+ * text.
  */
 export function mergeResults({
   ingredients = [],
-  recipes = [],
+  dishes = [],
   query = '',
   exclude = {},
   allowNew = false,
+  allowNewDish = false,
   limit = 8,
 }) {
   const skipIngredient = new Set(exclude.ingredient ?? [])
-  const skipRecipe = new Set(exclude.recipe ?? [])
+  const skipDish = new Set(exclude.dish ?? [])
 
   const options = [
     ...(ingredients ?? [])
@@ -73,12 +77,12 @@ export function mergeResults({
         needsDetail: Boolean(row.needs_detail),
         exact: isExactMatch(row, query),
       })),
-    ...(recipes ?? [])
-      .filter((row) => !skipRecipe.has(row.id))
+    ...(dishes ?? [])
+      .filter((row) => !skipDish.has(row.id))
       .slice(0, limit)
       .map((row) => ({
-        key: `recipe-${row.id}`,
-        type: 'recipe',
+        key: `dish-${row.id}`,
+        type: 'dish',
         id: row.id,
         label: row.display_name,
         detail: secondary(row),
@@ -87,15 +91,18 @@ export function mergeResults({
       })),
   ]
 
-  return withNew(options, query, allowNew)
+  return withNew(options, query, allowNew, allowNewDish)
 }
 
 // An exact match anywhere is what the user meant, so 「新增」 would only make
 // a duplicate the server then folds into it.
-function withNew(options, query, allowNew) {
+function withNew(options, query, allowNew, allowNewDish = false) {
   const typed = String(query ?? '').trim()
-  if (allowNew && typed && !options.some((option) => option.exact)) {
-    options.push({ key: `new-${typed}`, type: 'new', id: null, label: typed, detail: '' })
+  if (typed && !options.some((option) => option.exact)) {
+    if (allowNew) options.push({ key: `new-${typed}`, type: 'new', id: null, label: typed, detail: '' })
+    if (allowNewDish) {
+      options.push({ key: `new-dish-${typed}`, type: 'new-dish', id: null, label: typed, detail: '' })
+    }
   }
   return options
 }

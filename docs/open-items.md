@@ -51,16 +51,17 @@ alphabet is wanted, the label table needs the column (a migration), its
 attached to, so `/edit/images` fetches `GET /api/images/{id}` for each tile
 that has any attachment - up to 30 requests for a page. It is fine at a
 kitchen's scale and slow over the tunnel on a phone. The list could return
-the owners itself (one query joining the three gallery tables), and the page
+the owners itself (one query joining the four gallery tables), and the page
 would drop the per-tile reads.
 
 ## `updated_at` does not move when only child rows change
 
 Editing only an ingredient's aliases, storage, heating, links, labels or
 gallery leaves its `updated_at` where it was, because no column on
-`ingredient` itself changed. Recipes have the same gap: a `PATCH` sending only
-lists (aliases, lines, steps, sources, labels, methods, equipment, courses
-served as) and the gallery `PUT` leave `recipe.updated_at` untouched. Kitchen
+`ingredient` itself changed. Dishes and recipes have the same gap: a dish
+`PATCH` sending only lists (aliases, labels, courses served as) and a recipe
+`PATCH` sending only lists (lines, steps, sources, methods, equipment), and
+either gallery `PUT`, leave `updated_at` untouched. Kitchen
 notes too: a `PATCH` sending only `label_ids`, and the gallery `PUT`, leave
 `kitchen_note.updated_at` where it was. Anything that sorts or reports by "recently edited" will miss
 those edits. The service would have to touch the timestamp whenever a list it

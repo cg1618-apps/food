@@ -5,9 +5,14 @@ database constraint so a bad payload is a 422 here rather than an
 IntegrityError later, inputs are `extra="forbid"`, and `RecipeUpdate` is an
 all-optional model applied with `exclude_unset`.
 
+A recipe belongs to one dish - `dish_id`, or `new_dish` for a name the save
+reuses an existing dish for or creates. What is true of the dish (names, kind,
+course, region, labels, serves-as) is the dish's and is written through
+`app/schemas/dish.py`; a recipe's response embeds a `DishBrief` to show it.
+
 A line carries no type field. Which kind of line it is comes from which target
-is set, and `extra="forbid"` turns a payload claiming a type into a 422 rather
-than something a later reader might trust.
+is set - an ingredient or a dish - and `extra="forbid"` turns a payload
+claiming a type into a 422 rather than something a later reader might trust.
 
 Lines and steps travel in pairs: `lines` are the ungrouped lines and
 `line_groups` the groups with theirs, and the same for `steps` and
@@ -19,38 +24,35 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-from app.constants import RECIPE_KINDS, STEP_KINDS
+from app.constants import DISH_KINDS, STEP_KINDS
 from app.schemas.image import AttachedImage, CoverRef
-from app.schemas.ingredient import _blank_to_none, _check_url, _clean_aliases
+from app.schemas.ingredient import _blank_to_none, _check_url
 from app.schemas.vocabulary import VocabRef
 
 LIST_FIELDS = (
-    "aliases",
     "sources",
     "lines",
     "line_groups",
     "steps",
     "step_groups",
-    "serves_as_ids",
-    "label_ids",
     "method_ids",
     "equipment_ids",
 )
 
 
 def _check_choice(value: str | None, choices: dict, what: str) -> str:
-    # None is refused too: kind is NOT NULL, so an explicit null on a PATCH is
-    # a bad value rather than "clear it".
+    # None is refused too: a kind is NOT NULL, so an explicit null on a PATCH
+    # is a bad value rather than "clear it".
     if value not in choices:
         raise ValueError(f"A {what} is one of {', '.join(choices)}")
     return value
 
 
-def _not_null(value, what: str):
+def _not_null(value, what: str, owner: str = "recipe"):
     """For a NOT NULL id that may be left out: absent is never validated, so
     only an explicit null reaches this and is refused."""
     if value is None:
-        raise ValueError(f"A recipe's {what} cannot be cleared; choose another")
+        raise ValueError(f"A {owner}'s {what} cannot be cleared; choose another")
     return value
 
 
@@ -77,6 +79,26 @@ class NewNameIn(BaseModel):
         if not any((self.name_cn, self.name_en)):
             raise ValueError("A new name needs at least one of name_cn or name_en")
         return self
+
+
+class NewDishIn(NewNameIn):
+    """A dish typed into the recipe form that is not in the library yet - the
+    recipe's own dish. A name answering to an existing dish reuses it, kind
+    and all; otherwise the save creates it with this kind."""
+
+    kind: str = "dish"
+
+    @field_validator("kind")
+    @classmethod
+    def kind_is_known(cls, value):
+        return _check_choice(value, DISH_KINDS, "dish kind")
+
+
+class NewSubDishIn(NewDishIn):
+    """A dish typed into a recipe LINE: the same, but a sauce unless told -
+    what a line names is usually something cooked to go into another dish."""
+
+    kind: str = "sauce"
 
 
 class SourceIn(BaseModel):
@@ -127,11 +149,15 @@ class SourceResponse(BaseModel):
 
 
 class LineIn(BaseModel):
+    """One line: `ingredient_id` or `new_ingredient`, `sub_dish_id` or
+    `new_dish` - exactly one of the four."""
+
     model_config = ConfigDict(extra="forbid")
 
     ingredient_id: int | None = None
-    sub_recipe_id: int | None = None
+    sub_dish_id: int | None = None
     new_ingredient: NewNameIn | None = None
+    new_dish: NewSubDishIn | None = None
     amount: str | None = None
     note: str | None = None
     is_optional: bool = False
@@ -143,12 +169,13 @@ class LineIn(BaseModel):
 
     @model_validator(mode="after")
     def exactly_one_target(self):
-        # Mirrors ck_recipe_line_one_target, with new_ingredient counted as an
-        # ingredient that does not exist yet.
-        targets = (self.ingredient_id, self.sub_recipe_id, self.new_ingredient)
+        # Mirrors ck_recipe_line_one_target, with new_ingredient and new_dish
+        # counted as an ingredient and a dish that do not exist yet.
+        targets = (self.ingredient_id, self.sub_dish_id, self.new_ingredient, self.new_dish)
         if sum(t is not None for t in targets) != 1:
             raise ValueError(
-                "A line names exactly one of ingredient_id, sub_recipe_id or new_ingredient"
+                "A line names exactly one of ingredient_id, sub_dish_id, "
+                "new_ingredient or new_dish"
             )
         return self
 
@@ -229,19 +256,38 @@ class IngredientRef(BaseModel):
     needs_detail: bool
 
 
-class RecipeRef(BaseModel):
-    """How one recipe points at another on the wire."""
+class DishRef(BaseModel):
+    """How a recipe, a line or a list points at a dish on the wire."""
 
     id: int
     display_name: str = ""
     kind: str
 
 
+class DishBrief(DishRef):
+    """The dish as a recipe's page shows it: enough to read what the dish
+    says without opening it. Edited on the dish, never through the recipe."""
+
+    course: VocabRef | None = None
+    region: VocabRef | None = None
+    labels: list[VocabRef] = []
+    serves_as: list[VocabRef] = []
+
+
+class RecipeRef(BaseModel):
+    """How something points at a recipe on the wire - an ingredient's "used
+    in", a dish's. `dish` is the dish it makes."""
+
+    id: int
+    display_name: str = ""
+    dish: DishRef
+
+
 class LineResponse(BaseModel):
     id: int
     position: int
     ingredient: IngredientRef | None = None
-    sub_recipe: RecipeRef | None = None
+    sub_dish: DishRef | None = None
     amount: str | None = None
     note: str | None = None
     is_optional: bool
@@ -277,114 +323,101 @@ class StepGroupResponse(BaseModel):
     steps: list[StepResponse] = []
 
 
+def _one_dish(model):
+    if model.dish_id is not None and model.new_dish is not None:
+        raise ValueError("A recipe names dish_id or new_dish, not both")
+    return model
+
+
 class RecipeCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name_cn: str | None = None
-    name_en: str | None = None
-    name_alt: str | None = None
-    kind: str = "dish"
-    course_id: int | None = None
-    variant_of_id: int | None = None
+    # Exactly one: the recipe's dish, or a dish named for the save to find
+    # or create.
+    dish_id: int | None = None
+    new_dish: NewDishIn | None = None
+    # Optional: what tells this recipe from the dish's others. Left out, the
+    # recipe is shown by its dish's name.
+    name: str | None = None
     # Left out, the first status in sort order (`recipes.create`).
     status_id: int | None = None
     servings: str | None = None
     time: str | None = None
-    description: str | None = None
     storage_notes: str | None = None
     notes: str | None = None
-    aliases: list[str] = []
     sources: list[SourceIn] = []
     lines: list[LineIn] = []
     line_groups: list[LineGroupIn] = []
     steps: list[StepIn] = []
     step_groups: list[StepGroupIn] = []
-    serves_as_ids: list[int] = []
-    label_ids: list[int] = []
     method_ids: list[int] = []
     equipment_ids: list[int] = []
 
-    @field_validator("name_cn", "name_en", "name_alt", mode="before")
+    @field_validator("name", mode="before")
     @classmethod
-    def normalise_names(cls, value):
+    def normalise_name(cls, value):
         return _normalise(value)
-
-    @field_validator("kind")
-    @classmethod
-    def kind_is_known(cls, value):
-        return _check_choice(value, RECIPE_KINDS, "kind")
 
     @field_validator("status_id")
     @classmethod
     def status_is_not_null(cls, value):
         return _not_null(value, "status")
 
-    @field_validator("aliases")
-    @classmethod
-    def clean_aliases(cls, values: list[str]) -> list[str]:
-        return _clean_aliases(values)
-
     @model_validator(mode="after")
-    def at_least_one_name(self):
-        # Mirrors ck_recipe_has_a_name.
-        if not any((self.name_cn, self.name_en, self.name_alt)):
-            raise ValueError("A recipe needs at least one name")
+    def exactly_one_dish(self):
+        # Mirrors recipe.dish_id NOT NULL, with new_dish counted as a dish
+        # that does not exist yet.
+        _one_dish(self)
+        if self.dish_id is None and self.new_dish is None:
+            raise ValueError("A recipe belongs to a dish: send dish_id or new_dish")
         return self
 
 
 class RecipeUpdate(BaseModel):
     """Every field optional, and only what was SENT is applied.
 
-    As `IngredientUpdate`: the at-least-one-name rule depends on the row the
-    PATCH lands on, so the service checks it against the merged result.
+    `dish_id` or `new_dish` moves the recipe to another dish; neither leaves
+    it where it is.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    name_cn: str | None = None
-    name_en: str | None = None
-    name_alt: str | None = None
-    kind: str | None = None
-    course_id: int | None = None
-    variant_of_id: int | None = None
+    dish_id: int | None = None
+    new_dish: NewDishIn | None = None
+    name: str | None = None
     status_id: int | None = None
     servings: str | None = None
     time: str | None = None
-    description: str | None = None
     storage_notes: str | None = None
     notes: str | None = None
-    aliases: list[str] | None = None
     sources: list[SourceIn] | None = None
     lines: list[LineIn] | None = None
     line_groups: list[LineGroupIn] | None = None
     steps: list[StepIn] | None = None
     step_groups: list[StepGroupIn] | None = None
-    serves_as_ids: list[int] | None = None
-    label_ids: list[int] | None = None
     method_ids: list[int] | None = None
     equipment_ids: list[int] | None = None
 
-    @field_validator("name_cn", "name_en", "name_alt", mode="before")
+    @field_validator("name", mode="before")
     @classmethod
-    def normalise_names(cls, value):
+    def normalise_name(cls, value):
         return _normalise(value)
 
     # Validators run only on fields that were sent, so an explicit null is
-    # checked - and refused - while an absent kind is left alone.
-    @field_validator("kind")
-    @classmethod
-    def kind_is_known(cls, value):
-        return _check_choice(value, RECIPE_KINDS, "kind")
-
+    # checked - and refused - while an absent one is left alone.
     @field_validator("status_id")
     @classmethod
     def status_is_not_null(cls, value):
         return _not_null(value, "status")
 
-    @field_validator("aliases")
+    @field_validator("dish_id")
     @classmethod
-    def clean_aliases(cls, values: list[str] | None) -> list[str] | None:
-        return None if values is None else _clean_aliases(values)
+    def dish_is_not_null(cls, value):
+        return _not_null(value, "dish")
+
+    @model_validator(mode="after")
+    def at_most_one_dish(self):
+        return _one_dish(self)
 
     @model_validator(mode="after")
     def pairs_travel_together(self):
@@ -404,15 +437,14 @@ class RecipeSummary(BaseModel):
     """What a library row needs - the cover view and the table view both.
 
     `authors` is the distinct authors of the recipe's sources, in source
-    order. `written_up` is derived, as on the full recipe.
+    order. `written_up` is derived, as on the full recipe. `course` is the
+    dish's, for the table view's column.
     """
 
     id: int
     display_name: str = ""
-    name_cn: str | None = None
-    name_en: str | None = None
-    name_alt: str | None = None
-    kind: str
+    name: str | None = None
+    dish: DishRef
     status: VocabRef
     course: VocabRef | None = None
     methods: list[VocabRef] = []
@@ -425,34 +457,26 @@ class RecipeSummary(BaseModel):
 class RecipeResponse(BaseModel):
     id: int
     display_name: str = ""
-    name_cn: str | None = None
-    name_en: str | None = None
-    name_alt: str | None = None
-    kind: str
+    name: str | None = None
+    dish: DishBrief
     status: VocabRef
-    course: VocabRef | None = None
     servings: str | None = None
     time: str | None = None
-    description: str | None = None
     storage_notes: str | None = None
     notes: str | None = None
 
-    aliases: list[str] = []
     sources: list[SourceResponse] = []
     # The ungrouped rows; each group carries its own.
     lines: list[LineResponse] = []
     line_groups: list[LineGroupResponse] = []
     steps: list[StepResponse] = []
     step_groups: list[StepGroupResponse] = []
-    serves_as: list[VocabRef] = []
-    labels: list[VocabRef] = []
     methods: list[VocabRef] = []
     equipment: list[VocabRef] = []
     images: list[AttachedImage] = []
 
-    variant_of: RecipeRef | None = None
-    versions: list[RecipeRef] = []
-    used_in: list[RecipeRef] = []
+    # 其他版本: the dish's other recipes, by display name.
+    other_recipes: list[RecipeRef] = []
     written_up: bool
 
     created_at: datetime | None = None

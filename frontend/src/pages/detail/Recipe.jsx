@@ -1,14 +1,17 @@
 // Frontend: one recipe, /recipes/:id.
 //
-// One reading column, in the order a cook reads it: the pictures; course,
-// names and a meta line (servings, time, methods, equipment); the status,
-// changeable here; where it came from; other versions; the ingredients and
-// the steps, each in its groups (lib/recipeGroups.js) - the ungrouped rows
-// first, then a block per group under its name, ordinary steps numbered
-// through every group, an optional step marked 可省略 and a 備註 drawn as a
-// callout; notes; and for a base,
-// the recipes that use it. Every section with nothing in it is left out, so a
-// recipe saved as a bookmark is a short page rather than a page of empties.
+// One reading column, in the order a cook reads it: the pictures; the dish
+// it makes - a link, with the dish's kind, course, region, serves-as and
+// labels shown read-only, since they are the dish's and edited there; the
+// recipe's name and a meta line (servings, time, methods, equipment); the
+// status, changeable here; where it came from; 其他版本, the dish's other
+// recipes; the ingredients and the steps, each in its groups
+// (lib/recipeGroups.js) - the ungrouped rows first, then a block per group
+// under its name, ordinary steps numbered through every group, an optional
+// step marked 可省略 and a 備註 drawn as a callout; storage and notes. A line
+// naming a dish links to the dish. Every section with nothing in it is left
+// out, so a recipe saved as a bookmark is a short page rather than a page of
+// empties.
 //
 // The status is the one thing changed in place: 想試 -> 可煮 -> 常煮 is what
 // happens after cooking, standing at the stove with the page open, and a
@@ -30,13 +33,13 @@ import { cx } from '../../lib/cx'
 import { linkHost } from '../../lib/format'
 import { lineBlocks, stepBlocks } from '../../lib/recipeGroups'
 import { NOTE } from '../../lib/steps'
-import { otherVersions } from '../../lib/versions'
 
 const names = (refs) => (refs?.length ? refs.map((ref) => ref.display_name).join('、') : null)
 
 // A status change moves this recipe's reads and the library's status filter
-// and column - all under the recipes prefix - and the statuses' usage counts.
-const STATUS_INVALIDATE = [endpoints.recipes.list(), endpoints.statuses.list()]
+// and column - all under the recipes prefix - the statuses' usage counts, and
+// the dish page's list of its recipes.
+const STATUS_INVALIDATE = [endpoints.recipes.list(), endpoints.statuses.list(), endpoints.dishes.list()]
 
 function StatusControl({ recipe }) {
   const statuses = useApiQuery(endpoints.statuses.list())
@@ -112,10 +115,10 @@ function LineTarget({ line }) {
       </>
     )
   }
-  if (line.sub_recipe) {
+  if (line.sub_dish) {
     return (
-      <Link to={`/recipes/${line.sub_recipe.id}`} className="text-brand hover:underline">
-        {line.sub_recipe.display_name}
+      <Link to={`/dishes/${line.sub_dish.id}`} className="text-brand hover:underline">
+        {line.sub_dish.display_name}
       </Link>
     )
   }
@@ -200,17 +203,13 @@ export default function Recipe() {
     )
   }
 
-  const otherNames = [recipe.name_cn, recipe.name_en, recipe.name_alt].filter(
-    (name) => name && name !== recipe.display_name,
-  )
+  const { dish } = recipe
   const meta = [
     recipe.servings ? `份量 ${recipe.servings}` : null,
     recipe.time ? `時間 ${recipe.time}` : null,
     names(recipe.methods),
     names(recipe.equipment),
   ].filter(Boolean)
-  const versions = otherVersions(recipe)
-  const isBase = recipe.kind === 'base'
   const lines = lineBlocks(recipe)
   const steps = stepBlocks(recipe)
 
@@ -220,23 +219,25 @@ export default function Recipe() {
 
       <header className="space-y-3">
         <p className="flex flex-wrap items-center gap-2 text-sm text-text-muted">
-          {recipe.course ? (
-            <Link to={`/recipes?course=${recipe.course.id}`} className="hover:text-brand">
-              {recipe.course.display_name}
+          <Link to={`/dishes/${dish.id}`} className="font-medium text-brand hover:underline">
+            {dish.display_name}
+          </Link>
+          {dish.kind === 'sauce' ? <Chip tone="brand">{fixedLabel(fixed.data?.dish_kinds, dish.kind)}</Chip> : null}
+          {dish.course ? (
+            <Link to={`/recipes?course=${dish.course.id}`} className="hover:text-brand">
+              {dish.course.display_name}
             </Link>
           ) : null}
-          {isBase ? <Chip tone="brand">{fixedLabel(fixed.data?.recipe_kinds, recipe.kind)}</Chip> : null}
-          {recipe.serves_as.length ? <span>也可以當作 {names(recipe.serves_as)}</span> : null}
+          {dish.region ? <span>{dish.region.display_name}</span> : null}
+          {dish.serves_as.length ? <span>也可以當作 {names(dish.serves_as)}</span> : null}
           {recipe.written_up ? null : <Badge kind="bookmark" />}
         </p>
         <h1 className="text-3xl font-bold leading-tight">{recipe.display_name}</h1>
-        {otherNames.length ? <p className="text-text-muted">{otherNames.join(' · ')}</p> : null}
+        {recipe.name ? <p className="text-text-muted">{dish.display_name} 的一份食譜</p> : null}
         {meta.length ? <p className="text-sm text-text-muted">{meta.join(' · ')}</p> : null}
         <StatusControl recipe={recipe} />
-        <LabelLinks labels={recipe.labels} to={(label) => `/recipes?label=${label.id}`} />
+        <LabelLinks labels={dish.labels} to={(label) => `/recipes?label=${label.id}`} />
       </header>
-
-      <Prose>{recipe.description}</Prose>
 
       {recipe.sources.length ? (
         <Section title="來源">
@@ -244,9 +245,9 @@ export default function Recipe() {
         </Section>
       ) : null}
 
-      {versions.length ? (
+      {recipe.other_recipes.length ? (
         <Section title="其他版本">
-          <RecipeLinks recipes={versions} describe={(v) => (v.original ? '原版' : null)} />
+          <RecipeLinks recipes={recipe.other_recipes} />
         </Section>
       ) : null}
 
@@ -275,12 +276,6 @@ export default function Recipe() {
       {recipe.notes ? (
         <Section title="筆記">
           <Prose>{recipe.notes}</Prose>
-        </Section>
-      ) : null}
-
-      {recipe.used_in.length ? (
-        <Section title="用在">
-          <RecipeLinks recipes={recipe.used_in} />
         </Section>
       ) : null}
 

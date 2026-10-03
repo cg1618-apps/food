@@ -1,11 +1,12 @@
-"""The eight managed vocabularies share one router factory, so one parametrised
-suite covers all eight. The fixtures that make refusals bite are the in-use
+"""The nine managed vocabularies share one router factory, so one parametrised
+suite covers all nine. The fixtures that make refusals bite are the in-use
 rows: a vocabulary value nothing uses deletes freely, and that is the mirror."""
 
 import pytest
 
 RESOURCES = [
     "recipe-courses",
+    "regions",
     "recipe-statuses",
     "source-platforms",
     "cooking-methods",
@@ -83,10 +84,19 @@ def test_values_list_in_sort_order_then_name(client):
 # where an unused value deletes.
 
 
+def _dish(db, **kwargs):
+    from app.models import Dish
+
+    dish = Dish(name_cn="番茄炒蛋", **kwargs)
+    db.add(dish)
+    db.flush()
+    return dish
+
+
 def _recipe(db, status, **kwargs):
     from app.models import Recipe
 
-    recipe = Recipe(name_cn="番茄炒蛋", status_id=status.id, **kwargs)
+    recipe = Recipe(dish_id=_dish(db).id, status_id=status.id, **kwargs)
     db.add(recipe)
     db.flush()
     return recipe
@@ -140,20 +150,37 @@ def test_equipment_used_by_a_recipe_cannot_be_deleted(client, db, recipe_statuse
     assert response.json()["usage_count"] == 1
 
 
-def test_a_course_a_recipe_is_filed_in_cannot_be_deleted(client, db, recipe_statuses):
+def test_a_course_a_dish_is_filed_in_cannot_be_deleted(client, db):
     from app.models import RecipeCourse
 
     course = RecipeCourse(name_cn="主食")
     db.add(course)
     db.flush()
-    _recipe(db, recipe_statuses["想試"], course_id=course.id)
+    _dish(db, course_id=course.id)
 
     response = client.delete(f"/api/edit/recipe-courses/{course.id}")
     assert response.status_code == 409
     assert response.json()["usage_count"] == 1
 
 
-def test_a_course_a_recipe_only_serves_as_can_be_deleted(client, db, recipe_statuses):
+def test_a_region_a_dish_is_from_cannot_be_deleted(client, db):
+    """The dish is the fixture that makes the 409 bite; the mirror is the
+    parametrised round trip above, where an unused region deletes."""
+    from app.models import Region
+
+    region = Region(name_cn="日式")
+    db.add(region)
+    db.flush()
+    _dish(db, region_id=region.id)
+
+    listed = {row["id"]: row for row in client.get("/api/regions").json()}
+    assert listed[region.id]["usage_count"] == 1
+    response = client.delete(f"/api/edit/regions/{region.id}")
+    assert response.status_code == 409
+    assert response.json()["usage_count"] == 1
+
+
+def test_a_course_a_dish_only_serves_as_can_be_deleted(client, db):
     """Serves-as links CASCADE and are not a reason to refuse - the mirror of
     the test above, with a link in place so the count had something to miss."""
     from app.models import RecipeCourse
@@ -161,8 +188,8 @@ def test_a_course_a_recipe_only_serves_as_can_be_deleted(client, db, recipe_stat
     course = RecipeCourse(name_cn="配菜")
     db.add(course)
     db.flush()
-    recipe = _recipe(db, recipe_statuses["想試"])
-    recipe.serves_as.append(course)
+    dish = _dish(db)
+    dish.serves_as.append(course)
     db.flush()
 
     listed = {row["id"]: row for row in client.get("/api/recipe-courses").json()}
@@ -264,8 +291,13 @@ def test_statuses_and_platforms_list_in_sort_order(client, recipe_statuses, sour
 
 
 def test_the_recipe_fixed_vocabularies_are_served_with_labels(client):
-    """Statuses and platforms are managed vocabularies now, not closed lists."""
+    """Statuses and platforms are managed vocabularies now, not closed lists;
+    the kind is the dish's."""
     body = client.get("/api/vocabularies/fixed").json()
-    assert [e["value"] for e in body["recipe_kinds"]] == ["dish", "base"]
+    assert body["dish_kinds"] == [
+        {"value": "dish", "label": "料理"},
+        {"value": "sauce", "label": "醬料"},
+    ]
+    assert "recipe_kinds" not in body
     assert "recipe_statuses" not in body
     assert "source_platforms" not in body

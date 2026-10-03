@@ -1,15 +1,23 @@
 // Frontend: add or edit a recipe, /edit/recipes/new and /edit/recipes/:id.
 //
-// In the order the page reads: names and how it is filed (kind, course,
-// what else it serves as, status, servings, time, the recipe it is a version
-// of); sources; ingredient lines; steps; labels, methods, equipment; the
-// prose; aliases; the gallery.
+// In the order the page reads: the dish this is a recipe of, and the
+// recipe's own optional name; status, servings, time; sources; ingredient
+// lines; steps; methods, equipment; storage and notes; the gallery. What is
+// true of the dish whoever cooks it - names, kind, course, region, labels,
+// serves-as, a description - is the dish's form's, not this one's.
 //
-// A line's ingredient or sub-recipe is picked with the Typeahead, which
-// searches both libraries. When nothing matches, 「新增 'xxx'」 makes the
-// line name an ingredient that does not exist yet: it is shown with 待補 until
-// the save, which creates it as a stub in the same transaction (the server
-// folds a name it already knows into that row rather than duplicating it).
+// The dish is picked with the Typeahead, searching the dish library. When
+// nothing matches, 「新增」 names a dish the save creates, as a 料理 or a 醬料
+// (料理 unless switched); a name the server already knows is reused instead.
+// `?dish=<id>` - the dish page's 「＋ 新增食譜」 - starts a new recipe with that
+// dish chosen.
+//
+// A line's ingredient or dish is picked the same way, searching both
+// libraries. When nothing matches, 「新增」 makes the line name an
+// ingredient that does not exist yet - shown with 待補 until the save, which
+// creates it as a stub in the same transaction - and 「新增料理」 a dish, a
+// 醬料, made by the save the same way. The server folds a name it already
+// knows into that row rather than duplicating it.
 // A source's author is picked the same way from the authors list, which is
 // small enough to fetch once and filter in the browser; 「新增」 there makes
 // the author on save, and a name the server already knows is reused.
@@ -40,7 +48,7 @@
 // step_groups, the pairs the server replaces together. Saving goes to the
 // recipe's page.
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { endpoints } from '../../api/endpoints'
 import ChipPicker from '../../components/forms/ChipPicker'
@@ -54,7 +62,7 @@ import Typeahead, { Picked } from '../../components/forms/Typeahead'
 import Dialog from '../../components/ui/Dialog'
 import { Button, Field, Input, Section, Select, TextArea, Toggle } from '../../components/ui/primitives'
 import { ErrorNote, Loading } from '../../components/ui/states'
-import { useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
+import { fixedLabel, useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
 import { useOwnerSave } from '../../hooks/useOwnerSave'
 import { galleryChanged, galleryFromImages } from '../../lib/gallery'
 import {
@@ -68,22 +76,30 @@ import {
   setRows,
   updateRowByKey,
 } from '../../lib/groupedRows'
-import { emptyLine, isStub, lineFromResponse, linesPayload, targetFromOption } from '../../lib/recipeLines'
+import {
+  DISH,
+  emptyLine,
+  isStub,
+  lineFromResponse,
+  linesPayload,
+  newNames,
+  targetFromOption,
+} from '../../lib/recipeLines'
 import { authorFromOption, sourceRow, sourcesPayload } from '../../lib/recipeSources'
-import { blankToNull, keyed, splitAliases } from '../../lib/rowList'
+import { blankToNull, keyed } from '../../lib/rowList'
 import { NOTE, STEP, splitSteps, stepNumbers } from '../../lib/steps'
 
-// A recipe save moves its own reads, the authors list, the ingredient
-// library (a 新增 line makes a stub; used-in counts move), the category tree
-// (the stub is filed in the fallback category, whose count moves), and the
-// usage counts of every vocabulary and picture it names.
+// A recipe save moves its own reads, the dish library (its dish's recipe
+// count, cover and "used in"; a 新增 dish is a new row), the authors list, the
+// ingredient library (a 新增 line makes a stub; used-in counts move), the
+// category tree (the stub is filed in the fallback category, whose count
+// moves), and the usage counts of every vocabulary and picture it names.
 const INVALIDATE = [
+  endpoints.dishes.list(),
   endpoints.recipes.list(),
   endpoints.authors.list(),
   endpoints.ingredients.list(),
   endpoints.categories.tree(),
-  endpoints.labels.list(),
-  endpoints.courses.list(),
   endpoints.statuses.list(),
   endpoints.platforms.list(),
   endpoints.methods.list(),
@@ -94,30 +110,32 @@ const INVALIDATE = [
 ]
 
 const EMPTY = {
-  name_cn: '',
-  name_en: '',
-  name_alt: '',
-  kind: 'dish',
-  course_id: '',
-  serves_as_ids: [],
+  // { type: 'dish', id, label, kind } or { type: 'new-dish', label, kind }.
+  dish: null,
+  name: '',
   // '' until chosen: the first status is shown, and sent, in its place.
   status_id: '',
   servings: '',
   time: '',
-  variant_of: null,
   sources: [],
   // { ungrouped, groups } each (lib/groupedRows.js).
   lines: emptyGrouped(),
   steps: emptyGrouped(),
-  label_ids: [],
   method_ids: [],
   equipment_ids: [],
-  description: '',
   storage_notes: '',
   notes: '',
-  aliases: '',
   gallery: [],
 }
+
+const dishPick = (dish) => ({ type: 'dish', id: dish.id, label: dish.display_name, kind: dish.kind })
+
+// The recipe's own dish from a typeahead pick: a new one is a 料理 unless the
+// form's switch says 醬料 - a line's new dish is the other way round.
+const dishFromOption = (option) =>
+  option.type === 'new-dish'
+    ? { ...targetFromOption(option), kind: DISH }
+    : { type: 'dish', id: option.id, label: option.label, kind: option.kind }
 
 const stepRow = (entry = {}) => keyed({ body: entry.body ?? '', kind: entry.kind ?? STEP })
 
@@ -129,16 +147,11 @@ const ids = (refs) => (refs ?? []).map((ref) => ref.id)
 
 function fromRecipe(row) {
   return {
-    name_cn: row.name_cn ?? '',
-    name_en: row.name_en ?? '',
-    name_alt: row.name_alt ?? '',
-    kind: row.kind ?? 'dish',
-    course_id: row.course ? String(row.course.id) : '',
-    serves_as_ids: ids(row.serves_as),
+    dish: row.dish ? dishPick(row.dish) : null,
+    name: row.name ?? '',
     status_id: row.status ? String(row.status.id) : '',
     servings: row.servings ?? '',
     time: row.time ?? '',
-    variant_of: row.variant_of ? { id: row.variant_of.id, label: row.variant_of.display_name } : null,
     sources: (row.sources ?? []).map(sourceRow),
     lines: {
       ungrouped: (row.lines ?? []).map(lineFromResponse),
@@ -148,13 +161,10 @@ function fromRecipe(row) {
       ungrouped: (row.steps ?? []).map(stepRow),
       groups: groupsFromResponse(row.step_groups, 'steps', stepRow),
     },
-    label_ids: ids(row.labels),
     method_ids: ids(row.methods),
     equipment_ids: ids(row.equipment),
-    description: row.description ?? '',
     storage_notes: row.storage_notes ?? '',
     notes: row.notes ?? '',
-    aliases: (row.aliases ?? []).join('、'),
     gallery: galleryFromImages(row.images),
   }
 }
@@ -163,14 +173,16 @@ export default function RecipeForm() {
   const { id } = useParams()
   const isNew = id === undefined
   const navigate = useNavigate()
+  // ?dish=<id>: the dish page's 「＋ 新增食譜」. Only a new recipe reads it.
+  const [searchParams] = useSearchParams()
+  const presetId = isNew && /^\d+$/.test(searchParams.get('dish') ?? '') ? searchParams.get('dish') : null
 
   const existing = useApiQuery(endpoints.recipes.detail(id), null, { enabled: !isNew })
-  const courses = useApiQuery(endpoints.courses.list())
+  const preset = useApiQuery(endpoints.dishes.detail(presetId), null, { enabled: presetId !== null })
   const statuses = useApiQuery(endpoints.statuses.list())
   const platforms = useApiQuery(endpoints.platforms.list())
   const methods = useApiQuery(endpoints.methods.list())
   const equipment = useApiQuery(endpoints.equipment.list())
-  const labels = useApiQuery(endpoints.labels.list())
   const authors = useApiQuery(endpoints.authors.list())
   const lineGroups = useApiQuery(endpoints.lineGroups.list())
   const stepGroups = useApiQuery(endpoints.stepGroups.list())
@@ -184,9 +196,10 @@ export default function RecipeForm() {
   const [error, setError] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [pasting, setPasting] = useState(false)
-  // Typed into the version-of box and not picked: refused on save, never
-  // dropped (Typeahead's onQueryChange).
-  const [variantTyped, setVariantTyped] = useState('')
+  // Typed into the dish box and not picked: refused on save, never dropped
+  // (Typeahead's onQueryChange).
+  const [dishTyped, setDishTyped] = useState('')
+  const [presetApplied, setPresetApplied] = useState(false)
   // The line a 常用 chip just added, whose 份量 takes the focus once drawn.
   const [focusAmountOf, setFocusAmountOf] = useState(null)
   const amountInputs = useRef(new Map())
@@ -199,6 +212,12 @@ export default function RecipeForm() {
   if (!isNew && existing.data && loaded?.id !== existing.data.id) {
     setLoaded(existing.data)
     setForm(fromRecipe(existing.data))
+  }
+  // The preset dish, once, the first time it answers - and never over a dish
+  // chosen in the meantime.
+  if (isNew && preset.data && !presetApplied) {
+    setPresetApplied(true)
+    setForm((previous) => (previous.dish ? previous : { ...previous, dish: dishPick(preset.data) }))
   }
 
   const setField = (field, value) => setForm((previous) => ({ ...previous, [field]: value }))
@@ -252,19 +271,15 @@ export default function RecipeForm() {
 
   function payload() {
     return {
-      name_cn: blankToNull(form.name_cn),
-      name_en: blankToNull(form.name_en),
-      name_alt: blankToNull(form.name_alt),
-      kind: form.kind,
-      course_id: form.course_id ? Number(form.course_id) : null,
-      // The UI does not offer the recipe's own course as a serves-as.
-      serves_as_ids: form.serves_as_ids.filter((courseId) => String(courseId) !== form.course_id),
+      ...(form.dish.type === 'dish'
+        ? { dish_id: form.dish.id }
+        : { new_dish: { ...newNames(form.dish.label), kind: form.dish.kind } }),
+      name: blankToNull(form.name),
       // Left out when there is no status to choose: the server then gives
       // the first one, or says there is none.
       ...(statusId ? { status_id: Number(statusId) } : {}),
       servings: blankToNull(form.servings),
       time: blankToNull(form.time),
-      variant_of_id: form.variant_of?.id ?? null,
       sources: sourcesPayload(form.sources, platformOf),
       lines: linesPayload(form.lines.ungrouped),
       line_groups: groupsPayload(form.lines, {
@@ -280,22 +295,23 @@ export default function RecipeForm() {
         what: '步驟分組',
         rowsPayload: stepsPayload,
       }),
-      label_ids: form.label_ids,
       method_ids: form.method_ids,
       equipment_ids: form.equipment_ids,
-      description: blankToNull(form.description),
       storage_notes: blankToNull(form.storage_notes),
       notes: blankToNull(form.notes),
-      aliases: splitAliases(form.aliases),
     }
   }
 
   async function submit(event) {
     event.preventDefault()
     setError(null)
-    if (!form.variant_of && variantTyped.trim()) {
+    if (!form.dish) {
       setError(
-        new Error(`「是哪道食譜的另一版」打了「${variantTyped.trim()}」，但還沒從清單選：選一道，或把文字清掉。`),
+        new Error(
+          dishTyped.trim()
+            ? `「料理」打了「${dishTyped.trim()}」，但還沒從清單選：選一道，或選「新增」。`
+            : '這份食譜是哪道料理？先選一道，或打名字新增。',
+        ),
       )
       return
     }
@@ -314,19 +330,15 @@ export default function RecipeForm() {
     }
   }
 
-  const fixedOptions = (list) =>
-    (list ?? []).map((entry) => (
-      <option key={entry.value} value={entry.value}>
-        {entry.label}
-      </option>
-    ))
+  const dishKinds = fixed.data?.dish_kinds ?? []
+  const kindWord = (kind) => fixedLabel(dishKinds, kind)
+  const ownDish = form.dish?.type === 'dish' ? [form.dish.id] : []
   const vocabularyOptions = (rows) =>
     (rows ?? []).map((row) => (
       <option key={row.id} value={row.id}>
         {row.display_name}
       </option>
     ))
-  const otherCourses = (courses.data ?? []).filter((course) => String(course.id) !== form.course_id)
 
   return (
     <form onSubmit={submit} className="mx-auto max-w-3xl space-y-6">
@@ -342,32 +354,44 @@ export default function RecipeForm() {
 
       {isNew || existing.data ? (
         <>
-          <Section title="名稱與分類">
+          <Section title="料理">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <span className="text-sm font-medium text-text-muted">料理</span>
+                {form.dish ? (
+                  <Picked
+                    label={form.dish.label}
+                    tag={form.dish.type === 'new-dish' ? `新${kindWord(form.dish.kind)}` : kindWord(form.dish.kind)}
+                    onClear={() => {
+                      setField('dish', null)
+                      setDishTyped('')
+                    }}
+                  />
+                ) : (
+                  <Typeahead
+                    sources={['dish']}
+                    allowNewDish
+                    newDishHint="（存檔時建立料理）"
+                    label="料理"
+                    placeholder="這是哪道料理的食譜…"
+                    onSelect={(option) => setField('dish', dishFromOption(option))}
+                    onQueryChange={setDishTyped}
+                  />
+                )}
+                {form.dish?.type === 'new-dish' && dishKinds.length ? (
+                  <Toggle
+                    label="新料理的種類"
+                    options={dishKinds}
+                    value={form.dish.kind}
+                    onChange={(kind) => setField('dish', { ...form.dish, kind })}
+                  />
+                ) : null}
+              </div>
+              <Field label="名稱" hint="同一道料理有好幾份食譜時用來分辨，例如作者或做法。留空就用料理的名字。">
+                <Input value={form.name} onChange={set('name')} />
+              </Field>
+            </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <Field label="中文名">
-                <Input value={form.name_cn} onChange={set('name_cn')} />
-              </Field>
-              <Field label="英文名">
-                <Input value={form.name_en} onChange={set('name_en')} />
-              </Field>
-              <Field label="其他名稱">
-                <Input value={form.name_alt} onChange={set('name_alt')} />
-              </Field>
-              <Field label="種類" hint="基底：醬汁、高湯、麵團這類拿來做別道菜的">
-                <Select value={form.kind} onChange={set('kind')}>
-                  {fixedOptions(fixed.data?.recipe_kinds ?? [{ value: form.kind, label: form.kind }])}
-                </Select>
-              </Field>
-              <Field label="類別">
-                <Select value={form.course_id} onChange={set('course_id')}>
-                  <option value="">—</option>
-                  {(courses.data ?? []).map((course) => (
-                    <option key={course.id} value={course.id}>
-                      {course.display_name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
               <Field label="狀態">
                 <Select value={statusId} onChange={set('status_id')}>
                   {vocabularyOptions(statuses.data)}
@@ -379,38 +403,6 @@ export default function RecipeForm() {
               <Field label="時間">
                 <Input value={form.time} onChange={set('time')} placeholder="例如 30 分鐘" />
               </Field>
-              <div className="space-y-1">
-                <span className="text-sm font-medium text-text-muted">是哪道食譜的另一版</span>
-                {form.variant_of ? (
-                  <Picked
-                    label={form.variant_of.label}
-                    onClear={() => {
-                      setField('variant_of', null)
-                      setVariantTyped('')
-                    }}
-                    clearLabel="移除"
-                  />
-                ) : (
-                  <Typeahead
-                    sources={['recipe']}
-                    label="是哪道食譜的另一版"
-                    placeholder="不是就留空"
-                    exclude={{ recipe: id ? [Number(id)] : [] }}
-                    onSelect={(option) => setField('variant_of', { id: option.id, label: option.label })}
-                    onQueryChange={setVariantTyped}
-                  />
-                )}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <span className="text-sm font-medium text-text-muted">也可以當作</span>
-              <ChipPicker
-                label="也可以當作"
-                options={otherCourses}
-                value={form.serves_as_ids}
-                onChange={(value) => setField('serves_as_ids', value)}
-                empty="還沒有類別，可以在設定裡新增。"
-              />
             </div>
           </Section>
 
@@ -490,15 +482,22 @@ export default function RecipeForm() {
                       <Picked
                         label={line.target.label}
                         stub={isStub(line.target)}
-                        tag={line.target.type === 'recipe' ? '食譜' : null}
+                        tag={
+                          line.target.type === 'dish'
+                            ? kindWord(line.target.kind)
+                            : line.target.type === 'new-dish'
+                              ? `新${kindWord(line.target.kind)}`
+                              : null
+                        }
                         onClear={() => update({ target: null, pending: '' })}
                       />
                     ) : (
                       <Typeahead
                         allowNew
+                        allowNewDish
                         label={`材料 ${number}`}
-                        placeholder="食材或食譜…"
-                        exclude={{ recipe: id ? [Number(id)] : [] }}
+                        placeholder="食材或料理（醬料）…"
+                        exclude={{ dish: ownDish }}
                         onSelect={(option) => update({ target: targetFromOption(option) })}
                         onQueryChange={(text) => setLinePending(line._key, text)}
                       />
@@ -582,7 +581,7 @@ export default function RecipeForm() {
             </GroupedRowEditor>
           </Section>
 
-          <Section title="標籤、做法、器材">
+          <Section title="做法、器材">
             <div className="space-y-1">
               <span className="text-sm font-medium text-text-muted">做法</span>
               <ChipPicker
@@ -603,30 +602,14 @@ export default function RecipeForm() {
                 empty="還沒有器材，可以在設定裡新增。"
               />
             </div>
-            <div className="space-y-1">
-              <span className="text-sm font-medium text-text-muted">標籤</span>
-              <ChipPicker
-                label="標籤"
-                options={labels.data}
-                value={form.label_ids}
-                onChange={(value) => setField('label_ids', value)}
-                empty="還沒有標籤，可以在設定裡新增。"
-              />
-            </div>
           </Section>
 
           <Section title="說明">
-            <Field label="簡介">
-              <TextArea value={form.description} onChange={set('description')} />
-            </Field>
             <Field label="保存">
               <TextArea rows={3} value={form.storage_notes} onChange={set('storage_notes')} />
             </Field>
             <Field label="筆記">
               <TextArea value={form.notes} onChange={set('notes')} />
-            </Field>
-            <Field label="別名" hint="用逗號或頓號分開。搜尋得到，但不顯示。">
-              <Input value={form.aliases} onChange={set('aliases')} />
             </Field>
           </Section>
 
@@ -637,7 +620,9 @@ export default function RecipeForm() {
           <FormActions
             saving={saving}
             error={error}
-            onCancel={() => navigate(isNew ? '/recipes' : `/recipes/${id}`)}
+            onCancel={() =>
+              navigate(isNew ? (presetId ? `/dishes/${presetId}` : '/recipes') : `/recipes/${id}`)
+            }
             onDelete={isNew ? null : () => setDeleting(true)}
           />
         </>

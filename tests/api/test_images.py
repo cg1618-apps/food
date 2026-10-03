@@ -196,9 +196,56 @@ def test_attaching_an_unknown_image_is_422_and_a_repeat_is_422(client, fallback_
 
 
 def _recipe(client, name="番茄炒蛋"):
-    response = client.post("/api/edit/recipes", json={"name_cn": name})
+    response = client.post("/api/edit/recipes", json={"new_dish": {"name_cn": name}})
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def _dish(client, name="番茄炒蛋"):
+    response = client.post("/api/edit/dishes", json={"name_cn": name})
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_a_dish_gallery_is_set_in_order_and_its_first_image_is_the_cover(client):
+    first = _upload(client, _png(colour=(1, 2, 3, 255))).json()
+    second = _upload(client, _png(colour=(9, 8, 7, 255))).json()
+    dish = _dish(client)
+    url = f"/api/edit/dishes/{dish['id']}/images"
+    response = client.put(
+        url, json=[{"image_id": second["id"], "focus": "50% 30%"}, {"image_id": first["id"]}]
+    )
+    assert response.status_code == 200, response.text
+    assert [i["image_id"] for i in response.json()["images"]] == [second["id"], first["id"]]
+    [summary] = client.get("/api/dishes").json()
+    assert summary["cover"] == {"thumb_url": second["thumb_url"], "focus": "50% 30%"}
+    swapped = client.put(url, json=[{"image_id": first["id"]}, {"image_id": second["id"]}])
+    assert [i["image_id"] for i in swapped.json()["images"]] == [first["id"], second["id"]]
+    unknown = client.put(url, json=[{"image_id": 999999}])
+    assert unknown.status_code == 422 and "999999" in unknown.json()["detail"]
+
+
+def test_a_dish_without_pictures_shows_its_first_recipe_cover(client):
+    """The recipe with a picture is the fixture; a dish with neither is the
+    mirror and has no cover. The dish's own picture wins once it has one."""
+    recipe_picture = _upload(client, _png(colour=(1, 2, 3, 255))).json()
+    dish_picture = _upload(client, _png(colour=(9, 8, 7, 255))).json()
+    dish = _dish(client, "咖哩")
+    _dish(client, "白飯")
+    bare = client.post("/api/edit/recipes", json={"dish_id": dish["id"]}).json()
+    pictured = client.post("/api/edit/recipes", json={"dish_id": dish["id"]}).json()
+    client.put(
+        f"/api/edit/recipes/{pictured['id']}/images", json=[{"image_id": recipe_picture["id"]}]
+    )
+    assert bare["id"] < pictured["id"]
+
+    covers = {row["display_name"]: row["cover"] for row in client.get("/api/dishes").json()}
+    assert covers["咖哩"]["thumb_url"] == recipe_picture["thumb_url"]
+    assert covers["白飯"] is None
+
+    client.put(f"/api/edit/dishes/{dish['id']}/images", json=[{"image_id": dish_picture["id"]}])
+    covers = {row["display_name"]: row["cover"] for row in client.get("/api/dishes").json()}
+    assert covers["咖哩"]["thumb_url"] == dish_picture["thumb_url"]
 
 
 def test_a_recipe_gallery_is_set_in_order_and_its_first_image_is_the_cover(client):
@@ -235,9 +282,12 @@ def test_a_recipe_gallery_refuses_an_unknown_image_and_an_unknown_recipe(client)
     ).status_code == 404
 
 
-def test_an_image_lists_the_recipes_that_attach_it(client, fallback_category):
+def test_an_image_lists_the_recipes_and_dishes_that_attach_it(client, fallback_category):
     image = _upload(client, _png()).json()
     recipe = _recipe(client, "芒果布丁")
+    client.put(
+        f"/api/edit/dishes/{recipe['dish']['id']}/images", json=[{"image_id": image["id"]}]
+    )
     ingredient = client.post(
         "/api/edit/ingredients", json={"name_cn": "芒果", "category_id": fallback_category.id}
     ).json()
@@ -245,9 +295,12 @@ def test_an_image_lists_the_recipes_that_attach_it(client, fallback_category):
     client.put(f"/api/edit/ingredients/{ingredient['id']}/images", json=[{"image_id": image["id"]}])
     owners = client.get(f"/api/images/{image['id']}").json()["owners"]
     assert sorted((o["type"], o["id"], o["display_name"]) for o in owners) == [
+        ("dish", recipe["dish"]["id"], "芒果布丁"),
         ("ingredient", ingredient["id"], "芒果"),
         ("recipe", recipe["id"], "芒果布丁"),
     ]
+    listed = {row["id"]: row for row in client.get("/api/images").json()}
+    assert listed[image["id"]]["attachment_count"] == 3
 
 
 def test_an_attached_image_cannot_be_deleted_and_its_file_survives(

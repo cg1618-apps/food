@@ -4,6 +4,7 @@ from app.schemas.common_ingredient import (
     CommonIngredientResponse,
     CommonIngredientsIn,
 )
+from app.schemas.dish import DishCreate, DishResponse, DishSummary, DishUpdate
 from app.schemas.image import (
     AttachedImage,
     CoverRef,
@@ -42,12 +43,16 @@ from app.schemas.kitchen_note import (
 )
 from app.schemas.label import LabelCreate, LabelResponse, LabelUpdate
 from app.schemas.recipe import (
+    DishBrief,
+    DishRef,
     IngredientRef,
     LineGroupIn,
     LineGroupResponse,
     LineIn,
     LineResponse,
+    NewDishIn,
     NewNameIn,
+    NewSubDishIn,
     RecipeCreate,
     RecipeRef,
     RecipeResponse,
@@ -84,6 +89,12 @@ __all__ = [
     "CommonIngredientResponse",
     "CommonIngredientsIn",
     "CoverRef",
+    "DishBrief",
+    "DishCreate",
+    "DishRef",
+    "DishResponse",
+    "DishSummary",
+    "DishUpdate",
     "ImageAttachmentIn",
     "ImageDetail",
     "ImageOwner",
@@ -114,7 +125,9 @@ __all__ = [
     "LinkResponse",
     "MergeIn",
     "MergePreview",
+    "NewDishIn",
     "NewNameIn",
+    "NewSubDishIn",
     "PreservationIn",
     "PreservationResponse",
     "RecipeCreate",

@@ -13,8 +13,8 @@ from app.models import RecipeLine, RecipeLineGroup, RecipeStep
 pytestmark = pytest.mark.usefixtures("recipe_statuses")
 
 
-def create(client, **body):
-    body.setdefault("name_cn", "麻婆豆腐")
+def create(client, dish="麻婆豆腐", **body):
+    body["new_dish"] = {"name_cn": dish}
     response = client.post("/api/edit/recipes", json=body)
     assert response.status_code == 201, response.text
     return response.json()
@@ -121,7 +121,7 @@ def test_a_group_named_twice_in_one_recipe_is_422(client, db, line_groups, group
         "one-off name twice in another case": [{"name": "Sauce"}, {"name": "sauce "}],
     }[groups]
     before = db.query(RecipeLineGroup).count()
-    response = client.post("/api/edit/recipes", json={"name_cn": "x", "line_groups": payload})
+    response = client.post("/api/edit/recipes", json={"new_dish": {"name_cn": "x"}, "line_groups": payload})
     assert response.status_code == 422, response.text
     assert db.query(RecipeLineGroup).count() == before
     # Mirror: two different groups are fine.
@@ -133,13 +133,13 @@ def test_a_group_named_twice_in_one_recipe_is_422(client, db, line_groups, group
     [{}, {"name": "  "}, {"name": "醬汁", "line_group_id": 1}],
 )
 def test_a_group_names_exactly_one_of_a_value_or_a_name(client, group):
-    response = client.post("/api/edit/recipes", json={"name_cn": "x", "line_groups": [group]})
+    response = client.post("/api/edit/recipes", json={"new_dish": {"name_cn": "x"}, "line_groups": [group]})
     assert response.status_code == 422
 
 
 def test_a_group_naming_a_missing_value_is_422(client, line_groups):
     response = client.post(
-        "/api/edit/recipes", json={"name_cn": "x", "step_groups": [{"step_group_id": 999999}]}
+        "/api/edit/recipes", json={"new_dish": {"name_cn": "x"}, "step_groups": [{"step_group_id": 999999}]}
     )
     assert response.status_code == 422
     assert "999999" in response.json()["detail"]
@@ -148,7 +148,10 @@ def test_a_group_naming_a_missing_value_is_422(client, line_groups):
 def test_a_grouped_line_naming_a_missing_ingredient_is_422(client, ingredient):
     response = client.post(
         "/api/edit/recipes",
-        json={"name_cn": "x", "line_groups": [{"name": "a", "lines": [{"ingredient_id": 999999}]}]},
+        json={
+            "new_dish": {"name_cn": "x"},
+            "line_groups": [{"name": "a", "lines": [{"ingredient_id": 999999}]}],
+        },
     )
     assert response.status_code == 422
 
@@ -164,12 +167,12 @@ def test_a_new_ingredient_inside_a_group_becomes_a_stub(client, fallback_categor
     assert grouped["ingredient"]["id"] == body["lines"][0]["ingredient"]["id"]
 
 
-def test_a_sub_recipe_inside_a_group_counts_as_used_in(client):
-    base = create(client, name_cn="辣油", kind="base")
-    dish = create(client, line_groups=[{"name": "醬汁", "lines": [{"sub_recipe_id": base["id"]}]}])
-    read = client.get(f"/api/recipes/{base['id']}").json()
-    assert [r["id"] for r in read["used_in"]] == [dish["id"]]
-    assert client.get(f"/api/recipes/{base['id']}/cascade").json()["used_in"] == 1
+def test_a_sub_dish_inside_a_group_counts_as_used_in(client):
+    oil = create(client, dish="辣油")["dish"]
+    recipe = create(client, line_groups=[{"name": "醬汁", "lines": [{"sub_dish_id": oil["id"]}]}])
+    read = client.get(f"/api/dishes/{oil['id']}").json()
+    assert [r["id"] for r in read["used_in"]] == [recipe["id"]]
+    assert client.get(f"/api/dishes/{oil['id']}/cascade").json()["used_in"] == 1
 
 
 def test_patch_replaces_lines_and_their_groups_together(client, ingredient, line_groups):
@@ -250,14 +253,14 @@ def test_the_delete_dialog_counts_grouped_rows_and_the_delete_takes_the_groups(
         step_groups=[{"name": "備料", "steps": [{"body": "a"}, {"body": "b"}]}],
     )
     counts = client.get(f"/api/recipes/{created['id']}/cascade").json()
-    assert counts == {"aliases": 0, "sources": 0, "lines": 3, "steps": 2, "used_in": 0}
+    assert counts == {"sources": 0, "lines": 3, "steps": 2}
 
-    stale = {"aliases": 0, "sources": 0, "lines": 1, "steps": 2}
+    stale = {"sources": 0, "lines": 1, "steps": 2}
     response = client.delete(f"/api/edit/recipes/{created['id']}", params=stale)
     assert response.status_code == 409
     assert response.json()["field"] == "lines"
 
-    params = {k: counts[k] for k in ("aliases", "sources", "lines", "steps")}
+    params = {k: counts[k] for k in ("sources", "lines", "steps")}
     assert client.delete(f"/api/edit/recipes/{created['id']}", params=params).status_code == 204
     assert db.query(RecipeLineGroup).filter_by(recipe_id=created["id"]).count() == 0
     assert db.query(RecipeLine).filter_by(recipe_id=created["id"]).count() == 0
@@ -305,11 +308,16 @@ def test_group_values_list_in_their_seeded_order(client, line_groups, step_group
 
 
 def test_a_cycle_through_a_grouped_line_is_refused(client):
-    a = create(client, name_cn="A")
-    b = create(client, name_cn="B", line_groups=[{"name": "底", "lines": [{"sub_recipe_id": a["id"]}]}])
+    a = create(client, dish="A")
+    b = create(
+        client, dish="B", line_groups=[{"name": "底", "lines": [{"sub_dish_id": a["dish"]["id"]}]}]
+    )
     response = client.patch(
         f"/api/edit/recipes/{a['id']}",
-        json={"lines": [], "line_groups": [{"name": "x", "lines": [{"sub_recipe_id": b["id"]}]}]},
+        json={
+            "lines": [],
+            "line_groups": [{"name": "x", "lines": [{"sub_dish_id": b["dish"]["id"]}]}],
+        },
     )
     assert response.status_code == 422
     assert client.get(f"/api/recipes/{a['id']}").json()["line_groups"] == []

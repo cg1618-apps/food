@@ -1,7 +1,8 @@
 // The form components against a stubbed fetch: the typeahead's keyboard and
 // its 「新增」, the delete dialog correcting itself on a 409 and listing what
-// blocks a refusal, and the recipe form's save - one target per line, and a
-// new recipe's gallery PUT only after the POST has answered with an id.
+// blocks a refusal, the recipe form's save - its dish, picked or new or
+// preset from ?dish=, one target per line, and a new recipe's gallery PUT only
+// after the POST has answered with an id - and the dish form's save.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
@@ -61,26 +62,36 @@ function wrap(ui, path = '/', client = new QueryClient({ defaultOptions: { queri
 }
 
 const GINGER = { id: 1, display_name: '薑', name_cn: '薑', name_en: 'Ginger', needs_detail: false }
-const STOCK = { id: 7, display_name: '雞高湯', name_cn: '雞高湯', kind: 'base' }
+const STOCK = { id: 7, display_name: '雞高湯', name_cn: '雞高湯', kind: 'sauce' }
+
+// A recipe belongs to a dish: type a name into the 料理 box and pick 「新增」.
+// The dish search answers nothing in these tests unless a handler says so.
+async function chooseNewDish(name) {
+  fireEvent.change(await screen.findByRole('combobox', { name: '料理' }), { target: { value: name } })
+  // The name is in a <strong>, which the accessible name pads with spaces.
+  fireEvent.click(await screen.findByRole('option', { name: new RegExp(`^新增「\\s*${name}\\s*」`) }))
+}
 
 describe('Typeahead', () => {
   it('searches both libraries once the typing settles and picks with the keyboard', async () => {
     handler = ({ url }) =>
-      url.startsWith('/api/ingredients?') ? json([GINGER]) : url.startsWith('/api/recipes?') ? json([STOCK]) : json([])
+      url.startsWith('/api/ingredients?') ? json([GINGER]) : url.startsWith('/api/dishes?') ? json([STOCK]) : json([])
     const onSelect = vi.fn()
     wrap(<Typeahead label="材料" onSelect={onSelect} allowNew />)
 
     const box = screen.getByRole('combobox', { name: '材料' })
     fireEvent.change(box, { target: { value: '薑' } })
     await screen.findByRole('option', { name: /薑\s*Ginger/ })
-    expect(calls.map((c) => c.url)).toEqual(expect.arrayContaining(['/api/ingredients?q=薑', '/api/recipes?q=薑']))
+    expect(calls.map((c) => c.url)).toEqual(expect.arrayContaining(['/api/ingredients?q=薑', '/api/dishes?q=薑']))
+    // A sauce says so.
+    expect(screen.getByRole('option', { name: /雞高湯/ }).textContent).toContain('醬料')
 
-    // Down twice: the ingredient, then the recipe; Enter picks the recipe.
+    // Down twice: the ingredient, then the dish; Enter picks the dish.
     fireEvent.keyDown(box, { key: 'ArrowDown' })
     fireEvent.keyDown(box, { key: 'ArrowDown' })
     expect(box.getAttribute('aria-activedescendant')).toBeTruthy()
     fireEvent.keyDown(box, { key: 'Enter' })
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ type: 'recipe', id: 7 }))
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ type: 'dish', id: 7 }))
     expect(box.value).toBe('')
   })
 
@@ -94,7 +105,7 @@ describe('Typeahead', () => {
     const option = await screen.findByRole('option', { name: /新增.*薑末/ })
     expect(option).toBeTruthy()
     // Only the ingredient library was asked.
-    expect(calls.some((c) => c.url.startsWith('/api/recipes'))).toBe(false)
+    expect(calls.some((c) => c.url.startsWith('/api/dishes'))).toBe(false)
 
     fireEvent.keyDown(box, { key: 'Escape' })
     expect(screen.queryByRole('listbox')).toBeNull()
@@ -280,7 +291,7 @@ describe('DeleteDialog', () => {
   it('cannot be dismissed while the delete is running', async () => {
     let finish
     handler = ({ url, method }) => {
-      if (url === '/api/recipes/5/cascade') return json({ aliases: 0, sources: 0, lines: 0, steps: 0, used_in: 0 })
+      if (url === '/api/recipes/5/cascade') return json({ sources: 0, lines: 0, steps: 0 })
       if (method === 'DELETE') return new Promise((resolve) => (finish = () => resolve(json(null, 204))))
       return json([])
     }
@@ -297,7 +308,7 @@ describe('DeleteDialog', () => {
   it('sends the counts it showed, takes the server number on a stale 409, and confirms again', async () => {
     let stale = true
     handler = ({ url, method }) => {
-      if (url === '/api/recipes/5/cascade') return json({ aliases: 1, sources: 2, lines: 3, steps: 4, used_in: 0 })
+      if (url === '/api/recipes/5/cascade') return json({ sources: 2, lines: 3, steps: 4 })
       if (method === 'DELETE' && stale) {
         stale = false
         return json(
@@ -321,8 +332,8 @@ describe('DeleteDialog', () => {
 
     const deletes = calls.filter((c) => c.method === 'DELETE').map((c) => c.url)
     expect(deletes).toEqual([
-      '/api/edit/recipes/5?aliases=1&sources=2&lines=3&steps=4',
-      '/api/edit/recipes/5?aliases=1&sources=2&lines=5&steps=4',
+      '/api/edit/recipes/5?sources=2&lines=3&steps=4',
+      '/api/edit/recipes/5?sources=2&lines=5&steps=4',
     ])
   })
 
@@ -371,11 +382,14 @@ describe('RecipeForm', () => {
     handler = ({ url, method }) => {
       if (url === '/api/vocabularies/fixed') {
         return json({
-          recipe_kinds: [{ value: 'dish', label: '料理' }],
+          dish_kinds: [
+            { value: 'dish', label: '料理' },
+            { value: 'sauce', label: '醬料' },
+          ],
         })
       }
       if (url.startsWith('/api/ingredients?')) return json([GINGER])
-      if (url.startsWith('/api/recipes?')) return json([STOCK])
+      if (url.startsWith('/api/dishes?q=高湯')) return json([STOCK])
       if (url === '/api/edit/images' && method === 'POST') return json(UPLOADED, 201)
       if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
       if (url === '/api/edit/recipes/42/images' && method === 'PUT') return json({ id: 42 })
@@ -383,17 +397,25 @@ describe('RecipeForm', () => {
     }
     wrap(<AppRoutes />, '/edit/recipes/new')
 
-    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '薑汁燒肉' } })
+    await chooseNewDish('薑汁燒肉')
 
-    // A stub line and a sub-recipe line.
+    // A stub line, a line naming a dish, and a line naming a dish the save
+    // makes - a 醬料 unless told.
     fireEvent.click(screen.getByRole('button', { name: /加一行材料/ }))
     fireEvent.change(screen.getByRole('combobox', { name: '材料 1' }), { target: { value: '紫蘇' } })
-    fireEvent.click(await screen.findByRole('option', { name: /新增.*紫蘇/ }))
+    fireEvent.click(await screen.findByRole('option', { name: /^新增「\s*紫蘇/ }))
     expect(screen.getByText('待補')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: /加一行材料/ }))
     fireEvent.change(screen.getByRole('combobox', { name: '材料 2' }), { target: { value: '高湯' } })
     fireEvent.click(await screen.findByRole('option', { name: /雞高湯/ }))
+
+    fireEvent.click(screen.getByRole('button', { name: /加一行材料/ }))
+    fireEvent.change(screen.getByRole('combobox', { name: '材料 3' }), { target: { value: '照燒醬' } })
+    // Both are offered: a new ingredient and a new dish.
+    expect(await screen.findByRole('option', { name: /^新增「\s*照燒醬/ })).toBeTruthy()
+    fireEvent.click(screen.getByRole('option', { name: /^新增料理「\s*照燒醬/ }))
+    expect(within(screen.getByRole('group', { name: '材料 3' })).getByText('新醬料')).toBeTruthy()
 
     // Steps pasted with their numbering.
     fireEvent.click(screen.getByRole('button', { name: '貼上多行' }))
@@ -416,10 +438,15 @@ describe('RecipeForm', () => {
       'PUT /api/edit/recipes/42/images',
     ])
     const body = writes[0].body
-    expect(body.name_cn).toBe('薑汁燒肉')
+    expect(body.new_dish).toEqual({ name_cn: '薑汁燒肉', kind: 'dish' })
+    expect(body.name).toBeNull()
+    for (const gone of ['name_cn', 'kind', 'course_id', 'label_ids', 'aliases', 'variant_of_id']) {
+      expect(gone in body).toBe(false)
+    }
     expect(body.lines).toEqual([
       { amount: null, note: null, is_optional: false, new_ingredient: { name_cn: '紫蘇' } },
-      { amount: null, note: null, is_optional: false, sub_recipe_id: 7 },
+      { amount: null, note: null, is_optional: false, sub_dish_id: 7 },
+      { amount: null, note: null, is_optional: false, new_dish: { name_cn: '照燒醬', kind: 'sauce' } },
     ])
     expect(body.line_groups).toEqual([])
     // Pasted steps are ordinary steps.
@@ -449,7 +476,7 @@ describe('RecipeForm', () => {
       return json([])
     }
     wrap(<AppRoutes />, '/edit/recipes/new')
-    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    await chooseNewDish('湯')
     await screen.findByRole('option', { name: '可煮' })
     expect(screen.getByLabelText('狀態').value).toBe('8')
 
@@ -475,7 +502,7 @@ describe('RecipeForm', () => {
   it("picks a source's author from the authors list, or makes a new one on save", async () => {
     handler = withAuthors
     wrap(<AppRoutes />, '/edit/recipes/new')
-    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    await chooseNewDish('湯')
 
     fireEvent.click(screen.getByRole('button', { name: /加一個來源/ }))
     fireEvent.change(screen.getByRole('combobox', { name: '作者 1' }), { target: { value: '阿基' } })
@@ -497,7 +524,7 @@ describe('RecipeForm', () => {
   it('refuses to save an author that was typed but never picked', async () => {
     handler = withAuthors
     wrap(<AppRoutes />, '/edit/recipes/new')
-    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    await chooseNewDish('湯')
     fireEvent.click(screen.getByRole('button', { name: /加一個來源/ }))
     fireEvent.change(screen.getByRole('combobox', { name: '作者 1' }), { target: { value: '詹姆士' } })
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
@@ -509,7 +536,7 @@ describe('RecipeForm', () => {
     handler = ({ url, method }) =>
       url === '/api/edit/recipes' && method === 'POST' ? json({ id: 42, images: [] }, 201) : json([])
     wrap(<AppRoutes />, '/edit/recipes/new')
-    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    await chooseNewDish('湯')
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
     expect('status_id' in calls.find((c) => c.method === 'POST').body).toBe(false)
@@ -517,7 +544,7 @@ describe('RecipeForm', () => {
 
   it('refuses to save a line whose name was typed but never picked', async () => {
     wrap(<AppRoutes />, '/edit/recipes/new')
-    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    await chooseNewDish('湯')
     fireEvent.click(screen.getByRole('button', { name: /加一行材料/ }))
     fireEvent.change(screen.getByRole('combobox', { name: '材料 1' }), { target: { value: '紫蘇' } })
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
@@ -525,13 +552,70 @@ describe('RecipeForm', () => {
     expect(calls.some((c) => c.method === 'POST')).toBe(false)
   })
 
-  it('refuses to save a version-of that was typed but never picked', async () => {
+  it('refuses to save without a dish, or with one typed but never picked', async () => {
     wrap(<AppRoutes />, '/edit/recipes/new')
-    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
-    fireEvent.change(screen.getByRole('combobox', { name: '是哪道食譜的另一版' }), { target: { value: '高湯' } })
+    fireEvent.click(await screen.findByRole('button', { name: '儲存' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/哪道料理/)
+    fireEvent.change(screen.getByRole('combobox', { name: '料理' }), { target: { value: '高湯' } })
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
-    expect((await screen.findByRole('alert')).textContent).toMatch(/另一版.*高湯/)
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/料理.*高湯.*還沒/))
     expect(calls.some((c) => c.method === 'POST')).toBe(false)
+  })
+
+  it('picks an existing dish, or makes a new one as a 料理 or a 醬料, with an optional name', async () => {
+    handler = ({ url, method }) => {
+      if (url === '/api/vocabularies/fixed') {
+        return json({
+          dish_kinds: [
+            { value: 'dish', label: '料理' },
+            { value: 'sauce', label: '醬料' },
+          ],
+        })
+      }
+      if (url.startsWith('/api/dishes?q=照燒')) {
+        return json([{ id: 40, display_name: '照燒雞腿排', name_cn: '照燒雞腿排', kind: 'dish' }])
+      }
+      if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
+      return json([])
+    }
+    wrap(<AppRoutes />, '/edit/recipes/new')
+
+    // A new dish: 料理 by default, switched to 醬料.
+    await chooseNewDish('柴魚高湯')
+    const kind = await screen.findByRole('group', { name: '新料理的種類' })
+    expect(within(kind).getByRole('button', { name: '料理' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(within(kind).getByRole('button', { name: '醬料' }))
+    expect(screen.getByText('新醬料')).toBeTruthy()
+
+    // Changed to an existing dish instead.
+    fireEvent.click(screen.getByRole('button', { name: '更換' }))
+    fireEvent.change(screen.getByRole('combobox', { name: '料理' }), { target: { value: '照燒' } })
+    fireEvent.click(await screen.findByRole('option', { name: /照燒雞腿排/ }))
+    expect(screen.queryByRole('group', { name: '新料理的種類' })).toBeNull()
+    fireEvent.change(screen.getByLabelText(/^名稱/), { target: { value: '阿基師版' } })
+
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+    const body = calls.find((c) => c.method === 'POST').body
+    expect(body.dish_id).toBe(40)
+    expect('new_dish' in body).toBe(false)
+    expect(body.name).toBe('阿基師版')
+  })
+
+  it('starts with the dish ?dish= names, and saves the recipe under it', async () => {
+    handler = ({ url, method }) => {
+      if (url === '/api/dishes/40') {
+        return json({ id: 40, display_name: '照燒雞腿排', name_cn: '照燒雞腿排', kind: 'dish', recipes: [] })
+      }
+      if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
+      return json([])
+    }
+    wrap(<AppRoutes />, '/edit/recipes/new?dish=40')
+    expect(await screen.findByText('照燒雞腿排')).toBeTruthy()
+    expect(screen.queryByRole('combobox', { name: '料理' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+    expect(calls.find((c) => c.method === 'POST').body.dish_id).toBe(40)
   })
 
   it('drops a blank source row and marks the category counts stale for a 新增 line', async () => {
@@ -544,7 +628,7 @@ describe('RecipeForm', () => {
     client.setQueryData(['/api/ingredient-categories', null], [])
     wrap(<AppRoutes />, '/edit/recipes/new', client)
 
-    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    await chooseNewDish('湯')
     fireEvent.click(screen.getByRole('button', { name: /加一個來源/ }))
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
@@ -559,7 +643,7 @@ describe('RecipeForm', () => {
         ? json({ detail: 'A recipe cannot use itself, directly or through another recipe.' }, 422)
         : json([])
     wrap(<AppRoutes />, '/edit/recipes/new')
-    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: 'x' } })
+    await chooseNewDish('x')
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
     expect(await screen.findByRole('alert')).toHaveProperty(
       'textContent',
@@ -592,7 +676,7 @@ describe('RecipeForm groups', () => {
   it('puts steps in groups from 設定 chips and by name, moves them by keyboard, and pastes into a group', async () => {
     handler = groupData
     wrap(<AppRoutes />, '/edit/recipes/new')
-    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '麻婆豆腐' } })
+    await chooseNewDish('麻婆豆腐')
     const steps = area('步驟')
 
     // A 設定 value, one tap; then a one-off name.
@@ -663,7 +747,7 @@ describe('RecipeForm groups', () => {
     handler = (call) =>
       call.url === '/api/vocabularies/fixed'
         ? json({
-            recipe_kinds: [{ value: 'dish', label: '料理' }],
+            dish_kinds: [{ value: 'dish', label: '料理' }],
             step_kinds: [
               { value: 'step', label: '步驟' },
               { value: 'optional', label: '可省略' },
@@ -672,7 +756,7 @@ describe('RecipeForm groups', () => {
           })
         : groupData(call)
     wrap(<AppRoutes />, '/edit/recipes/new')
-    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '麻婆豆腐' } })
+    await chooseNewDish('麻婆豆腐')
     const steps = area('步驟')
 
     fireEvent.click(within(steps).getByRole('button', { name: '＋ 加分組' }))
@@ -721,7 +805,7 @@ describe('RecipeForm groups', () => {
   it('takes a typed name that is a 設定 value as that value, and removing a group keeps its rows', async () => {
     handler = groupData
     wrap(<AppRoutes />, '/edit/recipes/new')
-    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    await chooseNewDish('湯')
     const lines = area('材料')
 
     fireEvent.click(within(lines).getByRole('button', { name: '＋ 加分組' }))
@@ -756,7 +840,7 @@ describe('RecipeForm groups', () => {
       id,
       position: id,
       ingredient: { id: ingredientId, display_name: `食材${ingredientId}`, needs_detail: false },
-      sub_recipe: null,
+      sub_dish: null,
       amount: null,
       note: null,
       is_optional: false,
@@ -764,8 +848,8 @@ describe('RecipeForm groups', () => {
     const RECIPE = {
       id: 5,
       display_name: '麻婆豆腐',
-      name_cn: '麻婆豆腐',
-      kind: 'dish',
+      name: null,
+      dish: { id: 40, display_name: '麻婆豆腐', kind: 'dish', course: null, region: null, labels: [], serves_as: [] },
       status: { id: 1, display_name: '想試' },
       sources: [],
       lines: [line(0, 1)],
@@ -774,15 +858,10 @@ describe('RecipeForm groups', () => {
       ],
       steps: [],
       step_groups: [{ id: 4, position: 0, group: null, name: '收尾', display_name: '收尾', steps: [] }],
-      serves_as: [],
-      labels: [],
       methods: [],
       equipment: [],
       images: [],
-      aliases: [],
-      variant_of: null,
-      versions: [],
-      used_in: [],
+      other_recipes: [],
       written_up: true,
     }
     handler = (call) =>
@@ -792,6 +871,7 @@ describe('RecipeForm groups', () => {
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/5'))
     const body = calls.find((c) => c.method === 'PATCH').body
+    expect(body.dish_id).toBe(40)
     expect(body.lines).toEqual([{ amount: null, note: null, is_optional: false, ingredient_id: 1 }])
     expect(body.line_groups).toEqual([
       { line_group_id: 11, lines: [{ amount: null, note: null, is_optional: false, ingredient_id: 2 }] },
@@ -823,7 +903,7 @@ describe('RecipeForm 常用食材', () => {
   it('appends a line for a tapped chip to the ungrouped lines, focused on its amount', async () => {
     handler = commonData(COMMON)
     wrap(<AppRoutes />, '/edit/recipes/new')
-    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '炒青菜' } })
+    await chooseNewDish('炒青菜')
     const lines = area('材料')
 
     // A group first, so "ungrouped" is a place a line could miss.
@@ -867,8 +947,8 @@ describe('RecipeForm 常用食材', () => {
     const RECIPE = {
       id: 5,
       display_name: '薑母鴨',
-      name_cn: '薑母鴨',
-      kind: 'dish',
+      name: null,
+      dish: { id: 41, display_name: '薑母鴨', kind: 'dish', course: null, region: null, labels: [], serves_as: [] },
       status: { id: 1, display_name: '想試' },
       sources: [],
       lines: [],
@@ -884,7 +964,7 @@ describe('RecipeForm 常用食材', () => {
               id: 1,
               position: 0,
               ingredient: { id: 2, display_name: '薑', needs_detail: true },
-              sub_recipe: null,
+              sub_dish: null,
               amount: '1 塊',
               note: null,
               is_optional: false,
@@ -894,15 +974,10 @@ describe('RecipeForm 常用食材', () => {
       ],
       steps: [],
       step_groups: [],
-      serves_as: [],
-      labels: [],
       methods: [],
       equipment: [],
       images: [],
-      aliases: [],
-      variant_of: null,
-      versions: [],
-      used_in: [],
+      other_recipes: [],
       written_up: true,
     }
     const data = commonData(COMMON)
@@ -917,12 +992,72 @@ describe('RecipeForm 常用食材', () => {
   it('shows no chip row at all while the list is empty', async () => {
     handler = commonData([])
     wrap(<AppRoutes />, '/edit/recipes/new')
-    await screen.findByLabelText('中文名')
+    await screen.findByRole('combobox', { name: '料理' })
     await waitFor(() => expect(calls.some((c) => c.url === '/api/common-ingredients')).toBe(true))
     // Give the read a chance to answer before asserting absence.
     await act(async () => {})
     expect(screen.queryByRole('group', { name: '常用食材' })).toBeNull()
     expect(within(area('材料')).queryByText(/常用/)).toBeNull()
+  })
+})
+
+describe('DishForm', () => {
+  const FIXED = {
+    dish_kinds: [
+      { value: 'dish', label: '料理' },
+      { value: 'sauce', label: '醬料' },
+    ],
+  }
+  const data = ({ url, method }) => {
+    if (url === '/api/vocabularies/fixed') return json(FIXED)
+    if (url === '/api/recipe-courses') {
+      return json([
+        { id: 1, display_name: '主菜', sort_order: 10, usage_count: 0 },
+        { id: 2, display_name: '湯', sort_order: 20, usage_count: 0 },
+      ])
+    }
+    if (url === '/api/regions') return json([{ id: 3, display_name: '日式', sort_order: 30, usage_count: 0 }])
+    if (url === '/api/labels') return json([{ id: 9, display_name: '下飯', dish_count: 0, usage_count: 0 }])
+    if (url === '/api/edit/dishes' && method === 'POST') return json({ id: 42, images: [] }, 201)
+    return json([])
+  }
+
+  it('saves the names, kind, course, region, serves-as, labels, description and aliases', async () => {
+    handler = data
+    wrap(<AppRoutes />, '/edit/dishes/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '照燒醬' } })
+    fireEvent.change(screen.getByLabelText('英文名'), { target: { value: 'teriyaki sauce' } })
+    const kind = screen.getByRole('group', { name: '種類' })
+    expect((await within(kind).findByRole('button', { name: '料理' })).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(within(kind).getByRole('button', { name: '醬料' }))
+    await screen.findByRole('option', { name: '主菜' })
+    fireEvent.change(screen.getByLabelText('類別'), { target: { value: '1' } })
+    await screen.findByRole('option', { name: '日式' })
+    fireEvent.change(screen.getByLabelText('地區'), { target: { value: '3' } })
+    // The dish's own course is not offered as a serves-as.
+    const servesAs = screen.getByRole('group', { name: '也可以當作' })
+    expect(within(servesAs).queryByRole('button', { name: /主菜/ })).toBeNull()
+    fireEvent.click(within(servesAs).getByRole('button', { name: /湯/ }))
+    fireEvent.click(within(screen.getByRole('group', { name: '標籤' })).getByRole('button', { name: /下飯/ }))
+    fireEvent.change(screen.getByLabelText('簡介'), { target: { value: '甜鹹' } })
+    fireEvent.change(screen.getByLabelText(/別名/), { target: { value: '照燒、teriyaki' } })
+
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/dishes/42'))
+    const post = calls.find((c) => c.method === 'POST')
+    expect(post.url).toBe('/api/edit/dishes')
+    expect(post.body).toEqual({
+      name_cn: '照燒醬',
+      name_en: 'teriyaki sauce',
+      name_alt: null,
+      kind: 'sauce',
+      course_id: 1,
+      region_id: 3,
+      serves_as_ids: [2],
+      label_ids: [9],
+      description: '甜鹹',
+      aliases: ['照燒', 'teriyaki'],
+    })
   })
 })
 

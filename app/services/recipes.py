@@ -1,9 +1,9 @@
 """Reading and writing recipes. The router does HTTP; this does the work.
 
-Every write validates everything it can BEFORE it changes anything: names,
-the course, the status, every source's platform and author, the version rule,
-every id in the vocabulary lists, every group's value or name, every line
-target and the cycle guard. Only then are stubs and new authors created and
+Every write validates everything it can BEFORE it changes anything: the dish,
+the status, every source's platform and author, every id in the vocabulary
+lists, every group's value or name, every line target, the own-dish rule and
+the cycle guard. Only then are new dishes, stubs and new authors created and
 the row touched.
 
 Lines and steps are each a pair on the wire - the ungrouped rows, and the
@@ -14,8 +14,10 @@ One request is one transaction, and the ordering is what makes a refused save
 leave nothing behind even in a session that is never rolled back - the test
 session is one such, and an autoflush is all it takes to half-write a row.
 
-There are no reverse relationships from an ingredient or a recipe to the lines
-that name them, so "used in" is always an explicit query here.
+A line names a DISH, not a recipe of it, so the nesting graph is a graph of
+dishes: dish A uses dish B when a recipe of A has a line naming B. There are
+no reverse relationships from an ingredient or a dish to the lines that name
+them, so "used in" is always an explicit query.
 """
 
 from sqlalchemy import func, or_, select
@@ -25,18 +27,16 @@ from app.errors import AppError
 from app.models import (
     Author,
     CookingMethod,
+    Dish,
+    DishLabel,
     Equipment,
     Ingredient,
     IngredientAlias,
     IngredientCategory,
-    Label,
     LineGroup,
     Recipe,
-    RecipeAlias,
-    RecipeCourse,
     RecipeEquipment,
     RecipeImage,
-    RecipeLabel,
     RecipeLine,
     RecipeLineGroup,
     RecipeMethod,
@@ -48,6 +48,7 @@ from app.models import (
     StepGroup,
 )
 from app.schemas.recipe import LIST_FIELDS
+from app.services import dishes
 from app.services.hierarchy import MAX_DEPTH
 from app.services.lookup import fetch_all
 from app.services.search import ESCAPE, contains
@@ -55,8 +56,6 @@ from app.services.search import ESCAPE, contains
 # The id lists a recipe carries, the relationship each fills, the model it
 # names, and the word a 422 uses for it.
 _LINKED = {
-    "serves_as_ids": ("serves_as", RecipeCourse, "course"),
-    "label_ids": ("labels", Label, "label"),
     "method_ids": ("methods", CookingMethod, "cooking method"),
     "equipment_ids": ("equipment", Equipment, "equipment"),
 }
@@ -64,24 +63,24 @@ _LINKED = {
 
 def _loaded(query):
     """Every relationship the response needs, in one round trip each."""
+    dish = selectinload(Recipe.dish)
     return query.options(
-        selectinload(Recipe.course),
+        dish.selectinload(Dish.course),
+        dish.selectinload(Dish.region),
+        dish.selectinload(Dish.labels),
+        dish.selectinload(Dish.serves_as),
+        dish.selectinload(Dish.recipes),
         selectinload(Recipe.status),
-        selectinload(Recipe.variant_of).selectinload(Recipe.variants),
-        selectinload(Recipe.variants),
-        selectinload(Recipe.aliases),
         selectinload(Recipe.sources).selectinload(RecipeSource.platform),
         selectinload(Recipe.sources).selectinload(RecipeSource.author),
         selectinload(Recipe.lines).selectinload(RecipeLine.ingredient),
-        selectinload(Recipe.lines).selectinload(RecipeLine.sub_recipe),
+        selectinload(Recipe.lines).selectinload(RecipeLine.sub_dish),
         selectinload(Recipe.steps),
         selectinload(Recipe.line_groups).selectinload(RecipeLineGroup.group),
         selectinload(Recipe.step_groups).selectinload(RecipeStepGroup.group),
         selectinload(Recipe.images).selectinload(RecipeImage.image),
-        selectinload(Recipe.labels),
         selectinload(Recipe.methods),
         selectinload(Recipe.equipment),
-        selectinload(Recipe.serves_as),
     )
 
 
@@ -92,7 +91,7 @@ def _summary_loaded(query):
     rendering any of these lazily would issue a query per row.
     """
     return query.options(
-        selectinload(Recipe.course),
+        selectinload(Recipe.dish).selectinload(Dish.course),
         selectinload(Recipe.status),
         selectinload(Recipe.methods),
         selectinload(Recipe.sources).selectinload(RecipeSource.author),
@@ -114,35 +113,13 @@ def written_up(recipe: Recipe) -> bool:
     return bool(recipe.lines or recipe.steps)
 
 
-def versions(recipe: Recipe) -> list[Recipe]:
-    """The other recipes in this one's version family.
-
-    For an original, its versions; for a version, its original's other
-    versions - the original itself is `variant_of`, not one of these.
-    """
-    family = recipe.variant_of.variants if recipe.variant_of else recipe.variants
-    others = [r for r in family if r.id != recipe.id]
-    return sorted(others, key=lambda r: r.display_name.casefold())
+def _by_name(rows) -> list[Recipe]:
+    return sorted(rows, key=lambda r: (r.display_name.casefold(), r.id))
 
 
-def used_in(db: Session, recipe_id: int) -> list[Recipe]:
-    """Distinct recipes with a line naming this one DIRECTLY.
-
-    Depth zero: a dish using a base that uses this base is not counted. That
-    is the same depth "used in" has through sub-recipes for an ingredient.
-    """
-    rows = (
-        db.query(Recipe)
-        .filter(
-            Recipe.id.in_(
-                select(RecipeLine.recipe_id)
-                .where(RecipeLine.sub_recipe_id == recipe_id)
-                .scalar_subquery()
-            )
-        )
-        .all()
-    )
-    return sorted(rows, key=lambda r: r.display_name.casefold())
+def other_recipes(recipe: Recipe) -> list[Recipe]:
+    """其他版本: the other recipes of this recipe's dish, by display name."""
+    return _by_name(r for r in recipe.dish.recipes if r.id != recipe.id)
 
 
 def authors(recipe: Recipe) -> list[Author]:
@@ -174,8 +151,8 @@ def _usage(ingredient_ids: list[int]):
     THE definition of "uses" for an ingredient. The recipe list's
     `ingredient_id` filter, an ingredient's `used_in` and its `used_in_count`
     all read this and nothing else, so the three cannot disagree. Depth through
-    sub-recipes is zero: a line naming a sub-recipe is not a line naming what
-    that base uses.
+    sub-dishes is zero: a line naming a sauce is not a line naming what that
+    sauce's recipes use.
     """
     tree = _below(ingredient_ids)
     return (
@@ -193,8 +170,12 @@ def recipe_ids_using_ingredients(ingredient_ids: list[int]):
 
 def recipes_using_ingredient(db: Session, ingredient_ids: list[int]) -> list[Recipe]:
     """Distinct recipes using any of `ingredient_ids` or anything below them."""
-    rows = db.query(Recipe).filter(Recipe.id.in_(recipe_ids_using_ingredients(ingredient_ids)))
-    return sorted(rows, key=lambda r: r.display_name.casefold())
+    rows = (
+        db.query(Recipe)
+        .options(selectinload(Recipe.dish))
+        .filter(Recipe.id.in_(recipe_ids_using_ingredients(ingredient_ids)))
+    )
+    return _by_name(rows)
 
 
 def used_in_counts(db: Session, ingredient_ids: list[int]) -> dict[int, int]:
@@ -218,14 +199,18 @@ def recipes_naming_ingredient(db: Session, ingredient_id: int) -> list[Recipe]:
     recipe naming only a child does not block deleting the parent - the child
     does that on its own.
     """
-    rows = db.query(Recipe).filter(
-        Recipe.id.in_(
-            select(RecipeLine.recipe_id)
-            .where(RecipeLine.ingredient_id == ingredient_id)
-            .scalar_subquery()
+    rows = (
+        db.query(Recipe)
+        .options(selectinload(Recipe.dish))
+        .filter(
+            Recipe.id.in_(
+                select(RecipeLine.recipe_id)
+                .where(RecipeLine.ingredient_id == ingredient_id)
+                .scalar_subquery()
+            )
         )
     )
-    return sorted(rows, key=lambda r: r.display_name.casefold())
+    return _by_name(rows)
 
 
 def _any_of(link, column, values):
@@ -233,13 +218,21 @@ def _any_of(link, column, values):
     return Recipe.id.in_(select(link.recipe_id).where(column.in_(values)).scalar_subquery())
 
 
+def _dishes_where(*clauses):
+    """Recipes whose dish matches every clause - the filters that moved to
+    the dish read through it."""
+    return Recipe.dish_id.in_(select(Dish.id).where(*clauses).scalar_subquery())
+
+
 def search(
     db: Session,
     q: str | None = None,
-    course_id: list[int] | None = None,
-    status_id: list[int] | None = None,
+    dish_id: list[int] | None = None,
     kind: list[str] | None = None,
+    course_id: list[int] | None = None,
+    region_id: list[int] | None = None,
     label_id: list[int] | None = None,
+    status_id: list[int] | None = None,
     method_id: list[int] | None = None,
     equipment_id: list[int] | None = None,
     author_id: list[int] | None = None,
@@ -247,7 +240,9 @@ def search(
     written_up: bool | None = None,
 ) -> list[Recipe]:
     """The library list. Each multi-valued filter means "any of" its values;
-    different filters narrow each other.
+    different filters narrow each other. Kind, course, region and label are
+    the dish's, so they filter through it, and a search term matches the
+    recipe's own name or any of its dish's names and aliases.
 
     Every filter that reaches through another table is a subquery rather than
     a join, for the reason `ingredients.search` gives: a join returns the
@@ -256,29 +251,25 @@ def search(
     query = _summary_loaded(db.query(Recipe))
 
     if q:
-        term = contains(q)
-        alias_match = (
-            select(RecipeAlias.recipe_id)
-            .where(func.lower(RecipeAlias.value).like(func.lower(term), escape=ESCAPE))
-            .scalar_subquery()
-        )
         query = query.filter(
-            or_(
-                Recipe.name_cn.ilike(term, escape=ESCAPE),
-                Recipe.name_en.ilike(term, escape=ESCAPE),
-                Recipe.name_alt.ilike(term, escape=ESCAPE),
-                Recipe.id.in_(alias_match),
+            or_(Recipe.name.ilike(contains(q), escape=ESCAPE), _dishes_where(dishes.matches(q)))
+        )
+    if dish_id:
+        query = query.filter(Recipe.dish_id.in_(dish_id))
+    if kind:
+        query = query.filter(_dishes_where(Dish.kind.in_(kind)))
+    if course_id:
+        query = query.filter(_dishes_where(Dish.course_id.in_(course_id)))
+    if region_id:
+        query = query.filter(_dishes_where(Dish.region_id.in_(region_id)))
+    if label_id:
+        query = query.filter(
+            Recipe.dish_id.in_(
+                select(DishLabel.dish_id).where(DishLabel.label_id.in_(label_id)).scalar_subquery()
             )
         )
-
-    if course_id:
-        query = query.filter(Recipe.course_id.in_(course_id))
     if status_id:
         query = query.filter(Recipe.status_id.in_(status_id))
-    if kind:
-        query = query.filter(Recipe.kind.in_(kind))
-    if label_id:
-        query = query.filter(_any_of(RecipeLabel, RecipeLabel.label_id, label_id))
     if method_id:
         query = query.filter(_any_of(RecipeMethod, RecipeMethod.method_id, method_id))
     if equipment_id:
@@ -294,17 +285,10 @@ def search(
         )
         query = query.filter(has_content if written_up else ~has_content)
 
-    rows = query.all()
-    rows.sort(key=lambda r: r.display_name.casefold())
-    return rows
+    return _by_name(query.all())
 
 
 # --- validation: everything here runs before anything is written -------------
-
-
-def _check_course(db: Session, course_id: int | None) -> None:
-    if course_id is not None:
-        fetch_all(db, RecipeCourse, [course_id], "course")
 
 
 def _check_status(db: Session, status_id: int) -> None:
@@ -329,28 +313,12 @@ def _check_sources(db: Session, entries) -> None:
     fetch_all(db, Author, author_ids, "author")
 
 
-def _check_version(db: Session, recipe_id: int | None, variant_of_id: int | None) -> None:
-    """Versions are one level deep. `recipe_id` is None when creating."""
-    if variant_of_id is None:
-        return
-    if variant_of_id == recipe_id:
-        raise AppError(422, "A recipe cannot be a version of itself.")
-    original = db.get(Recipe, variant_of_id)
-    if original is None:
-        raise AppError(422, f"No such recipe: {variant_of_id}.")
-    if original.variant_of_id is not None:
-        raise AppError(
-            422, "That recipe is itself a version; make this a version of its original."
-        )
-    if recipe_id is not None:
-        has_versions = db.query(Recipe.id).filter(Recipe.variant_of_id == recipe_id).first()
-        if has_versions is not None:
-            raise AppError(422, "A recipe with versions of its own cannot become a version.")
+def _reachable_from(db: Session, start_ids: set[int], skip_recipe: int | None) -> set[int]:
+    """Every dish reachable from `start_ids` through the lines of their
+    recipes, `start_ids` included. Breadth first, one query per level.
 
-
-def _reachable_from(db: Session, start_ids: set[int]) -> set[int]:
-    """Every recipe reachable from `start_ids` through sub-recipe lines,
-    `start_ids` included. Breadth first, one query per level.
+    `skip_recipe`'s own lines are left out: they are about to be replaced, and
+    a path through them is not one the saved recipe will have.
 
     The seen-set alone makes this terminate; MAX_DEPTH is the backstop the
     category walk has too, and here it refuses rather than stopping short,
@@ -362,13 +330,15 @@ def _reachable_from(db: Session, start_ids: set[int]) -> set[int]:
     while frontier:
         depth += 1
         if depth > MAX_DEPTH:
-            raise AppError(422, "Recipes nest deeper than this app allows.")
-        rows = db.execute(
-            select(RecipeLine.sub_recipe_id).where(
-                RecipeLine.recipe_id.in_(frontier), RecipeLine.sub_recipe_id.isnot(None)
-            )
+            raise AppError(422, "Dishes nest deeper than this app allows.")
+        query = (
+            select(RecipeLine.sub_dish_id)
+            .join(Recipe, Recipe.id == RecipeLine.recipe_id)
+            .where(Recipe.dish_id.in_(frontier), RecipeLine.sub_dish_id.isnot(None))
         )
-        frontier = {sub_id for (sub_id,) in rows} - seen
+        if skip_recipe is not None:
+            query = query.where(Recipe.id != skip_recipe)
+        frontier = {sub_id for (sub_id,) in db.execute(query)} - seen
         seen |= frontier
     return seen
 
@@ -439,26 +409,62 @@ def _check_groups(db: Session, lists: dict) -> dict[str, list]:
     }
 
 
-def _check_line_targets(db: Session, recipe_id: int | None, entries) -> None:
-    """Every id a line names exists, and no sub-recipe makes a cycle.
+def _names(new) -> set[str]:
+    return {n.lower() for n in (new.name_cn, new.name_en) if n}
 
-    A new recipe has no id, so nothing can reach it yet and only existence
-    applies. On an update the guard runs against the stored graph: this
-    recipe's own lines are about to be replaced, and a walk that reaches this
-    recipe stops being a question about them.
+
+def _check_dish(db: Session, dish_id: int | None, new_dish) -> int | None:
+    """The id of the dish the recipe will belong to, if it exists already:
+    `dish_id` checked, or the dish `new_dish` will reuse. None is a dish the
+    save will create. Read-only."""
+    if dish_id is not None:
+        fetch_all(db, Dish, [dish_id], "dish")
+        return dish_id
+    existing = dishes.by_name(db, list(_names(new_dish)))
+    return existing.id if existing else None
+
+
+def _check_line_targets(
+    db: Session, recipe_id: int | None, dish_id: int | None, new_dish, entries
+) -> None:
+    """Every id a line names exists, no line names the recipe's own dish, and
+    no sub-dish makes a cycle.
+
+    `dish_id` is the recipe's dish if it exists - None when the save creates
+    it, and then nothing can reach it yet. A line's `new_dish` is checked as
+    the dish it will turn out to be: an existing one by name, or - when it is
+    the same new name as the recipe's own new dish - the recipe's own dish.
     """
     ingredient_ids = [e.ingredient_id for e in entries if e.ingredient_id is not None]
     fetch_all(db, Ingredient, ingredient_ids, "ingredient")
-    sub_ids = [e.sub_recipe_id for e in entries if e.sub_recipe_id is not None]
-    fetch_all(db, Recipe, sub_ids, "recipe")
-    if recipe_id is None or not sub_ids:
+    sub_ids = [e.sub_dish_id for e in entries if e.sub_dish_id is not None]
+    fetch_all(db, Dish, sub_ids, "dish")
+    own = "A recipe cannot use its own dish as an ingredient."
+    for entry in entries:
+        if entry.new_dish is None:
+            continue
+        existing = dishes.by_name(db, list(_names(entry.new_dish)))
+        if existing is not None:
+            sub_ids.append(existing.id)
+        elif dish_id is None and new_dish is not None and _names(entry.new_dish) & _names(new_dish):
+            raise AppError(422, own)
+    if dish_id is None or not sub_ids:
         return
-    if recipe_id in sub_ids:
-        raise AppError(422, "A recipe cannot use itself as an ingredient.")
-    if recipe_id in _reachable_from(db, set(sub_ids)):
-        raise AppError(
-            422, "That would make a loop: the recipe is already used inside that one."
-        )
+    if dish_id in sub_ids:
+        raise AppError(422, own)
+    if dish_id in _reachable_from(db, set(sub_ids), recipe_id):
+        raise AppError(422, "That would make a loop: this dish is already used inside that one.")
+
+
+class _KeptLine:
+    """A stored line in the shape `_check_line_targets` reads, for a dish
+    move that keeps the lines."""
+
+    new_dish = None
+
+    def __init__(self, line):
+        self.ingredient_id = line.ingredient_id
+        self.sub_dish_id = line.sub_dish_id
 
 
 # --- resolution: may write (stubs), so runs only after validation -------------
@@ -529,6 +535,35 @@ def _resolve_new_ingredients(db: Session, entries) -> dict[int, int]:
     return resolved
 
 
+def _resolve_new_dishes(db: Session, recipe_new, entries) -> tuple[int | None, dict[int, int]]:
+    """The recipe's own new dish, and line index -> dish id for every
+    `new_dish` line.
+
+    Each typed name reuses the dish answering to it exactly, or is created
+    with the kind it was sent with. Names resolved earlier in the same save
+    are remembered - the recipe's own first - so one new name typed twice is
+    one dish.
+    """
+    seen: dict[str, Dish] = {}
+
+    def resolve(new) -> int:
+        names = [n for n in (new.name_cn, new.name_en) if n]
+        row = next((seen[n.lower()] for n in names if n.lower() in seen), None)
+        if row is None:
+            row = dishes.by_name(db, names)
+        if row is None:
+            row = Dish(name_cn=new.name_cn, name_en=new.name_en, kind=new.kind)
+            db.add(row)
+            db.flush()
+        for name in names:
+            seen.setdefault(name.lower(), row)
+        return row.id
+
+    own = resolve(recipe_new) if recipe_new is not None else None
+    lines = {i: resolve(e.new_dish) for i, e in enumerate(entries) if e.new_dish is not None}
+    return own, lines
+
+
 def _resolve_new_authors(db: Session, entries) -> dict[int, int]:
     """Source index -> author id, for every `new_author` source.
 
@@ -569,14 +604,6 @@ def _resolve_new_authors(db: Session, entries) -> dict[int, int]:
 
 
 # --- applying ----------------------------------------------------------------
-
-
-def _apply_aliases(recipe: Recipe, values: list[str]) -> None:
-    """Reconciled by value, as `ingredients._apply_aliases` and for its reason."""
-    wanted = list(dict.fromkeys(values))
-    recipe.aliases = [row for row in recipe.aliases if row.value in wanted]
-    kept = {row.value for row in recipe.aliases}
-    recipe.aliases.extend(RecipeAlias(value=v) for v in wanted if v not in kept)
 
 
 def _apply_sources(recipe: Recipe, entries, author_ids: dict[int, int]) -> None:
@@ -622,16 +649,17 @@ def _apply_pair(db: Session, recipe: Recipe, lists: dict, rows_field: str, resol
     setattr(recipe, rows_field, rows)
 
 
-def _apply_lines(db: Session, recipe: Recipe, lists: dict, resolved, new_ids: dict[int, int]) -> None:
-    """Replace the lines and their groups; a `new_ingredient` line takes its
-    resolved id."""
+def _apply_lines(db: Session, recipe: Recipe, lists: dict, resolved, new_ids: dict) -> None:
+    """Replace the lines and their groups; a `new_ingredient` or `new_dish`
+    line takes its resolved id."""
+    ingredients, sub_dishes = new_ids["lines"], new_ids["line_dishes"]
 
     def line(index, e, group):
         return RecipeLine(
             position=index,
             group=group,
-            ingredient_id=new_ids.get(index, e.ingredient_id),
-            sub_recipe_id=e.sub_recipe_id,
+            ingredient_id=ingredients.get(index, e.ingredient_id),
+            sub_dish_id=sub_dishes.get(index, e.sub_dish_id),
             amount=e.amount,
             note=e.note,
             is_optional=e.is_optional,
@@ -649,24 +677,27 @@ def _apply_steps(db: Session, recipe: Recipe, lists: dict, resolved) -> None:
     _apply_pair(db, recipe, lists, "steps", resolved, step)
 
 
-def _check_and_fetch(db: Session, recipe_id: int | None, lists: dict) -> dict:
-    """Validate every sent list; return the vocabulary rows to assign."""
+def _check_and_fetch(db: Session, lists: dict) -> dict:
+    """Validate every sent list but the lines, which need the dish; return
+    the vocabulary rows to assign."""
     fetched = {}
     for field, (_, model, what) in _LINKED.items():
         if lists.get(field) is not None:
             fetched[field] = fetch_all(db, model, lists[field], what)
     if lists.get("sources") is not None:
         _check_sources(db, lists["sources"])
-    if lists.get("lines") is not None:
-        _check_line_targets(db, recipe_id, _flat(lists, "lines"))
     return fetched
 
 
-def _resolve_new(db: Session, lists: dict) -> dict[str, dict[int, int]]:
-    """The first write of a save: stubs for new ingredients, rows for new
-    authors. Runs only after every check has passed."""
+def _resolve_new(db: Session, lists: dict, new_dish) -> dict:
+    """The first write of a save: new dishes, stubs for new ingredients, rows
+    for new authors. Runs only after every check has passed."""
+    lines = _flat(lists, "lines")
+    dish_id, line_dishes = _resolve_new_dishes(db, new_dish, lines)
     return {
-        "lines": _resolve_new_ingredients(db, _flat(lists, "lines")),
+        "dish": dish_id,
+        "line_dishes": line_dishes,
+        "lines": _resolve_new_ingredients(db, lines),
         "sources": _resolve_new_authors(db, lists.get("sources") or []),
     }
 
@@ -677,16 +708,14 @@ def _apply_lists(
     lists: dict,
     fetched: dict,
     groups: dict[str, list],
-    new_ids: dict[str, dict[int, int]],
+    new_ids: dict,
 ) -> None:
     """Every sent list. A pair is applied when it was sent - the schema has
     already refused one half without the other."""
-    if lists.get("aliases") is not None:
-        _apply_aliases(recipe, lists["aliases"])
     if lists.get("sources") is not None:
         _apply_sources(recipe, lists["sources"], new_ids["sources"])
     if "lines" in groups:
-        _apply_lines(db, recipe, lists, groups["lines"], new_ids["lines"])
+        _apply_lines(db, recipe, lists, groups["lines"], new_ids)
     if "steps" in groups:
         _apply_steps(db, recipe, lists, groups["steps"])
     for field, rows in fetched.items():
@@ -695,21 +724,20 @@ def _apply_lists(
 
 def create(db: Session, payload) -> Recipe:
     lists = {field: getattr(payload, field) for field in LIST_FIELDS}
-    _check_course(db, payload.course_id)
+    dish_id = _check_dish(db, payload.dish_id, payload.new_dish)
     if payload.status_id is None:
         status_id = _first_status(db)
     else:
         status_id = payload.status_id
         _check_status(db, status_id)
-    _check_version(db, None, payload.variant_of_id)
-    fetched = _check_and_fetch(db, None, lists)
+    fetched = _check_and_fetch(db, lists)
+    _check_line_targets(db, None, dish_id, payload.new_dish, _flat(lists, "lines"))
     groups = _check_groups(db, lists)
-    new_ids = _resolve_new(db, lists)  # the first write
+    new_ids = _resolve_new(db, lists, payload.new_dish)  # the first write
 
-    scalars = payload.model_dump(exclude=set(LIST_FIELDS))
+    scalars = payload.model_dump(exclude={*LIST_FIELDS, "dish_id", "new_dish"})
     scalars["status_id"] = status_id
-    # kind is set from the payload (whose default is the server default) so
-    # the response needs no refresh to know it.
+    scalars["dish_id"] = new_ids["dish"] if new_ids["dish"] is not None else dish_id
     recipe = Recipe(**scalars)
     db.add(recipe)
     db.flush()
@@ -722,41 +750,49 @@ def update(db: Session, recipe_id: int, payload) -> Recipe:
     recipe = get(db, recipe_id)
     sent = payload.model_fields_set
     lists = {field: getattr(payload, field) for field in LIST_FIELDS if field in sent}
-    scalars = {field: getattr(payload, field) for field in sent if field not in LIST_FIELDS}
+    scalars = {
+        field: getattr(payload, field)
+        for field in sent
+        if field not in LIST_FIELDS and field not in ("dish_id", "new_dish")
+    }
+    new_dish = payload.new_dish if "new_dish" in sent else None
 
-    # The at-least-one-name rule, against the MERGED row, before anything is
-    # assigned: assigning first would let an autoflush write the nameless row.
-    merged = [scalars.get(f, getattr(recipe, f)) for f in ("name_cn", "name_en", "name_alt")]
-    if not any(merged):
-        raise AppError(422, "A recipe needs at least one name.")
-    if "course_id" in scalars:
-        _check_course(db, scalars["course_id"])
+    moving = "dish_id" in sent or new_dish is not None
+    dish_id = _check_dish(db, payload.dish_id, new_dish) if moving else recipe.dish_id
     if "status_id" in scalars:
         _check_status(db, scalars["status_id"])
-    if "variant_of_id" in scalars:
-        _check_version(db, recipe.id, scalars["variant_of_id"])
-    fetched = _check_and_fetch(db, recipe.id, lists)
+    fetched = _check_and_fetch(db, lists)
+    # The lines are checked when they are sent - and when the dish moves, the
+    # lines the recipe keeps, which may name the dish it is moving to.
+    if "lines" in lists:
+        _check_line_targets(db, recipe.id, dish_id, new_dish, _flat(lists, "lines"))
+    elif moving:
+        kept = [_KeptLine(line) for line in recipe.lines]
+        _check_line_targets(db, recipe.id, dish_id, new_dish, kept)
     groups = _check_groups(db, lists)
-    new_ids = _resolve_new(db, lists)  # the first write
+    new_ids = _resolve_new(db, lists, new_dish)  # the first write
 
+    if moving:
+        recipe.dish_id = new_ids["dish"] if new_ids["dish"] is not None else dish_id
     for field, value in scalars.items():
         setattr(recipe, field, value)
     _apply_lists(db, recipe, lists, fetched, groups, new_ids)
     db.commit()
+    # A moved recipe's loaded dish is the old one until the session forgets it.
+    db.expire_all()
     return get(db, recipe_id)
 
 
 def cascade_counts(db: Session, recipe_id: int) -> dict[str, int]:
     """What a delete would take with it, for the confirmation dialog.
 
-    Serves-as, label, method and equipment links cascade too but are not
-    counted - they remove nothing the user would miss - and neither are gallery
-    rows, as for an ingredient: the pictures survive. Nor are the line and
-    step groups: the lines and steps inside them are counted, which is what
-    the user would miss.
+    Method and equipment links cascade too but are not counted - they remove
+    nothing the user would miss - and neither are gallery rows, as for an
+    ingredient: the pictures survive. Nor are the line and step groups: the
+    lines and steps inside them are counted, which is what the user would
+    miss. The dish is never taken: a dish outlives its last recipe.
     """
     return {
-        "aliases": db.query(RecipeAlias).filter(RecipeAlias.recipe_id == recipe_id).count(),
         "sources": db.query(RecipeSource).filter(RecipeSource.recipe_id == recipe_id).count(),
         "lines": db.query(RecipeLine).filter(RecipeLine.recipe_id == recipe_id).count(),
         "steps": db.query(RecipeStep).filter(RecipeStep.recipe_id == recipe_id).count(),

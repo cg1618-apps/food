@@ -7,7 +7,7 @@ pytestmark = pytest.mark.usefixtures("recipe_statuses")
 
 
 def create(client, **body):
-    body.setdefault("name_cn", "麻婆豆腐")
+    body.setdefault("new_dish", {"name_cn": "麻婆豆腐"})
     response = client.post("/api/edit/recipes", json=body)
     assert response.status_code == 201, response.text
     return response.json()
@@ -39,7 +39,7 @@ def test_kinds_round_trip_through_create_read_and_patch(client):
 @pytest.mark.parametrize("kind", ["tip", "", None, "STEP"])
 def test_an_unknown_kind_is_refused(client, kind):
     response = client.post(
-        "/api/edit/recipes", json={"name_cn": "x", "steps": [{"body": "煮", "kind": kind}]}
+        "/api/edit/recipes", json={"new_dish": {"name_cn": "x"}, "steps": [{"body": "煮", "kind": kind}]}
     )
     assert response.status_code == 422
 

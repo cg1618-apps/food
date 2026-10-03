@@ -14,7 +14,7 @@ describe('recipe lines', () => {
   it('reads both kinds of saved line back as targets', () => {
     const ing = lineFromResponse({
       ingredient: { id: 3, display_name: '薑', needs_detail: true },
-      sub_recipe: null,
+      sub_dish: null,
       amount: '1 片',
       note: null,
       is_optional: true,
@@ -25,20 +25,25 @@ describe('recipe lines', () => {
       note: '',
       is_optional: true,
     })
-    const sub = lineFromResponse({ ingredient: null, sub_recipe: { id: 9, display_name: '高湯', kind: 'base' } })
-    expect(sub.target).toMatchObject({ type: 'recipe', id: 9, kind: 'base' })
+    const sub = lineFromResponse({ ingredient: null, sub_dish: { id: 9, display_name: '高湯', kind: 'sauce' } })
+    expect(sub.target).toMatchObject({ type: 'dish', id: 9, kind: 'sauce' })
   })
 
   it('sends exactly one target per line and no type field', () => {
     const lines = [
       { ...emptyLine(), target: targetFromOption({ type: 'ingredient', id: 3, label: '薑' }), amount: ' 1 片 ' },
-      { ...emptyLine(), target: targetFromOption({ type: 'recipe', id: 9, label: '高湯' }) },
+      { ...emptyLine(), target: targetFromOption({ type: 'dish', id: 9, label: '高湯' }) },
       { ...emptyLine(), target: targetFromOption({ type: 'new', label: '紫蘇' }), is_optional: true },
+      { ...emptyLine(), target: targetFromOption({ type: 'new-dish', label: 'teriyaki' }) },
+      { ...emptyLine(), target: { type: 'new-dish', label: '白飯', kind: 'dish' } },
     ]
     expect(linesPayload(lines)).toEqual([
       { amount: '1 片', note: null, is_optional: false, ingredient_id: 3 },
-      { amount: null, note: null, is_optional: false, sub_recipe_id: 9 },
+      { amount: null, note: null, is_optional: false, sub_dish_id: 9 },
       { amount: null, note: null, is_optional: true, new_ingredient: { name_cn: '紫蘇' } },
+      // A dish typed into a line is a sauce unless the form says otherwise.
+      { amount: null, note: null, is_optional: false, new_dish: { name_en: 'teriyaki', kind: 'sauce' } },
+      { amount: null, note: null, is_optional: false, new_dish: { name_cn: '白飯', kind: 'dish' } },
     ])
   })
 

@@ -1,4 +1,4 @@
-// The library scaffold, through the three real pages: filters come from and go
+// The library scaffold, through the four real pages: filters come from and go
 // to the URL, the list is fetched with them, the two empties point different
 // ways, and the 封面 / 清單 choice is remembered.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -33,8 +33,9 @@ const CABBAGE = {
 
 const RECIPE = {
   id: 5,
-  display_name: '炒高麗菜',
-  kind: 'dish',
+  display_name: '阿基師版',
+  name: '阿基師版',
+  dish: { id: 11, display_name: '炒高麗菜', kind: 'dish' },
   status: { id: 2, display_name: '想試' },
   course: { id: 1, display_name: '配菜' },
   methods: [{ id: 3, display_name: '炒' }],
@@ -42,6 +43,27 @@ const RECIPE = {
   time: '15 分鐘',
   written_up: false,
   cover: { thumb_url: '/images/t.jpg', focus: '20% 80%' },
+}
+
+const TERIYAKI = {
+  id: 11,
+  display_name: '照燒醬',
+  name_cn: '照燒醬',
+  name_en: 'Teriyaki sauce',
+  name_alt: null,
+  kind: 'sauce',
+  course: null,
+  region: { id: 3, display_name: '日式' },
+  labels: [],
+  recipe_count: 2,
+  cover: { thumb_url: '/images/d.jpg', focus: null },
+}
+
+const FIXED = {
+  dish_kinds: [
+    { value: 'dish', label: '料理' },
+    { value: 'sauce', label: '醬料' },
+  ],
 }
 
 let responses
@@ -155,7 +177,69 @@ describe('the ingredient library', () => {
   })
 })
 
+describe('the dish library', () => {
+  it('sends every filter in the URL as the key repeated', async () => {
+    renderAt('/dishes?kind=sauce&course=1&course=4&region=3&label=7')
+    await waitFor(() =>
+      expect(listRequests('/api/dishes')).toContain(
+        '/api/dishes?kind=sauce&course_id=1&course_id=4&region_id=3&label_id=7',
+      ),
+    )
+  })
+
+  it('writes a 種類 and a 地區 click to the URL and refetches with them', async () => {
+    responses['/api/vocabularies/fixed'] = FIXED
+    responses['/api/regions'] = [{ id: 3, display_name: '日式', sort_order: 30, usage_count: 1 }]
+    renderAt('/dishes')
+    const sidebar = screen.getByRole('complementary', { name: '篩選' })
+    fireEvent.click(await within(sidebar).findByRole('button', { name: /醬料/ }))
+    expect(location()).toBe('/dishes?kind=sauce')
+    fireEvent.click(await within(sidebar).findByRole('button', { name: /日式/ }))
+    expect(location()).toBe('/dishes?kind=sauce&region=3')
+    await waitFor(() =>
+      expect(listRequests('/api/dishes')).toContain('/api/dishes?kind=sauce&region_id=3'),
+    )
+  })
+
+  it('draws a dish as a cover with its kind, region and recipe count, and as a table row', async () => {
+    responses['/api/dishes'] = [TERIYAKI]
+    responses['/api/vocabularies/fixed'] = FIXED
+    renderAt('/dishes')
+    const title = await screen.findByText('照燒醬')
+    const card = title.closest('a')
+    expect(card.getAttribute('href')).toBe('/dishes/11')
+    await waitFor(() => expect(card.textContent).toContain('醬料 · 日式 · 2 份食譜'))
+
+    fireEvent.click(screen.getByRole('button', { name: '清單', pressed: false }))
+    const table = screen.getByRole('table')
+    expect(within(table).getByText('2 份')).toBeTruthy()
+    expect(localStorage.getItem('cg1618:food:dishes-view')).toBe('list')
+  })
+
+  it('offers the add button when the library is empty', async () => {
+    renderAt('/dishes')
+    expect(await screen.findByText('還沒有任何料理。')).toBeTruthy()
+    const adds = screen.getAllByRole('link', { name: '新增料理' })
+    expect(adds.at(-1).getAttribute('href')).toBe('/edit/dishes/new')
+  })
+})
+
 describe('the recipe library', () => {
+  it('filters by dish and by the dish kind, with the dishes as the options', async () => {
+    responses['/api/dishes'] = [TERIYAKI]
+    responses['/api/vocabularies/fixed'] = FIXED
+    renderAt('/recipes')
+    const sidebar = screen.getByRole('complementary', { name: '篩選' })
+    fireEvent.click(await within(sidebar).findByRole('button', { name: /照燒醬/ }))
+    expect(location()).toBe('/recipes?dish=11')
+    fireEvent.click(await within(sidebar).findByRole('button', { name: /料理/ }))
+    expect(location()).toBe('/recipes?dish=11&kind=dish')
+    await waitFor(() =>
+      expect(listRequests('/api/recipes')).toContain('/api/recipes?dish_id=11&kind=dish'),
+    )
+  })
+
+
   it('sends an "any of" filter as the key repeated', async () => {
     renderAt('/recipes?course=1&course=4&written=false')
     await waitFor(() =>
@@ -196,12 +280,17 @@ describe('the recipe library', () => {
     const table = await screen.findByRole('table')
     expect(within(table).getByText('想試')).toBeTruthy()
     expect(within(table).getByText('阿基師')).toBeTruthy()
+    // The recipe's own name, and its dish beside it.
+    expect(within(table).getByText('阿基師版')).toBeTruthy()
+    expect(within(table).getByText('炒高麗菜')).toBeTruthy()
   })
 
   it('marks a recipe that is only a bookmark, and applies the cover focus', async () => {
     responses['/api/recipes'] = [RECIPE]
     renderAt('/recipes')
-    expect(await screen.findByText('炒高麗菜')).toBeTruthy()
+    expect(await screen.findByText('阿基師版')).toBeTruthy()
+    // Its dish's name under its own.
+    expect(screen.getByText('炒高麗菜')).toBeTruthy()
     expect(screen.getByText('書籤')).toBeTruthy()
     const img = document.querySelector('img')
     expect(img.getAttribute('loading')).toBe('lazy')

@@ -10,6 +10,7 @@ from app import errors, logging_config
 from app.request_context import RequestIdMiddleware
 from app.routers import (
     common_ingredient,
+    dish,
     edit_session,
     health,
     image,
@@ -55,6 +56,8 @@ def create_app(dist: Path = DIST) -> FastAPI:
     app.include_router(ingredient_category.edit)
     app.include_router(label.router)
     app.include_router(label.edit)
+    app.include_router(dish.router)
+    app.include_router(dish.edit)
     app.include_router(recipe.router)
     app.include_router(recipe.edit)
     app.include_router(kitchen_note.router)
