@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.errors import AppError
 from app.models import (
+    CommonIngredient,
     CookingMethod,
     Ingredient,
     IngredientAlias,
@@ -477,6 +478,11 @@ def merge(db: Session, plan: MergePlan) -> Ingredient:
     The session is expired before the delete, so the source's collections are
     re-read and hold only what stayed behind - the dropped notes, the images
     the target already had, its aliases - which go with it.
+
+    A 常用食材 entry follows the source to the target, keeping its place in
+    the list, unless the target is listed already - then the source's entry
+    is left to go with the source (CASCADE). It is not in the plan: it moves
+    no content, so there is nothing for the preview to warn about.
     """
     target = plan.target
     source_id, target_id = plan.source.id, target.id
@@ -491,6 +497,13 @@ def merge(db: Session, plan: MergePlan) -> Ingredient:
         .where(Ingredient.id.in_(plan.child_ids))
         .values(parent_id=target_id)
     )
+    target_listed = db.get(CommonIngredient, target_id) is not None
+    if not target_listed:
+        db.execute(
+            update_rows(CommonIngredient)
+            .where(CommonIngredient.ingredient_id == source_id)
+            .values(ingredient_id=target_id)
+        )
     links = [r.sort_order for r in target.links]
     heating = [r.sort_order for r in target.heating]
     kept = [r.sort_order for r in target.preservation]

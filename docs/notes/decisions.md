@@ -670,6 +670,37 @@ What the branch after module 1 chose, and what it turned down.
   note written as a step stays a step until the owner switches it, because
   reading step text to decide what it is would be a guess.
 
+### 常用食材
+
+- **A table of its own, not a flag or a label on the ingredient.** The chips
+  are ordered - the owner puts 蒜, 薑, 蔥 first because they are reached for
+  first - and an order is a place in one list, not a property of one row. A
+  boolean column would need a second column for the order and would scatter
+  the list across the ingredient table; a label (常用) has no order at all and
+  would also put the chips' list among the tags filtered by. `ingredient_id`
+  is the primary key, so the schema itself says an ingredient is listed once.
+- **The write replaces the whole list.** Add, remove and reorder are then one
+  `PUT` each, carrying the list as it should be, and the server numbers it -
+  there is no per-row `sort_order` arithmetic for the client to get wrong, as
+  `lib/vocabulary.js`'s `reorderPatches` has to for the vocabularies, and no
+  half-applied reorder when one of several PATCHes fails. The list is a dozen
+  rows, so sending it whole costs nothing. A duplicate id is refused rather
+  than collapsed: a client that sends one ingredient twice has lost track of
+  its own list, and keeping the first would save an order nobody sent.
+- **An ingredient deleted leaves the list (`CASCADE`), and a merge moves its
+  entry.** A chip has no life without its ingredient, so a delete is not
+  refused over it. A merge is the fix for a duplicate, so the chip follows the
+  surviving row and keeps its place; when the target is already listed the
+  source's chip is simply dropped. The move is outside the merge plan and its
+  fingerprint: it moves no content the preview would need to warn about.
+- **A tapped chip adds to the ungrouped lines and focuses the amount.** The
+  chip cannot know which group the owner means, and the ungrouped area is the
+  one place every recipe has; the line drags into a group afterwards like any
+  other. The focus goes to 份量 because the ingredient is already chosen - the
+  amount is the only thing left to type.
+- **A used chip stays tappable.** The same ingredient on two lines (garlic in
+  the sauce and again on top) is ordinary, so "used" is a mark, not a lock.
+
 ## Kitchen notes
 
 - **A note has a title, not name slots.** It is a bookmark - a compilation, a

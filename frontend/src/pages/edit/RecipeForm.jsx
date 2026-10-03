@@ -24,6 +24,12 @@
 // accessible names (「步驟 3」) keep a running index, so every row has a
 // unique one whatever its kind.
 //
+// Above 材料 sit the 常用 chips, one per 設定's 常用食材, in its order
+// (components/forms/CommonIngredientChips.jsx). A tap appends a line naming
+// that ingredient to the ungrouped lines and puts the cursor in its 份量, so
+// the amount is typed next; a chip whose ingredient is already on a line is
+// marked used and still adds. No chips, no row.
+//
 // 材料 and 步驟 each sit in groups (components/forms/GroupedRowEditor.jsx):
 // the ungrouped rows first, then a box per group, picked from 設定's
 // 材料分組 / 步驟分組 or named for this recipe only. Rows are numbered through
@@ -33,11 +39,12 @@
 // form always sends every list - lines with line_groups, steps with
 // step_groups, the pairs the server replaces together. Saving goes to the
 // recipe's page.
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { endpoints } from '../../api/endpoints'
 import ChipPicker from '../../components/forms/ChipPicker'
+import CommonIngredientChips from '../../components/forms/CommonIngredientChips'
 import DeleteDialog from '../../components/forms/DeleteDialog'
 import FormActions from '../../components/forms/FormActions'
 import GalleryPicker from '../../components/forms/GalleryPicker'
@@ -54,6 +61,7 @@ import {
   UNGROUPED,
   emptyGrouped,
   flatRows,
+  groupedReducer,
   groupsFromResponse,
   groupsPayload,
   rowsOf,
@@ -166,6 +174,7 @@ export default function RecipeForm() {
   const authors = useApiQuery(endpoints.authors.list())
   const lineGroups = useApiQuery(endpoints.lineGroups.list())
   const stepGroups = useApiQuery(endpoints.stepGroups.list())
+  const common = useApiQuery(endpoints.commonIngredients.list())
   const fixed = useFixedVocabularies()
   const stepKinds = fixed.data?.step_kinds ?? []
   const { save, saving } = useOwnerSave({ group: endpoints.recipes, invalidate: INVALIDATE })
@@ -178,6 +187,12 @@ export default function RecipeForm() {
   // Typed into the version-of box and not picked: refused on save, never
   // dropped (Typeahead's onQueryChange).
   const [variantTyped, setVariantTyped] = useState('')
+  // The line a 常用 chip just added, whose 份量 takes the focus once drawn.
+  const [focusAmountOf, setFocusAmountOf] = useState(null)
+  const amountInputs = useRef(new Map())
+  useEffect(() => {
+    if (focusAmountOf) amountInputs.current.get(focusAmountOf)?.focus()
+  }, [focusAmountOf])
 
   // Adjusting state to the loaded row during render, keyed on the id so a
   // background refetch never throws away what is being typed.
@@ -209,6 +224,28 @@ export default function RecipeForm() {
       ...previous,
       sources: previous.sources.map((row) => (row._key === key ? { ...row, pendingAuthor } : row)),
     }))
+  // A 常用 chip: a new ungrouped line naming that ingredient.
+  function addCommonLine(ingredient) {
+    const row = {
+      ...emptyLine(),
+      target: {
+        type: 'ingredient',
+        id: ingredient.id,
+        label: ingredient.display_name,
+        needsDetail: ingredient.needs_detail,
+      },
+    }
+    setForm((previous) => ({
+      ...previous,
+      lines: groupedReducer(previous.lines, { type: 'rows', container: UNGROUPED, action: { type: 'add', row } }),
+    }))
+    setFocusAmountOf(row._key)
+  }
+  const usedIngredients = new Set(
+    flatRows(form.lines)
+      .filter((line) => line.target?.type === 'ingredient')
+      .map((line) => line.target.id),
+  )
   const firstId = (query) => (query.data?.length ? String(query.data[0].id) : '')
   const statusId = form.status_id || firstId(statuses)
   const platformOf = (row) => row.platform_id || firstId(platforms)
@@ -432,6 +469,11 @@ export default function RecipeForm() {
           </Section>
 
           <Section title="材料">
+            <CommonIngredientChips
+              ingredients={(common.data ?? []).map((row) => row.ingredient)}
+              usedIds={usedIngredients}
+              onAdd={addCommonLine}
+            />
             <GroupedRowEditor
               value={form.lines}
               onChange={(value) => setField('lines', value)}
@@ -463,6 +505,10 @@ export default function RecipeForm() {
                     )}
                   </div>
                   <Input
+                    ref={(element) => {
+                      if (element) amountInputs.current.set(line._key, element)
+                      else amountInputs.current.delete(line._key)
+                    }}
                     aria-label="份量"
                     placeholder="份量"
                     value={line.amount}

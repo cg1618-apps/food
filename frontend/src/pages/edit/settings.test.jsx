@@ -132,6 +132,19 @@ const LABELS = [
   },
 ]
 
+const common = (id, name, needsDetail = false) => ({
+  ingredient: { id, display_name: name, needs_detail: needsDetail },
+  sort_order: 0,
+})
+
+const COMMON = [common(1, '蒜'), common(2, '薑', true), common(3, '蔥')]
+
+// What the add box's search answers: one already listed, one not.
+const INGREDIENT_SEARCH = [
+  { id: 2, display_name: '薑', name_cn: '薑', needs_detail: true },
+  { id: 9, display_name: '洋蔥', name_cn: '洋蔥', needs_detail: false },
+]
+
 function settingsData({ url, method }) {
   if (method !== 'GET') return null
   if (url === '/api/recipe-courses') return json(COURSES)
@@ -141,6 +154,8 @@ function settingsData({ url, method }) {
   if (url === '/api/step-groups') return json(STEP_GROUPS)
   if (url === '/api/ingredient-categories') return json(TREE)
   if (url === '/api/labels') return json(LABELS)
+  if (url === '/api/common-ingredients') return json(COMMON)
+  if (url.startsWith('/api/ingredients?')) return json(INGREDIENT_SEARCH)
   return null
 }
 
@@ -156,6 +171,7 @@ describe('設定', () => {
     const tabs = screen.getAllByRole('tab')
     expect(tabs.map((tab) => tab.textContent)).toEqual([
       '食材分類',
+      '常用食材',
       '標籤',
       '類別',
       '狀態',
@@ -205,13 +221,13 @@ describe('設定', () => {
     const tab = (name) => screen.getByRole('tab', { name })
     // Only the selected tab is in the Tab order; the arrows move within the bar.
     expect(tab('食材分類').tabIndex).toBe(0)
-    expect(tab('標籤').tabIndex).toBe(-1)
+    expect(tab('常用食材').tabIndex).toBe(-1)
 
     fireEvent.keyDown(tab('食材分類'), { key: 'ArrowRight' })
-    expect(location()).toBe('/edit/settings?tab=labels')
-    expect(document.activeElement).toBe(tab('標籤'))
+    expect(location()).toBe('/edit/settings?tab=common-ingredients')
+    expect(document.activeElement).toBe(tab('常用食材'))
 
-    fireEvent.keyDown(tab('標籤'), { key: 'ArrowLeft' })
+    fireEvent.keyDown(tab('常用食材'), { key: 'ArrowLeft' })
     fireEvent.keyDown(tab('食材分類'), { key: 'ArrowLeft' })
     expect(location()).toBe('/edit/settings?tab=equipment')
     expect(document.activeElement).toBe(tab('器材'))
@@ -460,6 +476,86 @@ describe('設定', () => {
       expect(within(row).getByRole('alert').textContent).toBe('「YouTube」還用在 4 個地方，先改掉那些再刪。'),
     )
     expect(writes()).toEqual([{ url: '/api/edit/source-platforms/6', method: 'DELETE', body: undefined }])
+  })
+
+  describe('常用食材', () => {
+    const puts = () => writes().filter((call) => call.method === 'PUT')
+    const listed = () =>
+      within(section('常用食材'))
+        .getAllByRole('listitem')
+        .map((row) => row.getAttribute('aria-label'))
+
+    it('lists the chips in order, each with its stub badge', async () => {
+      renderAt('/edit/settings?tab=common-ingredients')
+      await screen.findByRole('list', { name: '常用食材' })
+      expect(listed()).toEqual(['蒜', '薑', '蔥'])
+      expect(within(section('常用食材')).getByRole('listitem', { name: '薑' }).textContent).toContain('待補')
+    })
+
+    it('reorders by keyboard, sending the whole list, frozen until it lands', async () => {
+      let release
+      handler = (call) =>
+        call.method === 'PUT'
+          ? new Promise((resolve) => {
+              release = () => resolve(json([]))
+            })
+          : settingsData(call)
+      renderAt('/edit/settings?tab=common-ingredients')
+      // The first has nowhere to go up to: nothing is sent.
+      fireEvent.keyDown(await screen.findByRole('button', { name: '排序 「蒜」' }), { key: 'ArrowUp' })
+      expect(puts()).toEqual([])
+
+      fireEvent.keyDown(screen.getByRole('button', { name: '排序 「蔥」' }), { key: 'ArrowUp' })
+      expect(listed()).toEqual(['蒜', '蔥', '薑'])
+      expect(screen.getByRole('button', { name: '排序 「蒜」' }).disabled).toBe(true)
+      await waitFor(() => expect(puts()).toHaveLength(1))
+      expect(puts()[0]).toEqual({
+        url: '/api/edit/common-ingredients',
+        method: 'PUT',
+        body: { ingredient_ids: [1, 3, 2] },
+      })
+      release()
+      await waitFor(() => expect(screen.getByRole('button', { name: '排序 「蒜」' }).disabled).toBe(false))
+    })
+
+    it('removes one with its ✕, sending the rest', async () => {
+      handler = (call) => (call.method === 'PUT' ? json([]) : settingsData(call))
+      renderAt('/edit/settings?tab=common-ingredients')
+      fireEvent.click(await screen.findByRole('button', { name: '從常用食材移除「薑」' }))
+      await waitFor(() => expect(puts()).toHaveLength(1))
+      expect(puts()[0].body).toEqual({ ingredient_ids: [1, 3] })
+    })
+
+    it('adds a picked ingredient at the end, never offering one already listed or 新增', async () => {
+      handler = (call) => (call.method === 'PUT' ? json([]) : settingsData(call))
+      renderAt('/edit/settings?tab=common-ingredients')
+      const box = await screen.findByRole('combobox', { name: '加常用食材' })
+      fireEvent.change(box, { target: { value: '蔥' } })
+      const option = await screen.findByRole('option', { name: /洋蔥/ })
+      expect(screen.queryByRole('option', { name: /^薑/ })).toBeNull()
+      expect(screen.queryByRole('option', { name: /新增/ })).toBeNull()
+      fireEvent.click(option)
+      await waitFor(() => expect(puts()).toHaveLength(1))
+      expect(puts()[0].body).toEqual({ ingredient_ids: [1, 2, 3, 9] })
+    })
+
+    it("puts the stored list back and shows the server's sentence when a change is refused", async () => {
+      handler = (call) =>
+        call.method === 'PUT' ? json({ detail: '資料庫連不上' }, 503) : settingsData(call)
+      renderAt('/edit/settings?tab=common-ingredients')
+      fireEvent.click(await screen.findByRole('button', { name: '從常用食材移除「蒜」' }))
+      await waitFor(() =>
+        expect(within(section('常用食材').parentElement).getByRole('alert').textContent).toBe('資料庫連不上'),
+      )
+      expect(listed()).toEqual(['蒜', '薑', '蔥'])
+    })
+
+    it('says what the list is for while it is empty', async () => {
+      handler = (call) => (call.url === '/api/common-ingredients' ? json([]) : settingsData(call))
+      renderAt('/edit/settings?tab=common-ingredients')
+      expect(await screen.findByText(/還沒有常用食材/)).toBeTruthy()
+      expect(screen.getByRole('combobox', { name: '加常用食材' })).toBeTruthy()
+    })
   })
 
   it('shows an error state in its own tab, leaving the others', async () => {
