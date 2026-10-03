@@ -37,8 +37,11 @@ afterEach(() => {
 
 describe('every page has a route', () => {
   it.each([
+    ['/dishes', '料理'],
     ['/recipes', '食譜'],
     ['/notes', '筆記'],
+    ['/edit/dishes/new', '新增料理'],
+    ['/edit/dishes/1', '編輯料理'],
     ['/edit/recipes/new', '新增食譜'],
     ['/edit/recipes/1', '編輯食譜'],
     ['/edit/notes/new', '新增筆記'],
@@ -57,7 +60,7 @@ describe('every page has a route', () => {
 // The detail pages fetch before they have a heading; their content is
 // pages/detail/details.test.jsx's. Here only that the route is theirs.
 describe('every detail page has a route', () => {
-  it.each(['/recipes/1', '/ingredients/1', '/notes/1'])('%s stays on its route', (path) => {
+  it.each(['/dishes/1', '/recipes/1', '/ingredients/1', '/notes/1'])('%s stays on its route', (path) => {
     expect(renderAt(path)).toBe(path)
     expect(screen.queryByRole('heading', { name: '找不到這一頁' })).toBeNull()
   })
@@ -74,6 +77,8 @@ describe('redirects', () => {
     ['/edit/ingredient/new', '/edit/ingredients/new'],
     ['/edit/ingredient/7', '/edit/ingredients/7'],
     ['/edit/vocabularies', '/edit/settings'],
+    // The dish form's path as the design named it.
+    ['/edit/dishes/4/edit', '/edit/dishes/4'],
   ])('%s goes to %s', (from, to) => {
     expect(renderAt(from)).toBe(to)
   })
@@ -98,7 +103,7 @@ describe('navigation', () => {
   it('gives the phone bar one column per section, whatever their number', () => {
     renderAt('/recipes')
     const [, phone] = screen.getAllByRole('navigation', { name: '主要' })
-    expect(SECTIONS.length).toBe(5)
+    expect(SECTIONS.length).toBe(6)
     expect(phone.style.gridTemplateColumns).toBe(`repeat(${SECTIONS.length}, minmax(0, 1fr))`)
     expect(within(phone).getAllByRole('link').map((link) => link.textContent)).toEqual(
       SECTIONS.map((section) => section.label),

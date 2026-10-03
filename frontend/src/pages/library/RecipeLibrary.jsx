@@ -1,9 +1,12 @@
-// Frontend: the recipe library, /recipes - the app's front page.
+// Frontend: the recipe library, /recipes - the app's front page. Every
+// recipe, of every dish.
 //
-// The sidebar: course, status, kind, method, equipment, author, label, and
-// written up / bookmark only. Every filter but the last is "any of" (the API
+// The sidebar: dish, kind, course, status, method, equipment, author, label,
+// and written up / bookmark only. Kind, course and label are the dish's - the
+// API filters through it. Every filter but the last is "any of" (the API
 // takes the parameter repeated); written-up is one choice of two, since both
-// at once is no filter. All of it is in the URL.
+// at once is no filter. All of it is in the URL. A card or a table row is
+// the recipe's own name, with its dish's under it when the two differ.
 //
 // A recipe that is only a saved link carries the 書籤 badge: it is in the
 // library to be written up later, and the badge is what makes that backlog
@@ -18,6 +21,7 @@ import { useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
 import { useUrlFilters } from '../../hooks/useUrlFilters'
 
 const SPEC = {
+  dish: { type: 'multi', api: 'dish_id', id: true },
   course: { type: 'multi', api: 'course_id', id: true },
   status: { type: 'multi', api: 'status_id', id: true },
   kind: { type: 'multi', api: 'kind' },
@@ -48,6 +52,7 @@ export default function RecipeLibrary() {
   const recipes = useApiQuery(endpoints.recipes.list(), filters.apiParams, {
     placeholderData: keepPreviousData,
   })
+  const dishes = useApiQuery(endpoints.dishes.list())
   const courses = useApiQuery(endpoints.courses.list())
   const statuses = useApiQuery(endpoints.statuses.list())
   const methods = useApiQuery(endpoints.methods.list())
@@ -59,7 +64,7 @@ export default function RecipeLibrary() {
   const card = (row) => ({
     cover: row.cover,
     title: row.display_name,
-    subtitle: row.name_en && row.name_en !== row.display_name ? row.name_en : null,
+    subtitle: row.dish.display_name !== row.display_name ? row.dish.display_name : null,
     meta: [row.course?.display_name, row.time, row.authors[0]?.display_name].filter(Boolean).join(' · '),
     badges: row.written_up ? null : <Badge kind="bookmark" />,
   })
@@ -86,6 +91,20 @@ export default function RecipeLibrary() {
           onToggle={(value) => toggle('written', value)}
         />
       </FilterGroup>
+      <FilterGroup title="料理">
+        <FilterOptions
+          options={asOptions(dishes.data)}
+          selected={values.dish}
+          onToggle={(value) => toggle('dish', value)}
+        />
+      </FilterGroup>
+      <FilterGroup title="種類">
+        <FilterOptions
+          options={fixedOptions(fixed.data?.dish_kinds)}
+          selected={values.kind}
+          onToggle={(value) => toggle('kind', value)}
+        />
+      </FilterGroup>
       <FilterGroup title="類別">
         <FilterOptions
           options={asOptions(courses.data)}
@@ -98,13 +117,6 @@ export default function RecipeLibrary() {
           options={asOptions(statuses.data)}
           selected={values.status}
           onToggle={(value) => toggle('status', value)}
-        />
-      </FilterGroup>
-      <FilterGroup title="種類">
-        <FilterOptions
-          options={fixedOptions(fixed.data?.recipe_kinds)}
-          selected={values.kind}
-          onToggle={(value) => toggle('kind', value)}
         />
       </FilterGroup>
       <FilterGroup title="做法">
@@ -133,7 +145,7 @@ export default function RecipeLibrary() {
           options={(labels.data ?? []).map((label) => ({
             value: String(label.id),
             label: label.display_name,
-            count: label.recipe_count,
+            count: label.dish_count,
           }))}
           selected={values.label}
           onToggle={(value) => toggle('label', value)}
@@ -153,7 +165,7 @@ export default function RecipeLibrary() {
       card={card}
       columns={columns}
       itemTo={(row) => `/recipes/${row.id}`}
-      searchPlaceholder="搜尋名稱或別名…"
+      searchPlaceholder="搜尋食譜或料理的名稱、別名…"
       emptyText="還沒有任何食譜。"
       noMatchText="沒有符合條件的食譜。"
     />

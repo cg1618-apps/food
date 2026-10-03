@@ -31,6 +31,8 @@ from sqlalchemy.orm import Session
 from app import config
 from app.errors import AppError
 from app.models import (
+    Dish,
+    DishImage,
     Image,
     Ingredient,
     IngredientImage,
@@ -52,6 +54,7 @@ MAX_PIXELS = 50_000_000
 # here; owners() and attachment counts read only this list.
 OWNER_TABLES: list[tuple[type, str, type]] = [
     (IngredientImage, "ingredient", Ingredient),
+    (DishImage, "dish", Dish),
     (RecipeImage, "recipe", Recipe),
     (KitchenNoteImage, "kitchen_note", KitchenNote),
 ]
@@ -221,8 +224,8 @@ def set_images(db: Session, owner, relationship: str, attachment: type, entries)
     """Replace `owner`'s gallery, in order. Position 0 is the cover.
 
     One function for every gallery: `relationship` names the owner's gallery
-    attribute and `attachment` the row class it holds (`IngredientImage`, `RecipeImage`,
-    `KitchenNoteImage`). Cleared and flushed BEFORE the new rows are assigned: the
+    attribute and `attachment` the row class it holds (`IngredientImage`, `DishImage`,
+    `RecipeImage`, `KitchenNoteImage`). Cleared and flushed BEFORE the new rows are assigned: the
     unit of work INSERTs before it DELETEs, so replacing in one step collides
     with the gallery's position (and once) unique key whenever a position or an
     image is reused - which a reorder always does.

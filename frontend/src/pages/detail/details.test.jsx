@@ -1,6 +1,7 @@
-// The three detail pages through the real routes: what each shows, what it
-// leaves out when empty, the recipe's in-place status change, and the
-// ingredient merge including the stale-preview 409.
+// The four detail pages through the real routes: what each shows, what it
+// leaves out when empty, the recipe's in-place status change, the dish's
+// recipes and "used in", and the ingredient merge including the
+// stale-preview 409.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
@@ -16,9 +17,9 @@ const FIXED = {
     { value: 'cooked', label: '熟食' },
   ],
   ratings: [],
-  recipe_kinds: [
+  dish_kinds: [
     { value: 'dish', label: '料理' },
-    { value: 'base', label: '基底' },
+    { value: 'sauce', label: '醬料' },
   ],
   kitchen_note_kinds: [{ value: 'technique', label: '技巧' }],
   step_kinds: [
@@ -37,20 +38,24 @@ const STATUSES = [
 const RECIPE = {
   id: 5,
   display_name: '麻婆豆腐',
-  name_cn: '麻婆豆腐',
-  name_en: 'Mapo tofu',
-  kind: 'dish',
+  name: null,
+  dish: {
+    id: 40,
+    display_name: '麻婆豆腐',
+    kind: 'dish',
+    course: { id: 1, display_name: '主菜' },
+    region: { id: 2, display_name: '中式' },
+    labels: [{ id: 9, display_name: '下飯' }],
+    serves_as: [],
+  },
   status: { id: 1, display_name: '想試' },
-  course: { id: 1, display_name: '主菜' },
   servings: '2 人',
   time: '20 分鐘',
-  description: null,
   storage_notes: null,
   notes: '花椒最後下',
-  aliases: [],
   sources: [],
   lines: [
-    { id: 1, position: 0, ingredient: { id: 10, display_name: '豆腐', needs_detail: false }, sub_recipe: null, amount: '1 盒', note: null, is_optional: false },
+    { id: 1, position: 0, ingredient: { id: 10, display_name: '豆腐', needs_detail: false }, sub_dish: null, amount: '1 盒', note: null, is_optional: false },
   ],
   line_groups: [
     {
@@ -60,8 +65,8 @@ const RECIPE = {
       name: '醬汁',
       display_name: '醬汁',
       lines: [
-        { id: 2, position: 1, ingredient: null, sub_recipe: { id: 7, display_name: '辣油', kind: 'base' }, amount: '2 匙', note: null, is_optional: false },
-        { id: 3, position: 2, ingredient: { id: 11, display_name: '花椒粉', needs_detail: true }, sub_recipe: null, amount: null, note: '現磨', is_optional: true },
+        { id: 2, position: 1, ingredient: null, sub_dish: { id: 7, display_name: '辣油', kind: 'sauce' }, amount: '2 匙', note: null, is_optional: false },
+        { id: 3, position: 2, ingredient: { id: 11, display_name: '花椒粉', needs_detail: true }, sub_dish: null, amount: null, note: '現磨', is_optional: true },
       ],
     },
     // Empty: kept by the server, nothing to read here.
@@ -72,15 +77,71 @@ const RECIPE = {
     { id: 4, position: 0, group: { id: 1, display_name: '備料' }, name: null, display_name: '備料', steps: [{ id: 2, position: 1, body: '切豆腐' }] },
     { id: 5, position: 1, group: null, name: '炒', display_name: '炒', steps: [{ id: 3, position: 2, body: '炒香辣油' }, { id: 4, position: 3, body: '下豆腐' }] },
   ],
-  serves_as: [],
-  labels: [],
   methods: [{ id: 3, display_name: '炒' }],
   equipment: [],
   images: [],
-  variant_of: { id: 4, display_name: '麻婆豆腐（原版）', kind: 'dish' },
-  versions: [],
-  used_in: [],
+  other_recipes: [{ id: 4, display_name: '麻婆豆腐（陳家）', dish: { id: 40, display_name: '麻婆豆腐', kind: 'dish' } }],
   written_up: true,
+}
+
+const DISH = {
+  id: 40,
+  display_name: '麻婆豆腐',
+  name_cn: '麻婆豆腐',
+  name_en: 'Mapo tofu',
+  name_alt: null,
+  kind: 'dish',
+  course: { id: 1, display_name: '主菜' },
+  region: { id: 2, display_name: '中式' },
+  description: '下飯的川菜',
+  aliases: [],
+  serves_as: [],
+  labels: [{ id: 9, display_name: '下飯' }],
+  images: [],
+  recipes: [
+    {
+      id: 5,
+      display_name: '麻婆豆腐',
+      name: null,
+      dish: { id: 40, display_name: '麻婆豆腐', kind: 'dish' },
+      status: { id: 1, display_name: '想試' },
+      course: { id: 1, display_name: '主菜' },
+      methods: [],
+      authors: [{ id: 6, display_name: '阿基師' }],
+      time: null,
+      written_up: true,
+      cover: null,
+    },
+    {
+      id: 4,
+      display_name: '麻婆豆腐（陳家）',
+      name: '麻婆豆腐（陳家）',
+      dish: { id: 40, display_name: '麻婆豆腐', kind: 'dish' },
+      status: { id: 2, display_name: '可煮' },
+      course: { id: 1, display_name: '主菜' },
+      methods: [],
+      authors: [],
+      time: null,
+      written_up: false,
+      cover: { thumb_url: '/images/c.jpg', focus: null },
+    },
+  ],
+  used_in: [],
+}
+
+const SAUCE = {
+  ...DISH,
+  id: 7,
+  display_name: '辣油',
+  name_cn: '辣油',
+  name_en: null,
+  kind: 'sauce',
+  course: null,
+  region: null,
+  description: null,
+  labels: [],
+  recipes: [],
+  used_in: [{ id: 5, display_name: '麻婆豆腐', dish: { id: 40, display_name: '麻婆豆腐', kind: 'dish' } }],
 }
 
 const PRESERVATION = (state, method, min, max, notes = null) => ({
@@ -117,7 +178,7 @@ const INGREDIENT = {
   links: [],
   labels: [],
   images: [],
-  used_in: [{ id: 5, display_name: '麻婆豆腐', kind: 'dish' }],
+  used_in: [{ id: 5, display_name: '麻婆豆腐', dish: { id: 40, display_name: '麻婆豆腐', kind: 'dish' } }],
 }
 
 const LEEK = { id: 30, display_name: '大蔥', category_id: 2, parent_id: null, needs_detail: false }
@@ -200,7 +261,8 @@ describe('the recipe page', () => {
       '辣油',
       '花椒',
     ])
-    expect(within(lines).getByRole('link', { name: '辣油' }).getAttribute('href')).toBe('/recipes/7')
+    // A line names the dish, so it links to the dish.
+    expect(within(lines).getByRole('link', { name: '辣油' }).getAttribute('href')).toBe('/dishes/7')
     const optional = within(lines).getByText('（可省略）').closest('li')
     expect(optional.className).toContain('text-text-faint')
     expect(within(optional).getByText('待補')).toBeTruthy()
@@ -251,13 +313,29 @@ describe('the recipe page', () => {
     expect(optional.className).toContain('text-text-muted')
   })
 
-  it('shows the original as another version and hides empty sections', async () => {
+  it('shows its dish, the dish’s other recipes as 其他版本, and hides empty sections', async () => {
     renderAt('/recipes/5')
-    const versions = (await screen.findByRole('heading', { name: '其他版本' })).closest('section')
-    expect(within(versions).getByRole('link').getAttribute('href')).toBe('/recipes/4')
-    expect(within(versions).getByText('原版')).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 1, name: '麻婆豆腐' })).toBeTruthy()
+    // The dish, a link, with what it says shown read-only.
+    const dishLinks = screen.getAllByRole('link', { name: '麻婆豆腐' })
+    expect(dishLinks.map((link) => link.getAttribute('href'))).toContain('/dishes/40')
+    expect(screen.getByText('中式')).toBeTruthy()
+    expect(screen.getByRole('link', { name: '下飯' }).getAttribute('href')).toBe('/recipes?label=9')
+    const versions = screen.getByRole('heading', { name: '其他版本' }).closest('section')
+    expect(within(versions).getByRole('link', { name: '麻婆豆腐（陳家）' }).getAttribute('href')).toBe('/recipes/4')
     expect(screen.queryByRole('heading', { name: '來源' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '用在' })).toBeNull()
+  })
+
+  it('shows its own name over the dish’s, and no 其他版本 when it is the only recipe', async () => {
+    handler = ({ url, method }) =>
+      method === 'GET' && url === '/api/recipes/5'
+        ? json({ ...RECIPE, name: '阿基師版', display_name: '阿基師版', other_recipes: [] })
+        : null
+    renderAt('/recipes/5')
+    expect(await screen.findByRole('heading', { level: 1, name: '阿基師版' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '麻婆豆腐' }).getAttribute('href')).toBe('/dishes/40')
+    expect(screen.queryByRole('heading', { name: '其他版本' })).toBeNull()
   })
 
   it('names each source by its platform, and links its author to the library filter', async () => {
@@ -333,6 +411,79 @@ describe('the recipe page', () => {
     handler = () => json({ detail: 'Recipe not found' }, 404)
     renderAt('/recipes/99')
     expect(await screen.findByText('找不到這道食譜。')).toBeTruthy()
+  })
+})
+
+describe('the dish page', () => {
+  beforeEach(() => {
+    handler = ({ url, method }) => {
+      if (method !== 'GET') return null
+      if (url === '/api/dishes/40') return json(DISH)
+      if (url === '/api/dishes/7') return json(SAUCE)
+      return null
+    }
+  })
+
+  it('shows what the dish is and lists its recipes, with an add that presets the dish', async () => {
+    renderAt('/dishes/40')
+    expect(await screen.findByRole('heading', { level: 1, name: '麻婆豆腐' })).toBeTruthy()
+    expect(screen.getByText('Mapo tofu')).toBeTruthy()
+    expect(screen.getByRole('link', { name: '主菜' }).getAttribute('href')).toBe('/dishes?course=1')
+    expect(screen.getByRole('link', { name: '中式' }).getAttribute('href')).toBe('/dishes?region=2')
+    expect(screen.getByRole('link', { name: '下飯' }).getAttribute('href')).toBe('/dishes?label=9')
+    expect(screen.getByText('下飯的川菜')).toBeTruthy()
+
+    const recipes = screen.getByRole('heading', { name: '食譜' }).closest('section')
+    const links = within(recipes).getAllByRole('link')
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/edit/recipes/new?dish=40',
+      '/recipes/5',
+      '/recipes/4',
+    ])
+    expect(links[1].textContent).toContain('阿基師 · 想試')
+    expect(within(links[2]).getByText('書籤')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: '用在' })).toBeNull()
+    expect(screen.getByRole('link', { name: '編輯' }).getAttribute('href')).toBe('/edit/dishes/40')
+  })
+
+  it('shows a sauce, and the recipes that use it', async () => {
+    renderAt('/dishes/7')
+    expect(await screen.findByRole('heading', { level: 1, name: '辣油' })).toBeTruthy()
+    expect(screen.getByText('醬料')).toBeTruthy()
+    expect(screen.getByText('還沒有食譜。')).toBeTruthy()
+    const usedIn = screen.getByRole('heading', { name: '用在' }).closest('section')
+    expect(within(usedIn).getByRole('link', { name: '麻婆豆腐' }).getAttribute('href')).toBe('/recipes/5')
+  })
+
+  it('lists the recipes and the recipes using it when a delete is refused', async () => {
+    handler = ({ url, method }) => {
+      if (method === 'GET' && url === '/api/dishes/40') return json(DISH)
+      if (method === 'GET' && url === '/api/dishes/40/cascade') return json({ aliases: 0, recipes: 2, used_in: 1 })
+      if (method === 'DELETE') {
+        return json(
+          {
+            detail: 'This dish still has recipes, or recipes use it, so it cannot be removed.',
+            recipes: [{ id: 5, display_name: '麻婆豆腐' }],
+            used_in: [{ id: 8, display_name: '燴飯' }],
+          },
+          409,
+        )
+      }
+      return null
+    }
+    renderAt('/dishes/40')
+    fireEvent.click(await screen.findByRole('button', { name: '刪除' }))
+    const dialog = await screen.findByRole('dialog')
+    // Said up front, from the counts.
+    expect(await within(dialog).findByText(/底下還有 2 份食譜/)).toBeTruthy()
+    expect(within(dialog).getByText(/有 1 份食譜把它當材料用/)).toBeTruthy()
+    fireEvent.click(within(dialog).getByRole('button', { name: '刪除' }))
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'DELETE').url).toBe('/api/edit/dishes/40?aliases=0'),
+    )
+    expect(await within(dialog).findByText('它的食譜：')).toBeTruthy()
+    expect(within(dialog).getByRole('link', { name: '燴飯' }).getAttribute('href')).toBe('/recipes/8')
+    expect(location()).toBe('/dishes/40')
   })
 })
 

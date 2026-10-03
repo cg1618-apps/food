@@ -94,15 +94,18 @@ CONSTRAINT_MESSAGES = {
     "uq_ingredient_category_one_fallback": (
         "There is already a fallback category, and there may only be one."
     ),
-    "ck_recipe_has_a_name": "A recipe needs at least one name.",
-    "ck_recipe_not_its_own_version": "A recipe cannot be a version of itself.",
-    "uq_recipe_alias": "That recipe already carries that alias.",
+    "ck_region_has_a_name": "A region needs at least one name.",
+    "uq_region_name_cn": "Another region already has that Chinese name.",
+    "uq_region_name_en": "Another region already has that English name.",
+    "ck_dish_has_a_name": "A dish needs at least one name.",
+    "uq_dish_alias": "That dish already carries that alias.",
+    "uq_dish_image_position": "Two images cannot share one position.",
+    "uq_dish_image_once": "That image is already in this gallery.",
     "ck_recipe_source_has_content": "A source needs an author, a link or a title.",
     "uq_recipe_line_position": "Two ingredient lines cannot share one position.",
     "ck_recipe_line_one_target": (
-        "An ingredient line names exactly one ingredient or one recipe."
+        "An ingredient line names exactly one ingredient or one dish."
     ),
-    "ck_recipe_line_not_itself": "A recipe cannot use itself as an ingredient.",
     "uq_recipe_step_position": "Two steps cannot share one position.",
     "uq_recipe_image_position": "Two images cannot share one position.",
     "uq_recipe_image_once": "That image is already in this gallery.",

@@ -1,8 +1,9 @@
 """A recipe can be added, read, edited and deleted over HTTP.
 
-Line resolution - ids, stubs, cycles - is `test_recipe_lines.py`. This file is
-the recipe itself: its columns, its lists, the version rule, and delete.
-Every refusal test sets up the thing it refuses, and has a mirror that commits.
+Line resolution - ids, stubs, cycles - is `test_recipe_lines.py`; the dish
+itself is `test_dish_crud.py`. This file is the recipe: its columns, its
+dish, its lists, its other versions, and delete. Every refusal test sets up
+the thing it refuses, and has a mirror that commits.
 """
 
 import pytest
@@ -10,6 +11,7 @@ import pytest
 from app.models import (
     Author,
     CookingMethod,
+    Dish,
     Equipment,
     Label,
     Recipe,
@@ -27,7 +29,6 @@ def vocab(db):
     """One of each vocabulary a recipe names, so the id lists are non-empty."""
     rows = {
         "course": RecipeCourse(name_cn="主菜"),
-        "side": RecipeCourse(name_cn="配菜"),
         "label": Label(name_cn="下飯"),
         "method": CookingMethod(name_cn="炒"),
         "equipment": Equipment(name_cn="炒鍋"),
@@ -39,7 +40,8 @@ def vocab(db):
 
 
 def create(client, **body):
-    body.setdefault("name_cn", "番茄炒蛋")
+    if "dish_id" not in body:
+        body.setdefault("new_dish", {"name_cn": "番茄炒蛋"})
     response = client.post("/api/edit/recipes", json=body)
     assert response.status_code == 201, response.text
     return response.json()
@@ -47,7 +49,7 @@ def create(client, **body):
 
 def delete_params(client, recipe_id):
     counts = client.get(f"/api/recipes/{recipe_id}/cascade").json()
-    return {k: counts[k] for k in ("aliases", "sources", "lines", "steps")}
+    return {k: counts[k] for k in ("sources", "lines", "steps")}
 
 
 def test_a_recipe_round_trips_through_create_read_update_delete(
@@ -55,65 +57,70 @@ def test_a_recipe_round_trips_through_create_read_update_delete(
 ):
     can_cook = recipe_statuses["可煮"]
     youtube = source_platforms["YouTube"]
+    dish = client.post(
+        "/api/edit/dishes",
+        json={
+            "name_cn": "番茄炒蛋",
+            "course_id": vocab["course"].id,
+            "label_ids": [vocab["label"].id],
+        },
+    ).json()
     created = create(
         client,
-        name_cn="番茄炒蛋",
-        name_en="tomato and egg",
-        kind="dish",
+        dish_id=dish["id"],
+        name="阿基師版",
         status_id=can_cook.id,
-        course_id=vocab["course"].id,
         servings="2 人",
         time="15m",
-        description="家常",
         storage_notes="當天吃完",
         notes="蛋先炒",
-        aliases=["西紅柿炒雞蛋"],
         sources=[
             {"platform_id": youtube.id, "author_id": vocab["author"].id, "url": "https://example.com/v"}
         ],
         lines=[{"ingredient_id": ingredient.id, "amount": "1 小塊"}],
         steps=[{"body": "蛋打散"}, {"body": "下番茄"}],
-        serves_as_ids=[vocab["side"].id],
-        label_ids=[vocab["label"].id],
         method_ids=[vocab["method"].id],
         equipment_ids=[vocab["equipment"].id],
     )
     read = client.get(f"/api/recipes/{created['id']}").json()
-    assert read["display_name"] == "番茄炒蛋"
+    assert read["display_name"] == "阿基師版"
+    assert read["name"] == "阿基師版"
+    # The dish as the recipe's page shows it: read-only, from the dish.
+    assert read["dish"] == {
+        "id": dish["id"],
+        "display_name": "番茄炒蛋",
+        "kind": "dish",
+        "course": {"id": vocab["course"].id, "display_name": "主菜"},
+        "region": None,
+        "labels": [{"id": vocab["label"].id, "display_name": "下飯"}],
+        "serves_as": [],
+    }
     assert read["status"] == {"id": can_cook.id, "display_name": "可煮"}
-    assert read["course"]["display_name"] == "主菜"
-    assert read["aliases"] == ["西紅柿炒雞蛋"]
     assert read["sources"][0]["author"] == {"id": vocab["author"].id, "display_name": "阿基師"}
     assert read["sources"][0]["platform"] == {"id": youtube.id, "display_name": "YouTube"}
     assert read["sources"][0]["sort_order"] == 0
     assert read["lines"][0]["ingredient"]["display_name"] == "生薑"
-    assert read["lines"][0]["sub_recipe"] is None
+    assert read["lines"][0]["sub_dish"] is None
     assert read["lines"][0]["position"] == 0
     assert [s["body"] for s in read["steps"]] == ["蛋打散", "下番茄"]
-    assert [s["position"] for s in read["steps"]] == [0, 1]
-    assert [c["display_name"] for c in read["serves_as"]] == ["配菜"]
-    assert [x["display_name"] for x in read["labels"]] == ["下飯"]
     assert [x["display_name"] for x in read["methods"]] == ["炒"]
     assert [x["display_name"] for x in read["equipment"]] == ["炒鍋"]
     assert read["written_up"] is True
     assert read["images"] == []
-    assert read["variant_of"] is None
-    assert read["versions"] == []
-    assert read["used_in"] == []
+    assert read["other_recipes"] == []
+    for gone in ("name_cn", "kind", "course", "labels", "aliases", "variant_of", "description"):
+        assert gone not in read, gone
 
-    updated = client.patch(
-        f"/api/edit/recipes/{created['id']}",
-        json={"notes": None, "aliases": [], "label_ids": []},
-    )
+    updated = client.patch(f"/api/edit/recipes/{created['id']}", json={"notes": None, "name": ""})
     assert updated.status_code == 200, updated.text
     body = updated.json()
     assert body["notes"] is None
-    assert body["aliases"] == []
-    assert body["labels"] == []
-    assert body["name_en"] == "tomato and egg"  # not sent, untouched
+    assert body["name"] is None
+    assert body["display_name"] == "番茄炒蛋"  # the dish's, once the recipe has none
+    assert body["time"] == "15m"  # not sent, untouched
 
     counts = client.get(f"/api/recipes/{created['id']}/cascade").json()
-    assert counts == {"aliases": 0, "sources": 1, "lines": 1, "steps": 2, "used_in": 0}
+    assert counts == {"sources": 1, "lines": 1, "steps": 2}
     deleted = client.delete(
         f"/api/edit/recipes/{created['id']}", params=delete_params(client, created["id"])
     )
@@ -121,16 +128,97 @@ def test_a_recipe_round_trips_through_create_read_update_delete(
     assert client.get(f"/api/recipes/{created['id']}").status_code == 404
 
 
-def test_a_bare_recipe_is_a_dish_nobody_has_tried_and_not_written_up(client):
-    created = create(client, name_cn=None, name_en="curry")
-    assert created["kind"] == "dish"
+def test_a_bare_recipe_is_untried_not_written_up_and_named_by_its_dish(client):
+    created = create(client, new_dish={"name_en": "curry"})
+    assert created["dish"]["kind"] == "dish"
     assert created["status"]["display_name"] == "想試"
     assert created["written_up"] is False
     assert created["display_name"] == "curry"
+    assert created["name"] is None
 
 
 def test_a_step_alone_makes_a_recipe_written_up(client):
     assert create(client, steps=[{"body": "煮"}])["written_up"] is True
+
+
+# --- the dish ---------------------------------------------------------------
+
+
+def test_a_recipe_needs_a_dish(client):
+    for body in ({}, {"name": "x"}, {"new_dish": {"name_cn": " "}}, {"new_dish": {}}):
+        assert client.post("/api/edit/recipes", json=body).status_code == 422, body
+
+
+def test_a_recipe_names_a_dish_id_or_a_new_dish_not_both(client, db):
+    dish = Dish(name_cn="咖哩")
+    db.add(dish)
+    db.flush()
+    both = {"dish_id": dish.id, "new_dish": {"name_cn": "拉麵"}}
+    assert client.post("/api/edit/recipes", json=both).status_code == 422
+    # Mirror: each alone.
+    assert create(client, dish_id=dish.id)["dish"]["id"] == dish.id
+    assert create(client, new_dish={"name_cn": "拉麵"})["dish"]["display_name"] == "拉麵"
+
+
+def test_a_missing_dish_is_422_naming_it(client, db):
+    db.add(Dish(name_cn="咖哩"))  # the dish table is not empty
+    db.flush()
+    response = client.post("/api/edit/recipes", json={"dish_id": 999999})
+    assert response.status_code == 422
+    assert response.json()["detail"] == "No such dish: 999999."
+
+
+def test_a_new_dish_is_created_with_the_kind_chosen(client, db):
+    created = create(client, new_dish={"name_cn": "照燒醬", "kind": "sauce"})
+    assert created["dish"]["kind"] == "sauce"
+    assert db.query(Dish).filter_by(name_cn="照燒醬").one().kind == "sauce"
+    bad = client.post("/api/edit/recipes", json={"new_dish": {"name_cn": "x", "kind": "base"}})
+    assert bad.status_code == 422
+
+
+def test_a_new_dish_whose_name_exists_reuses_that_dish(client, db):
+    """The existing dish - answering by an alias, in another case - is the
+    fixture: with none, every new_dish creates and a reuse that never happened
+    would pass. The existing kind is kept."""
+    response = client.post(
+        "/api/edit/dishes",
+        json={"name_cn": "照燒雞腿排", "aliases": ["Teriyaki Chicken"], "kind": "dish"},
+    )
+    existing = response.json()
+    one = create(client, new_dish={"name_en": "teriyaki chicken", "kind": "sauce"})
+    two = create(client, new_dish={"name_cn": "照燒雞腿排"})
+    assert one["dish"]["id"] == two["dish"]["id"] == existing["id"]
+    assert one["dish"]["kind"] == "dish"
+    assert db.query(Dish).count() == 1
+
+
+def test_a_recipe_can_move_to_another_dish(client, db):
+    created = create(client, new_dish={"name_cn": "咖哩"})
+    other = Dish(name_cn="咖哩飯")
+    db.add(other)
+    db.flush()
+    moved = client.patch(f"/api/edit/recipes/{created['id']}", json={"dish_id": other.id})
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["dish"]["id"] == other.id
+    # An explicit null cannot leave it without one.
+    cleared = client.patch(f"/api/edit/recipes/{created['id']}", json={"dish_id": None})
+    assert cleared.status_code == 422
+
+
+def test_other_recipes_are_the_dishs_other_recipes(client):
+    first = create(client, new_dish={"name_cn": "照燒雞腿排"}, name="A 版")
+    second = create(client, new_dish={"name_cn": "照燒雞腿排"}, name="B 版")
+    third = create(client, new_dish={"name_cn": "照燒雞腿排"})
+    unrelated = create(client, new_dish={"name_cn": "白飯"})
+
+    read = client.get(f"/api/recipes/{first['id']}").json()
+    assert [r["id"] for r in read["other_recipes"]] == [second["id"], third["id"]]
+    assert read["other_recipes"][1]["display_name"] == "照燒雞腿排"
+    assert read["other_recipes"][0]["dish"]["display_name"] == "照燒雞腿排"
+    assert client.get(f"/api/recipes/{unrelated['id']}").json()["other_recipes"] == []
+
+
+# --- the rest of the recipe --------------------------------------------------
 
 
 def test_patch_leaves_absent_lists_alone_and_replaces_sent_ones(
@@ -138,12 +226,11 @@ def test_patch_leaves_absent_lists_alone_and_replaces_sent_ones(
 ):
     created = create(
         client,
-        aliases=["a"],
         sources=[{"platform_id": source_platforms["書"].id, "title": "家常菜"}],
         lines=[{"ingredient_id": ingredient.id}],
         steps=[{"body": "one"}],
-        label_ids=[vocab["label"].id],
         method_ids=[vocab["method"].id],
+        equipment_ids=[vocab["equipment"].id],
     )
     body = client.patch(
         f"/api/edit/recipes/{created['id']}",
@@ -151,10 +238,9 @@ def test_patch_leaves_absent_lists_alone_and_replaces_sent_ones(
     ).json()
     assert [s["body"] for s in body["steps"]] == ["two", "three"]
     assert body["methods"] == []
-    assert body["aliases"] == ["a"]
     assert body["sources"][0]["title"] == "家常菜"
     assert len(body["lines"]) == 1
-    assert [x["display_name"] for x in body["labels"]] == ["下飯"]
+    assert [x["display_name"] for x in body["equipment"]] == ["炒鍋"]
 
 
 def test_re_sending_the_same_lists_unchanged_does_not_collide_with_itself(
@@ -165,14 +251,12 @@ def test_re_sending_the_same_lists_unchanged_does_not_collide_with_itself(
     unless the old rows are cleared and flushed first. Two lines and two steps,
     so positions 0 AND 1 are both reused."""
     payload = {
-        "aliases": ["x", "y"],
         "sources": [{"platform_id": source_platforms["網站"].id, "url": "https://example.com"}],
         "lines": [{"ingredient_id": ingredient.id}, {"ingredient_id": ingredient.id, "amount": "2"}],
         "line_groups": [],
         "steps": [{"body": "one"}, {"body": "two"}],
         "step_groups": [],
-        "label_ids": [vocab["label"].id],
-        "serves_as_ids": [vocab["side"].id],
+        "method_ids": [vocab["method"].id],
     }
     created = create(client, **payload)
     for _ in range(2):
@@ -181,7 +265,6 @@ def test_re_sending_the_same_lists_unchanged_does_not_collide_with_itself(
     body = response.json()
     assert [line["amount"] for line in body["lines"]] == [None, "2"]
     assert [s["body"] for s in body["steps"]] == ["one", "two"]
-    assert body["aliases"] == ["x", "y"]
 
 
 def test_a_status_only_patch_changes_the_status_and_nothing_else(
@@ -197,23 +280,29 @@ def test_a_status_only_patch_changes_the_status_and_nothing_else(
     assert len(body["lines"]) == 1
 
 
-@pytest.mark.parametrize(
-    "field, value",
-    [("kind", "snack"), ("status_id", 999999), ("kind", None), ("status_id", None)],
-)
-def test_an_unknown_or_empty_kind_or_status_is_refused(client, field, value):
+@pytest.mark.parametrize("value", [999999, None])
+def test_an_unknown_or_empty_status_is_refused(client, value):
     """The statuses fixture makes the table non-empty, so 999999 is refused
     for naming nothing rather than for there being nothing to name."""
     created = create(client)
-    response = client.patch(f"/api/edit/recipes/{created['id']}", json={field: value})
+    response = client.patch(f"/api/edit/recipes/{created['id']}", json={"status_id": value})
     assert response.status_code == 422
-    assert client.post("/api/edit/recipes", json={"name_cn": "x", field: value}).status_code == 422
+    body = {"new_dish": {"name_cn": "x"}, "status_id": value}
+    assert client.post("/api/edit/recipes", json=body).status_code == 422
 
 
-def test_a_known_kind_and_status_are_accepted(client, recipe_statuses):
+@pytest.mark.parametrize("field", ["kind", "name_cn", "aliases", "label_ids", "variant_of_id"])
+def test_the_fields_that_moved_to_the_dish_are_refused_on_a_recipe(client, field):
+    value = {"kind": "dish", "name_cn": "x", "aliases": [], "label_ids": [], "variant_of_id": None}
+    body = {"new_dish": {"name_cn": "x"}, field: value[field]}
+    assert client.post("/api/edit/recipes", json=body).status_code == 422
+    # Mirror: the same body without it saves.
+    assert client.post("/api/edit/recipes", json={"new_dish": {"name_cn": "x"}}).status_code == 201
+
+
+def test_a_known_status_is_accepted(client, recipe_statuses):
     regular = recipe_statuses["常煮"]
-    created = create(client, kind="base", status_id=regular.id)
-    assert (created["kind"], created["status"]["id"]) == ("base", regular.id)
+    assert create(client, status_id=regular.id)["status"]["id"] == regular.id
 
 
 def test_a_recipe_saved_without_a_status_gets_the_first_in_sort_order(
@@ -229,28 +318,15 @@ def test_a_recipe_saved_without_a_status_gets_the_first_in_sort_order(
 
 def test_a_recipe_saved_without_a_status_when_there_are_none_is_422(client, db):
     """The table is emptied first - the fixture filled it - so this is the
-    empty case on purpose; every other save in this file is the mirror."""
+    empty case on purpose; every other save in this file is the mirror. The
+    refused save leaves no new dish behind either."""
     db.query(RecipeStatus).delete()
     db.flush()
-    response = client.post("/api/edit/recipes", json={"name_cn": "x"})
+    response = client.post("/api/edit/recipes", json={"new_dish": {"name_cn": "x"}})
     assert response.status_code == 422
     assert "狀態" in response.json()["detail"]
     assert db.query(Recipe).count() == 0
-
-
-def test_a_recipe_needs_a_name(client):
-    response = client.post("/api/edit/recipes", json={"name_cn": "  ", "name_en": ""})
-    assert response.status_code == 422
-
-
-def test_clearing_the_only_name_is_refused_but_clearing_one_of_two_is_not(client):
-    created = create(client, name_cn="咖哩", name_en="curry")
-    cleared_one = client.patch(f"/api/edit/recipes/{created['id']}", json={"name_cn": None})
-    assert cleared_one.status_code == 200
-    assert cleared_one.json()["display_name"] == "curry"
-    cleared_all = client.patch(f"/api/edit/recipes/{created['id']}", json={"name_en": ""})
-    assert cleared_all.status_code == 422
-    assert client.get(f"/api/recipes/{created['id']}").json()["name_en"] == "curry"
+    assert db.query(Dish).count() == 0
 
 
 @pytest.mark.parametrize(
@@ -278,8 +354,8 @@ def test_a_bad_source_is_refused(client, db, source_platforms, source):
     source = dict(source)
     if isinstance(source.get("platform_id"), str):
         source["platform_id"] = source_platforms[source["platform_id"]].id
-    response = client.post("/api/edit/recipes", json={"name_cn": "x", "sources": [source]})
-    assert response.status_code == 422
+    body = {"new_dish": {"name_cn": "x"}, "sources": [source]}
+    assert client.post("/api/edit/recipes", json=body).status_code == 422
 
 
 def test_a_source_may_not_name_an_author_and_a_new_one(client, db, source_platforms):
@@ -288,8 +364,8 @@ def test_a_source_may_not_name_an_author_and_a_new_one(client, db, source_platfo
     db.flush()
     youtube = source_platforms["YouTube"].id
     both = {"platform_id": youtube, "author_id": author.id, "new_author": {"name_cn": "詹姆士"}}
-    response = client.post("/api/edit/recipes", json={"name_cn": "x", "sources": [both]})
-    assert response.status_code == 422
+    body = {"new_dish": {"name_cn": "x"}, "sources": [both]}
+    assert client.post("/api/edit/recipes", json=body).status_code == 422
     # The mirror: either one alone is fine.
     create(client, sources=[{"platform_id": youtube, "author_id": author.id}])
     create(client, sources=[{"platform_id": youtube, "new_author": {"name_cn": "詹姆士"}}])
@@ -368,15 +444,15 @@ def test_one_new_author_named_by_two_sources_is_one_author(client, db, source_pl
     assert created["sources"][0]["author"] == created["sources"][1]["author"]
 
 
-def test_a_refused_save_creates_no_author(client, db, source_platforms):
+def test_a_refused_save_creates_no_author_and_no_dish(client, db, source_platforms):
     """Validation runs before the first write: a source naming a platform
     that does not exist refuses the save, and the new author on the other
-    source must not be left behind."""
+    source - and the new dish - must not be left behind."""
     youtube = source_platforms["YouTube"].id
     response = client.post(
         "/api/edit/recipes",
         json={
-            "name_cn": "x",
+            "new_dish": {"name_cn": "x"},
             "sources": [
                 {"platform_id": youtube, "new_author": {"name_cn": "阿基師"}},
                 {"platform_id": 999999, "title": "y"},
@@ -385,26 +461,26 @@ def test_a_refused_save_creates_no_author(client, db, source_platforms):
     )
     assert response.status_code == 422
     assert authors(db) == set()
+    assert db.query(Dish).count() == 0
 
 
 def test_a_blank_step_is_refused(client):
-    response = client.post("/api/edit/recipes", json={"name_cn": "x", "steps": [{"body": " "}]})
-    assert response.status_code == 422
+    body = {"new_dish": {"name_cn": "x"}, "steps": [{"body": " "}]}
+    assert client.post("/api/edit/recipes", json=body).status_code == 422
 
 
 def test_an_unknown_field_is_refused(client):
-    assert client.post("/api/edit/recipes", json={"name_cn": "x", "id": 5}).status_code == 422
+    body = {"new_dish": {"name_cn": "x"}, "id": 5}
+    assert client.post("/api/edit/recipes", json=body).status_code == 422
 
 
-@pytest.mark.parametrize(
-    "field", ["serves_as_ids", "label_ids", "method_ids", "equipment_ids", "course_id"]
-)
+@pytest.mark.parametrize("field", ["method_ids", "equipment_ids"])
 def test_an_id_in_the_body_that_names_nothing_is_422(client, vocab, field):
     """The vocab fixture makes each table non-empty, so the refusal is about
     the id rather than an empty table; the round trip is the mirror."""
     missing = 999999
-    value = missing if field == "course_id" else [missing]
-    response = client.post("/api/edit/recipes", json={"name_cn": "x", field: value})
+    body = {"new_dish": {"name_cn": "x"}, field: [missing]}
+    response = client.post("/api/edit/recipes", json=body)
     assert response.status_code == 422, response.text
     assert str(missing) in response.json()["detail"]
 
@@ -413,103 +489,34 @@ def test_a_missing_recipe_in_the_url_is_404(client):
     assert client.get("/api/recipes/999999").status_code == 404
     assert client.get("/api/recipes/999999/cascade").status_code == 404
     assert client.patch("/api/edit/recipes/999999", json={"notes": "x"}).status_code == 404
-    params = {"aliases": 0, "sources": 0, "lines": 0, "steps": 0}
+    params = {"sources": 0, "lines": 0, "steps": 0}
     assert client.delete("/api/edit/recipes/999999", params=params).status_code == 404
-
-
-# --- versions ---------------------------------------------------------------
-
-
-def test_versions_are_listed_from_the_parent_and_from_each_version(client):
-    parent = create(client, name_cn="咖哩")
-    first = create(client, name_cn="咖哩", name_en="japanese", variant_of_id=parent["id"])
-    second = create(client, name_cn="咖哩", name_en="thai", variant_of_id=parent["id"])
-
-    read_parent = client.get(f"/api/recipes/{parent['id']}").json()
-    assert sorted(v["id"] for v in read_parent["versions"]) == sorted([first["id"], second["id"]])
-    assert read_parent["variant_of"] is None
-
-    read_first = client.get(f"/api/recipes/{first['id']}").json()
-    assert read_first["variant_of"]["id"] == parent["id"]
-    assert [v["id"] for v in read_first["versions"]] == [second["id"]]
-
-
-def test_a_version_of_a_missing_recipe_is_refused(client):
-    # The foreign key would answer 422 too, so the status alone passes with the
-    # service's check deleted: the id in the detail is the service's own. The
-    # real recipe is the mirror - a version of it is permitted.
-    real = create(client, name_cn="real")
-    response = client.post("/api/edit/recipes", json={"name_cn": "x", "variant_of_id": 999999})
-    assert response.status_code == 422
-    assert "999999" in response.json()["detail"]
-    assert create(client, name_cn="x", variant_of_id=real["id"])["variant_of"]["id"] == real["id"]
-
-
-def test_a_recipe_cannot_be_a_version_of_itself(client):
-    created = create(client)
-    response = client.patch(
-        f"/api/edit/recipes/{created['id']}", json={"variant_of_id": created["id"]}
-    )
-    assert response.status_code == 422
-
-
-def test_a_version_of_a_version_is_refused(client):
-    parent = create(client)
-    version = create(client, variant_of_id=parent["id"])
-    response = client.post(
-        "/api/edit/recipes", json={"name_cn": "x", "variant_of_id": version["id"]}
-    )
-    assert response.status_code == 422
-
-
-def test_a_recipe_with_versions_cannot_become_a_version(client):
-    other = create(client, name_cn="other")
-    parent = create(client)
-    create(client, variant_of_id=parent["id"])
-    response = client.patch(
-        f"/api/edit/recipes/{parent['id']}", json={"variant_of_id": other["id"]}
-    )
-    assert response.status_code == 422
-    # Mirror: a recipe with no versions of its own may become one.
-    alone = create(client, name_cn="alone")
-    moved = client.patch(f"/api/edit/recipes/{alone['id']}", json={"variant_of_id": other["id"]})
-    assert moved.status_code == 200, moved.text
-    assert moved.json()["variant_of"]["id"] == other["id"]
-
-
-def test_deleting_a_versions_parent_leaves_the_version(client, db):
-    parent = create(client)
-    version = create(client, name_en="v2", variant_of_id=parent["id"])
-    deleted = client.delete(
-        f"/api/edit/recipes/{parent['id']}", params=delete_params(client, parent["id"])
-    )
-    assert deleted.status_code == 204
-    read = client.get(f"/api/recipes/{version['id']}").json()
-    assert read["variant_of"] is None
-    assert db.get(Recipe, version["id"]).variant_of_id is None
 
 
 # --- delete -----------------------------------------------------------------
 
 
-def test_a_recipe_used_as_a_sub_recipe_cannot_be_deleted(client):
-    base = create(client, name_cn="高湯", kind="base")
-    dish = create(client, name_cn="拉麵", lines=[{"sub_recipe_id": base["id"]}])
-    assert client.get(f"/api/recipes/{base['id']}/cascade").json()["used_in"] == 1
-
-    response = client.delete(
-        f"/api/edit/recipes/{base['id']}", params=delete_params(client, base["id"])
+def test_deleting_the_last_recipe_of_a_dish_keeps_the_dish(client, db):
+    created = create(client, new_dish={"name_cn": "咖哩"})
+    deleted = client.delete(
+        f"/api/edit/recipes/{created['id']}", params=delete_params(client, created["id"])
     )
-    assert response.status_code == 409
-    assert response.json()["used_in"] == [{"id": dish["id"], "display_name": "拉麵"}]
-    assert client.get(f"/api/recipes/{base['id']}").status_code == 200
+    assert deleted.status_code == 204
+    assert db.get(Dish, created["dish"]["id"]) is not None
+    assert client.get(f"/api/dishes/{created['dish']['id']}").json()["recipes"] == []
 
-    # Mirror: once nothing names it, it deletes.
-    client.patch(f"/api/edit/recipes/{dish['id']}", json={"line_groups": [], "lines": []})
+
+def test_a_recipe_whose_dish_is_used_elsewhere_still_deletes(client):
+    """Lines name the dish, never a recipe of it, so nothing refuses deleting
+    a recipe - the dish stays, and so does the line naming it."""
+    sauce = create(client, new_dish={"name_cn": "高湯", "kind": "sauce"})
+    ramen = create(client, new_dish={"name_cn": "拉麵"}, lines=[{"sub_dish_id": sauce["dish"]["id"]}])
     response = client.delete(
-        f"/api/edit/recipes/{base['id']}", params=delete_params(client, base["id"])
+        f"/api/edit/recipes/{sauce['id']}", params=delete_params(client, sauce["id"])
     )
     assert response.status_code == 204
+    line = client.get(f"/api/recipes/{ramen['id']}").json()["lines"][0]
+    assert line["sub_dish"]["display_name"] == "高湯"
 
 
 def test_a_delete_with_a_stale_count_is_refused_naming_the_count(client):

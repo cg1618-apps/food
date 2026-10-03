@@ -8,12 +8,13 @@
 //   2. send them back as the delete's required query parameters;
 //   3. on a 409 carrying `field` / `actual` (StaleCountError), take the
 //      server's number, say so, and re-offer the button - no reload;
-//   4. a blocking count (a recipe used by others, an ingredient with
-//      varieties or recipe lines) is said up front, in words, but the button
-//      stays: the server is the one that decides, and its refusal is what
-//      carries the list;
+//   4. a blocking count (a dish with recipes or used by others, an
+//      ingredient with varieties or recipe lines) is said up front, in
+//      words, but the button stays: the server is the one that decides, and
+//      its refusal is what carries the list;
 //   5. on a 409 refusing the delete outright, show what blocks it: the
-//      recipes in `used_in`, with links, or the server's sentence (an
+//      recipes in `recipes` (a dish's own) and `used_in` (the ones using
+//      it), with links, or the server's sentence (an
 //      ingredient's child varieties are refused by the foreign key, whose
 //      409 carries only a sentence - the cascade's `children` count says how
 //      many).
@@ -35,6 +36,12 @@ import Dialog from '../ui/Dialog'
 import { Button } from '../ui/primitives'
 import { ErrorNote, Loading } from '../ui/states'
 
+// The lists of recipes a 409 may carry, and how each is introduced.
+const REFUSAL_LISTS = [
+  ['recipes', '它的食譜：'],
+  ['used_in', '用到它的食譜：'],
+]
+
 export default function DeleteDialog({ kind, id, name, onClose, onDeleted }) {
   const target = DELETE_TARGETS[kind]
   if (!target) throw new Error(`DeleteDialog: unknown kind ${kind}`)
@@ -49,7 +56,8 @@ export default function DeleteDialog({ kind, id, name, onClose, onDeleted }) {
   })
   const [corrected, setCorrected] = useState({})
   const [error, setError] = useState(null)
-  const [usedIn, setUsedIn] = useState(null)
+  // The recipes a refusal names, by what they are to the row.
+  const [refusedBy, setRefusedBy] = useState([])
   const [busy, setBusy] = useState(false)
 
   const counts = hasCascade && cascade.data ? { ...cascade.data, ...corrected } : {}
@@ -73,7 +81,13 @@ export default function DeleteDialog({ kind, id, name, onClose, onDeleted }) {
         // counts can be equal, and correcting the wrong one would loop.
         setCorrected((previous) => ({ ...previous, [caught.body.field]: caught.body.actual }))
       }
-      if (caught.status === 409 && Array.isArray(caught.body?.used_in)) setUsedIn(caught.body.used_in)
+      if (caught.status === 409) {
+        setRefusedBy(
+          REFUSAL_LISTS.map(([key, heading]) => [key, heading, caught.body?.[key]]).filter(
+            ([, , rows]) => Array.isArray(rows) && rows.length,
+          ),
+        )
+      }
       setError(caught)
     } finally {
       setBusy(false)
@@ -127,11 +141,11 @@ export default function DeleteDialog({ kind, id, name, onClose, onDeleted }) {
 
         {error ? <ErrorNote error={error} /> : null}
 
-        {usedIn?.length ? (
-          <div className="space-y-1">
-            <p className="text-text-muted">用到它的食譜：</p>
+        {refusedBy.map(([key, heading, rows]) => (
+          <div key={key} className="space-y-1">
+            <p className="text-text-muted">{heading}</p>
             <ul className="list-disc space-y-0.5 pl-5">
-              {usedIn.map((recipe) => (
+              {rows.map((recipe) => (
                 <li key={recipe.id}>
                   <Link to={`/recipes/${recipe.id}`} className="text-brand hover:underline">
                     {recipe.display_name}
@@ -140,7 +154,7 @@ export default function DeleteDialog({ kind, id, name, onClose, onDeleted }) {
               ))}
             </ul>
           </div>
-        ) : null}
+        ))}
       </div>
     </Dialog>
   )

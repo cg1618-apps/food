@@ -35,8 +35,8 @@ as they bind this app:
 - **An id inside a request body that names no row is 422, everywhere; a
   missing row named by the URL is 404.** Owner decision, 2026-10-02. The URL
   resolved, so the resource exists; it is the payload that is wrong. This
-  covers a parent, a label, a cooking method, a course, a version's original,
-  a line's ingredient or sub-recipe, and a gallery's `image_id` - the last
+  covers a parent, a label, a cooking method, a course, a region, a recipe's
+  dish, a line's ingredient or dish, and a gallery's `image_id` - the last
   was 404 until recipes added a third case and one convention had to cover
   all of them. The detail names the id. Rejected: 404 for body ids, which
   reads as "the thing you addressed is gone" when the thing addressed is
@@ -154,11 +154,14 @@ than now — a spec written months ahead describes a system that was imagined.
 - **Ingredient** — built. `docs/data-model.md` is the description, and this
   list does not repeat it: a second copy of a settled claim is the one that
   goes stale, because nobody is looking at it.
-- **Recipe** — names, aliases, steps, notes, and a `kind` separating a dish from
-  a general base. Also a personal status: want to try, can cook, regular.
+- **Dish** — names, aliases, a `kind` separating a dish (料理) from a sauce
+  (醬料), a course, a region, labels: what a dish is whoever cooks it. Built;
+  see "A dish and its recipes" below.
+- **Recipe** — one way of making a dish: steps, notes, sources, and a personal
+  status: want to try, can cook, regular.
 - **RecipeLine** — ordered, belongs to a recipe, points at **either an
-  ingredient or another recipe**, carries a free-text amount and an optional
-  section label ("for the sauce").
+  ingredient or a dish**, carries a free-text amount, and sits in a group or
+  none ("for the sauce").
 - **InventoryItem** — one per ingredient: `in_stock`, `is_staple`, a free-text
   quantity, notes, an optional use-by date.
 - **Snack** — names, brand, category, the nutrition printed on the package,
@@ -185,12 +188,14 @@ than now — a spec written months ahead describes a system that was imagined.
   Stubs are created by typing a name, so without aliases `spring onion`,
   `scallion` and `青蔥` become three rows that should be one. With them,
   merging is a rename.
-- **One recipe entity, not two.** A general recipe is a recipe whose `kind`
-  says so; it can be cooked alone and appear as a line inside others. The graph
-  needs a cycle guard, and "what can I cook" resolves *through* a nested recipe
+- **A general recipe is not a second entity.** It began as a recipe whose
+  `kind` was `base`; since `d1ishes` it is a dish whose `kind` is `sauce`, made
+  by ordinary recipes, and a line names the dish. Either way one shape serves
+  both: it can be cooked alone and appear as a line inside others, the graph
+  needs a cycle guard, and "what can I cook" resolves *through* a nested dish
   rather than treating it as an opaque item. Rejected: a separate table for
-  bases, which would duplicate ingredients, steps and notes. A line may nest a
-  `dish` as well as a `base`: `kind` is how the library files a recipe, not a
+  sauces, which would duplicate ingredients, steps and notes. A line may name
+  a `dish` as well as a `sauce`: `kind` is how the library files it, not a
   permission, and a dish served inside another (rice under a curry) is real.
 - **Inventory is presence, not stock.** `in_stock` with a free-text quantity and
   notes. Rejected: quantities decremented as you cook, which demands that every
@@ -299,7 +304,7 @@ so a later reader can tell a decision from an accident. These are food's.
 - **A bar fixed to the bottom of the screen on a phone**, where media's
   navigation folds below `lg` into a menu button that opens a full-screen
   drawer. media has a catalogue of sections and sub-pages to fold away;
-  food has a handful of destinations - 食譜 · 食材 · 筆記 · TBD · 設定 -
+  food has a handful of destinations - 料理 · 食譜 · 食材 · 筆記 · TBD · 設定 -
   which fit in one row under a thumb, and the app is opened one-handed in a shop or at the
   stove, where a menu button and a drawer are two taps and a screen covered
   for every move. Pages are padded at the bottom so the bar never covers
@@ -411,7 +416,7 @@ What the branch after module 1 chose, and what it turned down.
 - **A gallery table per owner type, not media's polymorphic table.** Media has
   one attachment table keyed by `owner_type` and `owner_id`, which nothing
   constrains, and records that nothing stops an attachment outliving its owner.
-  food has three owner types, so three small tables with real foreign keys
+  food has four owner types (ingredients, dishes, recipes, kitchen notes), so four small tables with real foreign keys
   remove the whole class at the price of one shared module's worth of
   repetition. `images.OWNER_TABLES` is the one list the library's usage counts
   and owner listings read. The owner side cascades and the image side
@@ -456,15 +461,11 @@ What the branch after module 1 chose, and what it turned down.
 
 ## Recipes
 
-- **Versions are one level deep, and an original's delete leaves them.** A
-  version points at its original through `variant_of_id`; a version may not
-  have versions, nor point at one, so a family is one original and its
-  versions and `versions` on the response is a flat list. The foreign key is
-  `SET NULL` rather than `RESTRICT` because each version is a complete recipe
-  in its own right - refusing to delete an original until its versions went
-  first would make the user destroy what they meant to keep. Rejected: a tree
-  of versions, which nothing here would read and which needs a cycle guard of
-  its own.
+- **Versions (另一版) were one level deep, and are gone.** A version pointed
+  at its original through `variant_of_id`, `SET NULL`, one level deep. Dishes
+  replace them: the recipes of one dish are its versions, and `d1ishes`
+  turned each version family into one dish ("A dish and its recipes",
+  below).
 - **"Written up" is derived** - at least one line or step - and never stored.
   A stored flag disagrees with the content the first time somebody forgets to
   tick it.
@@ -475,12 +476,12 @@ What the branch after module 1 chose, and what it turned down.
   rather than a unique violation. A near match is not guessed at: the
   typeahead shows it before the user chooses "new", which is the one moment a
   person is there to decide.
-- **"Used in" for a recipe is depth zero through sub-recipes.** A dish using a
-  base that uses this base is not listed; only lines naming this recipe
-  directly. An ingredient's "used in" takes the same depth through
-  sub-recipes, so the two cannot disagree about what "uses" means.
+- **"Used in" for a dish is depth zero through sub-dishes.** A recipe using a
+  sauce whose recipe uses this sauce is not listed; only recipes with a line
+  naming this dish directly. An ingredient's "used in" takes the same depth
+  through sub-dishes, so the two cannot disagree about what "uses" means.
 - **"Used in" for an ingredient goes all the way DOWN its own tree and not at
-  all through sub-recipes.** It counts distinct recipes with a line naming the
+  all through sub-dishes.** It counts distinct recipes with a line naming the
   ingredient or any ingredient below it, so 生抽 in one line and 老抽 in
   another is one recipe using 醬油. It is a recursive CTE over
   `ingredient.parent_id` (UNION, so a cycle a hand-written UPDATE made ends the
@@ -520,11 +521,13 @@ What the branch after module 1 chose, and what it turned down.
   delete carries `expected` and `actual`. Required rather than optional: an
   optional guard is one a client forgets.
 - **A refused recipe save writes nothing**, because the service validates
-  every name, id, version and cycle before its first write - the stubs - and
+  every id, the own-dish rule and the cycle before its first write - new
+  dishes, stubs and authors - and
   touches the row only after them. Relying on the request's rollback alone
   would hold in production and not in a session that is never rolled back,
   which is where a half-written row would be noticed last.
-- **The cycle guard walks the stored graph breadth first**, one query per
+- **The cycle guard walks the stored graph breadth first** - a graph of
+  dishes, dish A using dish B when a recipe of A names B - one query per
   level, refusing past `MAX_DEPTH` rather than stopping short - a walk that
   gave up early would let a cycle through. A recursive CTE would be one query
   instead of a few, for a graph a person builds by hand.
@@ -537,7 +540,7 @@ What the branch after module 1 chose, and what it turned down.
   / 常煮 and YouTube / Shorts / 網站 / 書 / 其他 - and the owner wants to edit
   them in 設定 as courses are edited: add 冷凍好 or IG, rename one, reorder.
   Nothing in the app branched on either value, which is the line between a
-  closed list (the code's logic depends on it: storage state, recipe kind)
+  closed list (the code's logic depends on it: storage state, dish kind)
   and a vocabulary (only displayed and filtered by). So they became
   `recipe_status` and `source_platform`, factory vocabularies like
   `recipe_course`, and `recipe.status_id` / `recipe_source.platform_id`
@@ -701,6 +704,75 @@ What the branch after module 1 chose, and what it turned down.
 - **A used chip stays tappable.** The same ingredient on two lines (garlic in
   the sauce and again on top) is ordinary, so "used" is a mark, not a lock.
 
+## A dish and its recipes
+
+- **A recipe is a specific way of making a dish.** The owner's words: "a
+  recipe will have its specific recipe item, the dish group which can have
+  multiple specific recipe belongs to it." 照燒雞腿排 by one author and by
+  another are two recipes of one dish. So the dish holds what is true of the
+  dish whoever cooks it - its names and aliases, kind, course, region,
+  labels, serves-as, a description, a gallery - and the recipe holds what one
+  way of making it needs: sources, status, servings, time, lines, steps,
+  methods, equipment, its own gallery and notes. A recipe's own `name` is
+  optional and says how it differs; its display name falls back to the
+  dish's. Rejected: keeping the dish implicit in a shared recipe name, which
+  is what 另一版 approximated and which gives labels, course and search
+  nowhere single to live.
+- **One table for dishes and sauces, with a `kind`.** 料理 and 醬料 carry the
+  same fields at the same level, and the libraries should be filterable by
+  kind now and separable later - a 醬料 library is a filter of the same rows,
+  not a migration. Rejected: two tables, which would duplicate every name,
+  alias, label and gallery rule, and make a line's target two columns.
+- **`kind` is a fixed list; 地區 is a 設定 vocabulary.** The code branches on
+  kind - a dish typed into a recipe line is created a `sauce`, one typed as a
+  recipe's own dish a `dish`, and a sauce carries a 醬料 chip - so it lives in
+  `DISH_KINDS` with the other behavioural lists. Region is only displayed and
+  filtered by, and the owner edits it, so it is `region`, a factory
+  vocabulary like the course, seeded and hand-ordered.
+- **另一版 is removed; dishes replace it.** A one-level version tree was a
+  weaker form of the same grouping: one recipe was the original and the rest
+  hung off it, and the family had no row of its own to carry what the
+  versions shared. The dish's
+  recipes are its versions, all equal, and 其他版本 on a recipe's page is the
+  dish's other recipes.
+- **A recipe line names a dish, not a recipe.** You use 照燒醬, however it is
+  made: which recipe of the sauce you follow is a choice made at the stove,
+  not part of the dish that uses it. Pointing at the dish means a sauce's
+  recipe can change, or a better one be added, without touching the recipes
+  that use it, and deleting a recipe never breaks a line - so nothing refuses
+  a recipe's delete at all. A dish named by a line, or one with recipes, is
+  what refuses its delete (`RESTRICT`, answered first with both lists). A
+  recipe may not name its own dish, and the nesting graph is a graph of
+  dishes; both rules need the recipe's row, so they are the write path's.
+- **A dish outlives its last recipe.** Deleting a recipe never deletes its
+  dish: a dish with no recipe yet is a real state - a dish you mean to find a
+  recipe for - and deleting it is a separate decision on its own page.
+- **A dish typed into a form is found by name before it is made.** The
+  recipe form's 料理 picker and a line's 新增料理 send `new_dish`; a dish
+  whose name slot or alias equals the typed name, ignoring case, is reused,
+  kind and all, and names resolved earlier in the same save count, the
+  recipe's own first. It is `new_ingredient`'s and `new_author`'s rule, for
+  the same reason: the typeahead offers near matches while a person is there
+  to choose, and the save only folds exact ones.
+- **Dish names are not unique**, as recipe names were not: two unrelated
+  recipes of one name became two dishes of one name in the migration, and a
+  unique index would have refused it.
+- **The migration groups by the version graph.** `d1ishes` takes each
+  connected component of `variant_of_id` as one dish - the graph the owner
+  had already drawn by hand. The root (no `variant_of_id`, the lowest id when
+  there are several or a cycle) gives the dish its names, aliases, course,
+  serves-as, description and kind (`base` renamed `sauce`); the labels are
+  the union, since a label on any version was true of the dish. No text is
+  lost silently: a version's own display name becomes its `name` when it
+  differs from the dish's, and a differing description is appended to its
+  notes after 「原簡介：」. What it does not carry - a version's aliases and
+  other name slots - and what a downgrade cannot restore are in
+  `docs/deployment.md`.
+- **The dish form is `/edit/dishes/:id`**, the shape every other edit page
+  has. The design named `/edit/dishes/:id/edit`; that path redirects, so a
+  link written to the design still lands, and the house convention is the
+  one a reader can guess.
+
 ## Kitchen notes
 
 - **A note has a title, not name slots.** It is a bookmark - a compilation, a
@@ -710,11 +782,11 @@ What the branch after module 1 chose, and what it turned down.
   because `NOT NULL` alone accepts "". Its `display_name` is the title, so an
   image's owner list reads it like any other owner.
 - **A note delete takes no confirmation counts.** A recipe's delete echoes the
-  aliases, sources, lines and steps the dialog showed, because those are
+  sources, lines and steps the dialog showed, because those are
   content the user wrote. A note owns only label links and gallery rows:
   nothing the user would miss, and the pictures survive in the library. A
   count with nothing behind it would be a ritual, not a guard.
-- **The list is newest first**, unlike the two name-sorted libraries. A note
+- **The list is newest first**, unlike the name-sorted libraries. A note
   is saved in the moment and found again by when as often as by what; a title
   sort would bury the one just added among similarly-named compilations.
 - **Search reads the title and the body.** A note's body is where the

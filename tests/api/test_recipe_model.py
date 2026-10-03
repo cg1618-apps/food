@@ -1,4 +1,5 @@
-"""The constraints on the recipe family, and that they actually refuse.
+"""The constraints on the dish and recipe family, and that they actually
+refuse.
 
 The same discipline as `test_ingredient_model.py`: every refusal test makes the
 refused thing possible - a row to collide with, a reference to protect - and a
@@ -13,18 +14,21 @@ from sqlalchemy.exc import IntegrityError
 from app.models import (
     Author,
     CookingMethod,
+    Dish,
+    DishAlias,
+    DishImage,
     Equipment,
     Image,
     Ingredient,
     Label,
     Recipe,
-    RecipeAlias,
     RecipeCourse,
     RecipeImage,
     RecipeLine,
     RecipeSource,
     RecipeStatus,
     RecipeStep,
+    Region,
     SourcePlatform,
 )
 
@@ -47,8 +51,18 @@ def platform(db):
     return row
 
 
-def make(db, **kwargs):
+def make_dish(db, **kwargs):
     kwargs.setdefault("name_cn", "番茄炒蛋")
+    dish = Dish(**kwargs)
+    db.add(dish)
+    db.flush()
+    return dish
+
+
+def make(db, **kwargs):
+    """A recipe, of a new dish unless one is given."""
+    if "dish_id" not in kwargs:
+        kwargs["dish_id"] = make_dish(db).id
     if "status_id" not in kwargs:
         kwargs["status_id"] = db.query(RecipeStatus.id).order_by(RecipeStatus.id).first()[0]
     recipe = Recipe(**kwargs)
@@ -57,38 +71,186 @@ def make(db, **kwargs):
     return recipe
 
 
+# --- dish -----------------------------------------------------------------
+
+
+def test_a_dish_with_no_name_at_all_is_refused(db):
+    db.add(Dish(name_cn=None, name_en=None, name_alt=None))
+    with pytest.raises(IntegrityError) as excinfo:
+        db.flush()
+    assert "ck_dish_has_a_name" in str(excinfo.value)
+
+
+def test_a_dish_named_only_in_the_alt_slot_is_allowed(db):
+    make_dish(db, name_cn=None, name_alt="tomato egg")
+
+
+def test_two_dishes_may_share_a_name(db):
+    """Not unique, as recipe names were not: the migration can make two
+    dishes of one name from two unrelated recipes."""
+    make_dish(db, name_cn="咖哩")
+    make_dish(db, name_cn="咖哩")
+    assert db.query(Dish).filter_by(name_cn="咖哩").count() == 2
+
+
+def test_a_new_dish_defaults_to_the_dish_kind(db):
+    dish = make_dish(db)
+    db.refresh(dish)
+    assert dish.kind == "dish"
+
+
+def test_a_dish_may_not_carry_the_same_alias_twice(db):
+    dish = make_dish(db)
+    db.add(DishAlias(dish_id=dish.id, value="tomato egg"))
+    db.flush()
+    db.add(DishAlias(dish_id=dish.id, value="tomato egg"))
+    with pytest.raises(IntegrityError) as excinfo:
+        db.flush()
+    assert "uq_dish_alias" in str(excinfo.value)
+
+
+def test_two_dishes_may_share_an_alias(db):
+    one, two = make_dish(db, name_cn="番茄炒蛋"), make_dish(db, name_cn="番茄蛋花湯")
+    db.add(DishAlias(dish_id=one.id, value="tomato"))
+    db.add(DishAlias(dish_id=two.id, value="tomato"))
+    db.flush()
+
+
+def test_a_course_with_dishes_filed_in_it_cannot_be_deleted(db):
+    course = RecipeCourse(name_cn="主食")
+    db.add(course)
+    db.flush()
+    make_dish(db, course_id=course.id)
+    db.delete(course)
+    with pytest.raises(IntegrityError) as excinfo:
+        db.flush()
+    assert "dish_course_id_fkey" in str(excinfo.value)
+
+
+def test_a_course_that_a_dish_only_serves_as_can_be_deleted(db):
+    """The mirror, and the asymmetry: serves-as links CASCADE."""
+    course = RecipeCourse(name_cn="配菜")
+    db.add(course)
+    db.flush()
+    dish = make_dish(db)
+    dish.serves_as.append(course)
+    db.flush()
+    db.delete(course)
+    db.flush()
+    db.expire_all()
+    assert db.get(Dish, dish.id).serves_as == []
+
+
+def test_a_region_with_dishes_cannot_be_deleted_and_an_unused_one_can(db):
+    used, unused = Region(name_cn="日式"), Region(name_cn="泰式")
+    db.add_all([used, unused])
+    db.flush()
+    make_dish(db, region_id=used.id)
+    db.delete(unused)
+    db.flush()
+    db.delete(used)
+    with pytest.raises(IntegrityError) as excinfo:
+        db.flush()
+    assert "dish_region_id_fkey" in str(excinfo.value)
+
+
+def test_a_label_on_a_dish_can_be_deleted(db):
+    """Labels CASCADE on every owner."""
+    label = Label(name_cn="辣")
+    db.add(label)
+    db.flush()
+    dish = make_dish(db)
+    dish.labels.append(label)
+    db.flush()
+    db.delete(label)
+    db.flush()
+    db.expire_all()
+    assert db.get(Dish, dish.id).labels == []
+
+
+def test_a_dish_with_a_recipe_cannot_be_deleted(db):
+    """RESTRICT, and RESTRICT is what refuses: `Dish.recipes` carries
+    `passive_deletes="all"` so the ORM cannot null the recipe's dish_id
+    first."""
+    recipe = make(db)
+    db.delete(recipe.dish)
+    with pytest.raises(IntegrityError) as excinfo:
+        db.flush()
+    assert "recipe_dish_id_fkey" in str(excinfo.value)
+
+
+def test_a_dish_without_recipes_deletes_with_what_it_owns(db):
+    """The mirror: aliases, links and gallery rows go; the picture stays."""
+    label = Label(name_cn="蛋")
+    db.add(label)
+    db.flush()
+    dish = make_dish(db)
+    dish.labels.append(label)
+    image = _image(db)
+    db.add_all(
+        [
+            DishAlias(dish_id=dish.id, value="x"),
+            DishImage(dish_id=dish.id, image_id=image.id, position=0),
+        ]
+    )
+    db.flush()
+    dish_id = dish.id
+    db.expire_all()
+    db.delete(db.get(Dish, dish_id))
+    db.flush()
+    assert db.query(DishAlias).count() == 0
+    assert db.query(DishImage).count() == 0
+    assert db.get(Image, image.id) is not None
+    assert db.get(Label, label.id) is not None
+
+
+def test_deleting_a_recipe_keeps_its_dish(db):
+    recipe = make(db)
+    dish_id = recipe.dish_id
+    db.delete(recipe)
+    db.flush()
+    assert db.get(Dish, dish_id) is not None
+
+
+def test_an_image_may_appear_once_in_a_dish_gallery(db):
+    dish = make_dish(db)
+    image = _image(db)
+    db.add(DishImage(dish_id=dish.id, image_id=image.id, position=0))
+    db.flush()
+    db.add(DishImage(dish_id=dish.id, image_id=image.id, position=1))
+    with pytest.raises(IntegrityError) as excinfo:
+        db.flush()
+    assert "uq_dish_image_once" in str(excinfo.value)
+
+
 # --- recipe ---------------------------------------------------------------
 
 
-def test_a_recipe_with_no_name_at_all_is_refused(db, status):
-    db.add(Recipe(name_cn=None, name_en=None, name_alt=None, status_id=status.id))
+def test_a_recipe_with_no_dish_is_refused(db, status):
+    db.add(Recipe(status_id=status.id))
     with pytest.raises(IntegrityError) as excinfo:
         db.flush()
-    assert "ck_recipe_has_a_name" in str(excinfo.value)
+    assert "dish_id" in str(excinfo.value)
 
 
-def test_a_recipe_named_only_in_the_alt_slot_is_allowed(db):
-    make(db, name_cn=None, name_alt="tomato egg")
-
-
-def test_two_recipes_may_share_a_name(db):
-    """Versions share names, so recipe names are deliberately not unique -
-    unlike every other named table in this app."""
-    make(db, name_cn="咖哩")
-    make(db, name_cn="咖哩")
-    assert db.query(Recipe).filter_by(name_cn="咖哩").count() == 2
-
-
-def test_a_new_recipe_defaults_to_a_dish(db):
-    recipe = make(db)
-    db.refresh(recipe)
-    assert recipe.kind == "dish"
+def test_a_recipe_is_shown_by_its_own_name_else_its_dishs(db):
+    dish = make_dish(db, name_cn="照燒雞腿排")
+    plain = make(db, dish_id=dish.id)
+    named = make(db, dish_id=dish.id, name="阿基師版")
+    blank = make(db, dish_id=dish.id, name="  ")
+    assert (plain.display_name, named.display_name, blank.display_name) == (
+        "照燒雞腿排",
+        "阿基師版",
+        "照燒雞腿排",
+    )
+    db.expire_all()
+    assert [r.id for r in db.get(Dish, dish.id).recipes] == [plain.id, named.id, blank.id]
 
 
 def test_a_recipe_with_no_status_is_refused(db):
     """No server default: which status comes first is the owner's data, so the
     write path picks it (`recipes.create`) and the column only refuses."""
-    db.add(Recipe(name_cn="番茄炒蛋"))
+    db.add(Recipe(dish_id=make_dish(db).id))
     with pytest.raises(IntegrityError) as excinfo:
         db.flush()
     assert "status_id" in str(excinfo.value)
@@ -114,81 +276,7 @@ def test_a_platform_a_source_names_cannot_be_deleted(db, platform):
     assert "recipe_source_platform_id_fkey" in str(excinfo.value)
 
 
-def test_a_recipe_may_not_be_a_version_of_itself(db):
-    recipe = make(db)
-    recipe.variant_of_id = recipe.id
-    with pytest.raises(IntegrityError) as excinfo:
-        db.flush()
-    assert "ck_recipe_not_its_own_version" in str(excinfo.value)
-
-
-def test_a_recipe_may_be_a_version_of_another(db):
-    original = make(db, name_cn="咖哩")
-    version = make(db, name_cn="咖哩", variant_of_id=original.id)
-    assert version.variant_of is original
-    assert original.variants == [version]
-
-
-def test_deleting_the_original_leaves_its_versions_standing(db):
-    """SET NULL, not CASCADE and not RESTRICT: a version is a complete recipe
-    in its own right. Expired before the delete so the database, not the ORM,
-    is what clears the column."""
-    original = make(db, name_cn="咖哩")
-    version = make(db, name_cn="咖哩", variant_of_id=original.id)
-    version_id = version.id
-    db.expire_all()
-    db.delete(db.get(Recipe, original.id))
-    db.flush()
-    db.expire_all()
-    survivor = db.get(Recipe, version_id)
-    assert survivor is not None
-    assert survivor.variant_of_id is None
-
-
-def test_a_course_with_recipes_filed_in_it_cannot_be_deleted(db):
-    course = RecipeCourse(name_cn="主食")
-    db.add(course)
-    db.flush()
-    make(db, course_id=course.id)
-    db.delete(course)
-    with pytest.raises(IntegrityError) as excinfo:
-        db.flush()
-    assert "recipe_course_id_fkey" in str(excinfo.value)
-
-
-def test_a_course_that_a_recipe_only_serves_as_can_be_deleted(db):
-    """The mirror, and the asymmetry: serves-as links CASCADE."""
-    course = RecipeCourse(name_cn="配菜")
-    db.add(course)
-    db.flush()
-    recipe = make(db)
-    recipe.serves_as.append(course)
-    db.flush()
-    db.delete(course)
-    db.flush()
-    db.expire_all()
-    assert db.get(Recipe, recipe.id).serves_as == []
-
-
 # --- children -------------------------------------------------------------
-
-
-def test_a_recipe_may_not_carry_the_same_alias_twice(db):
-    recipe = make(db)
-    db.add(RecipeAlias(recipe_id=recipe.id, value="tomato egg"))
-    db.flush()
-    db.add(RecipeAlias(recipe_id=recipe.id, value="tomato egg"))
-    with pytest.raises(IntegrityError) as excinfo:
-        db.flush()
-    assert "uq_recipe_alias" in str(excinfo.value)
-
-
-def test_two_recipes_may_share_an_alias(db):
-    one = make(db, name_cn="番茄炒蛋")
-    two = make(db, name_cn="番茄蛋花湯")
-    db.add(RecipeAlias(recipe_id=one.id, value="tomato"))
-    db.add(RecipeAlias(recipe_id=two.id, value="tomato"))
-    db.flush()
 
 
 def test_a_source_with_nothing_but_a_platform_is_refused(db, platform):
@@ -232,13 +320,11 @@ def test_a_line_naming_nothing_is_refused(db):
     assert "ck_recipe_line_one_target" in str(excinfo.value)
 
 
-def test_a_line_naming_both_an_ingredient_and_a_recipe_is_refused(db, ingredient):
-    base = make(db, name_cn="番茄醬汁", kind="base")
+def test_a_line_naming_both_an_ingredient_and_a_dish_is_refused(db, ingredient):
+    sauce = make_dish(db, name_cn="番茄醬汁", kind="sauce")
     recipe = make(db)
     db.add(
-        RecipeLine(
-            recipe_id=recipe.id, position=0, ingredient_id=ingredient.id, sub_recipe_id=base.id
-        )
+        RecipeLine(recipe_id=recipe.id, position=0, ingredient_id=ingredient.id, sub_dish_id=sauce.id)
     )
     with pytest.raises(IntegrityError) as excinfo:
         db.flush()
@@ -246,24 +332,16 @@ def test_a_line_naming_both_an_ingredient_and_a_recipe_is_refused(db, ingredient
 
 
 def test_a_line_naming_exactly_one_thing_is_allowed(db, ingredient):
-    base = make(db, name_cn="番茄醬汁", kind="base")
+    sauce = make_dish(db, name_cn="番茄醬汁", kind="sauce")
     recipe = make(db)
     db.add(RecipeLine(recipe_id=recipe.id, position=0, ingredient_id=ingredient.id))
-    db.add(RecipeLine(recipe_id=recipe.id, position=1, sub_recipe_id=base.id))
+    db.add(RecipeLine(recipe_id=recipe.id, position=1, sub_dish_id=sauce.id))
     db.flush()
     db.refresh(recipe)
     assert [line.position for line in recipe.lines] == [0, 1]
     assert recipe.lines[0].ingredient is ingredient
-    assert recipe.lines[1].sub_recipe is base
+    assert recipe.lines[1].sub_dish is sauce
     assert recipe.lines[0].is_optional is False
-
-
-def test_a_line_may_not_name_its_own_recipe(db):
-    recipe = make(db)
-    db.add(RecipeLine(recipe_id=recipe.id, position=0, sub_recipe_id=recipe.id))
-    with pytest.raises(IntegrityError) as excinfo:
-        db.flush()
-    assert "ck_recipe_line_not_itself" in str(excinfo.value)
 
 
 def test_two_lines_may_not_share_a_position(db, ingredient):
@@ -340,22 +418,19 @@ def test_two_images_may_not_share_a_recipe_gallery_position(db):
 
 def test_deleting_a_recipe_takes_every_child_with_it(db, ingredient, platform):
     """CASCADE from the recipe down to everything it owns - and no further:
-    the ingredient, the vocabulary rows and the picture all survive."""
-    course = RecipeCourse(name_cn="主食")
+    the dish, the ingredient, the vocabulary rows and the picture all
+    survive."""
     method = CookingMethod(name_cn="炒")
     pan = Equipment(name_cn="平底鍋")
-    label = Label(name_cn="蛋")
-    db.add_all([course, method, pan, label])
+    db.add_all([method, pan])
     db.flush()
     recipe = make(db)
-    recipe.serves_as.append(course)
+    dish_id = recipe.dish_id
     recipe.methods.append(method)
     recipe.equipment.append(pan)
-    recipe.labels.append(label)
     image = _image(db)
     db.add_all(
         [
-            RecipeAlias(recipe_id=recipe.id, value="tomato egg"),
             RecipeSource(recipe_id=recipe.id, platform_id=platform.id, url="https://x.example"),
             RecipeLine(recipe_id=recipe.id, position=0, ingredient_id=ingredient.id),
             RecipeStep(recipe_id=recipe.id, position=0, body="炒"),
@@ -369,12 +444,13 @@ def test_deleting_a_recipe_takes_every_child_with_it(db, ingredient, platform):
     db.delete(db.get(Recipe, recipe_id))
     db.flush()
 
-    for child in (RecipeAlias, RecipeSource, RecipeLine, RecipeStep, RecipeImage):
+    for child in (RecipeSource, RecipeLine, RecipeStep, RecipeImage):
         assert db.query(child).count() == 0, child.__name__
-    from app.models import RecipeEquipment, RecipeLabel, RecipeMethod, RecipeServesAs
+    from app.models import RecipeEquipment, RecipeMethod
 
-    for link in (RecipeServesAs, RecipeLabel, RecipeMethod, RecipeEquipment):
+    for link in (RecipeMethod, RecipeEquipment):
         assert db.query(link).count() == 0, link.__name__
+    assert db.get(Dish, dish_id) is not None
     assert db.get(Ingredient, ingredient.id) is not None
     assert db.get(Image, image.id) is not None
     assert db.query(CookingMethod).count() == 1
@@ -402,27 +478,29 @@ def test_an_ingredient_no_line_names_can_be_deleted(db, ingredient):
     db.flush()
 
 
-def test_a_base_recipe_named_by_a_line_cannot_be_deleted(db):
-    base = make(db, name_cn="番茄醬汁", kind="base")
-    dish = make(db, name_cn="義大利麵")
-    db.add(RecipeLine(recipe_id=dish.id, position=0, sub_recipe_id=base.id))
+def test_a_dish_named_by_a_line_cannot_be_deleted(db):
+    """No recipe of the sauce exists, so the line is the only thing that can
+    refuse - and must."""
+    sauce = make_dish(db, name_cn="番茄醬汁", kind="sauce")
+    pasta = make(db, dish_id=make_dish(db, name_cn="義大利麵").id)
+    db.add(RecipeLine(recipe_id=pasta.id, position=0, sub_dish_id=sauce.id))
     db.flush()
-    db.delete(base)
+    db.delete(sauce)
     with pytest.raises(IntegrityError) as excinfo:
         db.flush()
-    assert "recipe_line_sub_recipe_id_fkey" in str(excinfo.value)
+    assert "recipe_line_sub_dish_id_fkey" in str(excinfo.value)
 
 
-def test_a_dish_using_a_base_recipe_can_be_deleted(db):
+def test_a_recipe_using_a_dish_can_be_deleted(db):
     """The mirror, and the direction that matters: the OUTER recipe's lines
-    cascade with it, and the base it named is untouched."""
-    base = make(db, name_cn="番茄醬汁", kind="base")
-    dish = make(db, name_cn="義大利麵")
-    db.add(RecipeLine(recipe_id=dish.id, position=0, sub_recipe_id=base.id))
+    cascade with it, and the dish it named is untouched."""
+    sauce = make_dish(db, name_cn="番茄醬汁", kind="sauce")
+    pasta = make(db, dish_id=make_dish(db, name_cn="義大利麵").id)
+    db.add(RecipeLine(recipe_id=pasta.id, position=0, sub_dish_id=sauce.id))
     db.flush()
-    db.delete(dish)
+    db.delete(pasta)
     db.flush()
-    assert db.get(Recipe, base.id) is not None
+    assert db.get(Dish, sauce.id) is not None
 
 
 def test_a_cooking_method_a_recipe_uses_cannot_be_deleted_through_the_database(db):
@@ -449,17 +527,3 @@ def test_equipment_a_recipe_uses_cannot_be_deleted_through_the_database(db):
     with pytest.raises(IntegrityError) as excinfo:
         db.flush()
     assert "recipe_equipment_equipment_id_fkey" in str(excinfo.value)
-
-
-def test_a_label_on_a_recipe_can_be_deleted(db):
-    """Labels CASCADE on both owners - module 1's behaviour, kept uniform."""
-    label = Label(name_cn="辣")
-    db.add(label)
-    db.flush()
-    recipe = make(db)
-    recipe.labels.append(label)
-    db.flush()
-    db.delete(label)
-    db.flush()
-    db.expire_all()
-    assert db.get(Recipe, recipe.id).labels == []

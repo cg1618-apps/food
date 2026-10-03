@@ -3,8 +3,8 @@
 
 One function per vocabulary, registered in USAGE. Each counts exactly the
 references that are RESTRICT in the schema, so the count is the number of
-things that would stop the delete: a course counts the recipes filed in it and
-not the recipes that merely serve as it, because those links CASCADE.
+things that would stop the delete: a course counts the dishes filed in it and
+not the dishes that merely serve as it, because those links CASCADE.
 """
 
 from collections import Counter
@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.models import (
     Author,
     CookingMethod,
+    Dish,
     Equipment,
     IngredientHeating,
     LineGroup,
@@ -27,6 +28,7 @@ from app.models import (
     RecipeSource,
     RecipeStatus,
     RecipeStepGroup,
+    Region,
     SourcePlatform,
     StepGroup,
 )
@@ -37,9 +39,13 @@ def _count(db: Session, column) -> Counter:
 
 
 def _course_usage(db: Session) -> dict[int, int]:
-    counts = _count(db, Recipe.course_id)
-    counts.pop(None, None)
-    return dict(counts)
+    """Dishes filed in the course."""
+    return _nonnull(db, Dish.course_id)
+
+
+def _region_usage(db: Session) -> dict[int, int]:
+    """Dishes from the region."""
+    return _nonnull(db, Dish.region_id)
 
 
 def _status_usage(db: Session) -> dict[int, int]:
@@ -86,6 +92,7 @@ def _equipment_usage(db: Session) -> dict[int, int]:
 
 USAGE: dict[type, Callable[[Session], dict[int, int]]] = {
     RecipeCourse: _course_usage,
+    Region: _region_usage,
     RecipeStatus: _status_usage,
     SourcePlatform: _platform_usage,
     CookingMethod: _cooking_method_usage,

@@ -14,8 +14,9 @@ words:
 
 - an **ingredient library** — what an ingredient is, how to pick a good one,
   how to preserve it;
-- **recipes**, and **general recipes** — a sauce or a base that is used inside
-  other dishes rather than eaten on its own;
+- **dishes** (料理) and **sauces** (醬料) — a dish in general, or a sauce or
+  base used inside other dishes rather than eaten on its own — and their
+  **recipes**, each one specific way of making the dish;
 - a library of **what can be cooked**, with notes;
 - the **cooking schedule**;
 - **what is in the kitchen right now**, with notes on each thing;
@@ -34,30 +35,34 @@ reference work.
 
 ## Status
 
-**Modules 1 and 2 are built, with kitchen notes and TBD.** The schema is at
-revision `t1bd` (the head).
+**Modules 1 and 2 are built, with dishes, kitchen notes and TBD.** The schema
+is at revision `d1ishes` (the head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
   parent, rating, labels, storage as a state x method grid with day ranges, a
   heating guide, links, galleries, the 待補 (`needs_detail`) stub backlog,
   and merge.
-- **Recipes** - lines naming an ingredient, a sub-recipe or a new stub made
-  by the save, and steps (each a 步驟, 可省略 or 備註), each in groups (a
-  設定 材料分組 / 步驟分組 value or
-  a one-off name, rows dragged within and between them), sources with an
-  author picked or made by the save, versions, a status, courses,
-  methods, equipment, labels, galleries, "used in" for ingredients and
-  base recipes, and 常用 chips above the lines that add one in a tap.
+- **Dishes** - a dish (料理) or a sauce (醬料) in general: names and aliases,
+  kind, course, region, labels, serves-as, a description and a gallery; its
+  recipes, and "used in" - the recipes whose lines name it. A dish with
+  recipes, or one a line names, cannot be deleted.
+- **Recipes** - each one way of making a dish, with an optional name of its
+  own and 其他版本 (the dish's other recipes); lines naming an ingredient, a
+  dish, or a new stub or dish made by the save, and steps (each a 步驟, 可省略
+  or 備註), each in groups (a 設定 材料分組 / 步驟分組 value or a one-off name,
+  rows dragged within and between them), sources with an author picked or
+  made by the save, a status, methods, equipment, galleries, "used in" for
+  ingredients, and 常用 chips above the lines that add one in a tap.
 - **Kitchen notes** - bookmarks with a title, a kind, a link, a body, labels
   and a gallery.
 - **TBD** - a standalone page of entries, each an optional name and any
   number of links, in the owner's order; read at `/tbd`, edited in place at
   `/edit/tbd`.
-- **The notebook UI** - 食譜 · 食材 · 筆記 · TBD · 設定: the three libraries
+- **The notebook UI** - 料理 · 食譜 · 食材 · 筆記 · TBD · 設定: the four libraries
   (search and filters in the URL, a sidebar or a phone drawer, covers or a
   table), their detail pages, their add and edit forms with the gallery
   picker, one delete dialog, ingredient merge, 設定 for every vocabulary
-  (categories, labels, courses, recipe statuses, source platforms, authors,
+  (categories, labels, courses, regions, recipe statuses, source platforms, authors,
   材料分組, 步驟分組, cooking methods, equipment) and for 常用食材 (the
   recipe form's chips, an ordered pick of ingredients), and 圖片, the image
   library.

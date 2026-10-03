@@ -1,8 +1,8 @@
 // Frontend: the sections of the app and which one a path belongs to.
 //
-// The navigation is 食譜 · 食材 · 筆記 · TBD · 設定. A section is active on its own
-// pages AND on the edit pages behind them - the recipe form is still "in"
-// 食譜 - which react-router's NavLink prefix match cannot say, because the
+// The navigation is 料理 · 食譜 · 食材 · 筆記 · TBD · 設定. A section is active on
+// its own pages AND on the edit pages behind them - the recipe form is still
+// "in" 食譜 - which react-router's NavLink prefix match cannot say, because the
 // edit pages live under /edit/... for the Access gate. So the match is written
 // out here, once, and tested.
 //
@@ -11,6 +11,8 @@
 // (components/layout/Layout.jsx), so nothing else counts them.
 
 export const SECTIONS = [
+  // First: a dish is what you look for, and its recipes hang off it.
+  { key: 'dishes', label: '料理', to: '/dishes', prefixes: ['/dishes', '/edit/dishes'] },
   { key: 'recipes', label: '食譜', to: '/recipes', prefixes: ['/recipes', '/edit/recipes'] },
   {
     key: 'ingredients',

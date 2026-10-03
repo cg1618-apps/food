@@ -13,10 +13,12 @@
 // TABS is the whole list: a new vocabulary is one entry there - an id for the
 // URL, the label, and what its panel renders.
 //
-// What a change here makes stale is named per vocabulary: a renamed course,
-// status, source platform, author or 材料分組 / 步驟分組 is shown on every recipe, a renamed method on
-// recipes and on ingredient heating rows, a renamed label on all three kinds
-// of owner. 常用食材 is not a vocabulary but an ordered pick of ingredients -
+// What a change here makes stale is named per vocabulary: a renamed course or
+// region is shown on every dish and on its recipes' pages, a renamed status,
+// source platform, author or 材料分組 / 步驟分組 on every recipe, a renamed
+// method on recipes and on ingredient heating rows, a renamed label on all
+// three kinds of owner - ingredients, dishes and notes - and on the recipes
+// that show their dish's. 常用食材 is not a vocabulary but an ordered pick of ingredients -
 // the recipe form's chips - and makes only its own list stale.
 import { endpoints } from '../../api/endpoints'
 import CategoryEditor from '../../components/settings/CategoryEditor'
@@ -26,11 +28,12 @@ import { LinkButton, Tabs } from '../../components/ui/primitives'
 import { useUrlTab } from '../../hooks/useUrlTab'
 import { inUseMessage } from '../../lib/vocabulary'
 
+const DISHES = endpoints.dishes.list()
 const RECIPES = endpoints.recipes.list()
 const INGREDIENTS = endpoints.ingredients.list()
 const NOTES = endpoints.notes.list()
 
-// The eight factory vocabularies: one shape, one count (`usage_count`, the
+// The nine factory vocabularies: one shape, one count (`usage_count`, the
 // RESTRICT references that would stop a delete). Authors are listed by name
 // like labels, so they have no order to move by. `key` is the tab id and,
 // unless `vocabulary` says otherwise, the api/endpoints.js group.
@@ -38,9 +41,16 @@ const FACTORY = [
   {
     key: 'courses',
     title: '類別',
-    hint: '食譜放在哪一類：主菜、湯、甜點…',
+    hint: '料理放在哪一類：主菜、湯、甜點…',
     addLabel: '新增類別',
-    invalidate: [endpoints.courses.list(), RECIPES],
+    invalidate: [endpoints.courses.list(), DISHES, RECIPES],
+  },
+  {
+    key: 'regions',
+    title: '地區',
+    hint: '料理是哪裡的菜：台式、中式、日式…。料理表單和篩選依這裡的順序列出。',
+    addLabel: '新增地區',
+    invalidate: [endpoints.regions.list(), DISHES, RECIPES],
   },
   {
     key: 'statuses',
@@ -103,13 +113,13 @@ function LabelEditor() {
     <VocabularyEditor
       title="標籤"
       endpoints={endpoints.labels}
-      invalidate={[endpoints.labels.list(), INGREDIENTS, RECIPES, NOTES]}
+      invalidate={[endpoints.labels.list(), INGREDIENTS, DISHES, RECIPES, NOTES]}
       ordered={false}
-      hint="跨分類的標記，食材、食譜和筆記都可以貼。依名稱排列。"
+      hint="跨分類的標記，食材、料理和筆記都可以貼。依名稱排列。"
       addLabel="新增標籤"
       meta={(row) =>
         row.usage_count
-          ? `食材 ${row.ingredient_count} · 食譜 ${row.recipe_count} · 筆記 ${row.note_count}`
+          ? `食材 ${row.ingredient_count} · 料理 ${row.dish_count} · 筆記 ${row.note_count}`
           : '沒有使用'
       }
       confirmText={(row) =>

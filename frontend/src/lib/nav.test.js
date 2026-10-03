@@ -4,6 +4,10 @@ import { activeSection, SECTIONS } from './nav'
 
 describe('activeSection', () => {
   it.each([
+    ['/dishes', 'dishes'],
+    ['/dishes/7', 'dishes'],
+    ['/edit/dishes/new', 'dishes'],
+    ['/edit/dishes/7', 'dishes'],
     ['/recipes', 'recipes'],
     ['/recipes/12', 'recipes'],
     ['/edit/recipes/new', 'recipes'],
@@ -26,7 +30,7 @@ describe('activeSection', () => {
     expect(activeSection('/')).toBeNull()
   })
 
-  it('has the five sections, in navigation order', () => {
-    expect(SECTIONS.map((s) => s.label)).toEqual(['食譜', '食材', '筆記', 'TBD', '設定'])
+  it('has the six sections, in navigation order, 料理 first', () => {
+    expect(SECTIONS.map((s) => s.label)).toEqual(['料理', '食譜', '食材', '筆記', 'TBD', '設定'])
   })
 })

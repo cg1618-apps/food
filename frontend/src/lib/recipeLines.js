@@ -1,13 +1,16 @@
 // Frontend: a recipe's ingredient lines, between the form and the API.
 //
-// A line on the wire names exactly one of `ingredient_id`, `sub_recipe_id` or
-// `new_ingredient` - there is no type field, and the server refuses one
-// (app/schemas/recipe.py, LineIn). In the form a line holds a `target`
+// A line on the wire names exactly one of `ingredient_id`, `sub_dish_id`,
+// `new_ingredient` or `new_dish` - there is no type field, and the server
+// refuses one (app/schemas/recipe.py, LineIn). A line names a DISH - usually
+// a 醬料 - never one recipe of it. In the form a line holds a `target`
 // instead, which is what the typeahead chose:
 //
 //   { type: 'ingredient', id, label, needsDetail }
-//   { type: 'recipe', id, label, kind }
-//   { type: 'new', label }        - 「新增」: a stub made by the save
+//   { type: 'dish', id, label, kind }
+//   { type: 'new', label }        - 「新增」: a stub ingredient made by the save
+//   { type: 'new-dish', label, kind } - 「新增料理」: a dish made by the save,
+//                                   a 醬料 unless told
 //
 // so the form can show the choice (with 待補 for a stub, saved or not) and
 // the payload is derived from it in one place. `pending` is what is typed in
@@ -15,6 +18,12 @@
 // sent, but a line holding it is not blank.
 
 import { blankToNull, keyed } from './rowList'
+
+// The dish kinds (app/constants.py DISH_KINDS). A dish typed into a line is a
+// sauce unless the form says otherwise; one typed as a recipe's own dish is
+// a 料理.
+export const DISH = 'dish'
+export const SAUCE = 'sauce'
 
 // Which group a line is in is where it sits in the form's grouped list
 // (lib/groupedRows.js), not a field of the line.
@@ -33,12 +42,12 @@ export function lineFromResponse(line) {
       label: line.ingredient.display_name,
       needsDetail: line.ingredient.needs_detail,
     }
-  } else if (line.sub_recipe) {
+  } else if (line.sub_dish) {
     target = {
-      type: 'recipe',
-      id: line.sub_recipe.id,
-      label: line.sub_recipe.display_name,
-      kind: line.sub_recipe.kind,
+      type: 'dish',
+      id: line.sub_dish.id,
+      label: line.sub_dish.display_name,
+      kind: line.sub_dish.kind,
     }
   }
   return keyed({
@@ -53,8 +62,9 @@ export function lineFromResponse(line) {
 /** A typeahead option -> a line target. */
 export function targetFromOption(option) {
   if (option.type === 'new') return { type: 'new', label: option.label }
-  if (option.type === 'recipe') {
-    return { type: 'recipe', id: option.id, label: option.label, kind: option.kind }
+  if (option.type === 'new-dish') return { type: 'new-dish', label: option.label, kind: SAUCE }
+  if (option.type === 'dish') {
+    return { type: 'dish', id: option.id, label: option.label, kind: option.kind }
   }
   return { type: 'ingredient', id: option.id, label: option.label, needsDetail: option.needsDetail }
 }
@@ -65,7 +75,7 @@ export function targetFromOption(option) {
 // a1uthors_authors.py) files existing creators by the same rule.
 const CJK = /[぀-ヿ㐀-鿿豈-﫿가-힯]/
 
-/** The `new_ingredient` or `new_author` body for a typed name. */
+/** The `new_ingredient`, `new_author` or `new_dish` names for a typed name. */
 export function newNames(text) {
   const name = String(text ?? '').trim()
   return CJK.test(name) ? { name_cn: name } : { name_en: name }
@@ -91,8 +101,8 @@ export function linesPayload(rows, start = 0) {
       const number = start + index + 1
       throw new Error(
         typed
-          ? `第 ${number} 行材料打了「${typed}」，但還沒選食材或食譜：從清單選一個，或選「新增」。`
-          : `第 ${number} 行材料還沒選食材或食譜。`,
+          ? `第 ${number} 行材料打了「${typed}」，但還沒選食材或料理：從清單選一個，或選「新增」。`
+          : `第 ${number} 行材料還沒選食材或料理。`,
       )
     }
     const base = {
@@ -100,9 +110,11 @@ export function linesPayload(rows, start = 0) {
       note: blankToNull(line.note),
       is_optional: Boolean(line.is_optional),
     }
-    if (line.target.type === 'ingredient') out.push({ ...base, ingredient_id: line.target.id })
-    else if (line.target.type === 'recipe') out.push({ ...base, sub_recipe_id: line.target.id })
-    else out.push({ ...base, new_ingredient: newNames(line.target.label) })
+    const { type, id, label, kind } = line.target
+    if (type === 'ingredient') out.push({ ...base, ingredient_id: id })
+    else if (type === 'dish') out.push({ ...base, sub_dish_id: id })
+    else if (type === 'new-dish') out.push({ ...base, new_dish: { ...newNames(label), kind: kind ?? SAUCE } })
+    else out.push({ ...base, new_ingredient: newNames(label) })
   })
   return out
 }

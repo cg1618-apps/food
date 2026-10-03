@@ -66,7 +66,7 @@ malformed body produces.
 
 **A missing row named by the URL is 404; an id inside the request body that
 names no row is 422**, everywhere — a parent, a label, a cooking method, a
-course, a version's original, a line's ingredient or sub-recipe, a gallery's
+course, a recipe's dish, a line's ingredient or dish, a gallery's
 `image_id`. The URL resolved; it is the payload that is wrong. The detail
 names the id.
 
@@ -123,15 +123,15 @@ null when there is none, and `used_in_count`.
 
 **"Used in" is distinct recipes with a line naming the ingredient or any
 ingredient below it**, at any depth of `parent_id`. A recipe naming both 生抽
-and 老抽 counts once on 醬油. Depth through sub-recipes is zero: a dish using a
-base that uses the ingredient is not counted. `used_in_count` on a summary,
+and 老抽 counts once on 醬油. Depth through sub-dishes is zero: a recipe using a
+sauce whose recipe uses the ingredient is not counted. `used_in_count` on a summary,
 `used_in` on the full row and the recipe list's `ingredient_id` filter all read
 one query, so they cannot disagree; the list computes every row's count in a
 fixed number of queries.
 
 **The full row** adds `aliases`, `preservation`, `heating`, `links`, `labels`,
-`images` and `used_in` (`{id, display_name, kind}` recipes, sorted by display
-name). Its `parent` and `children` are summaries, `used_in_count` included,
+`images` and `used_in` (recipes as `{id, display_name, dish}`, `dish` being
+`{id, display_name, kind}`, sorted by display name). Its `parent` and `children` are summaries, `used_in_count` included,
 plus `sourcing_notes` - the page lists varieties with where each is bought;
 a list row does not carry it. A preservation entry is `state` (`unused`, `opened`, `cooked`;
 default `unused`), `method`, `duration_min_days`, `duration_max_days` and
@@ -247,99 +247,190 @@ is 422, and a `focus` that is not `"X% Y%"` with each between 0 and
 100 is 422. Putting the same list twice in a row succeeds. The answer is the
 full ingredient.
 
+## Dishes
+
+A dish (料理) is a dish or a sauce in general - 照燒雞腿排, 照燒醬 - and its
+recipes are the specific ways of making it. One table holds both kinds:
+`kind` is `dish` (料理) or `sauce` (醬料).
+
+| Route | |
+| --- | --- |
+| `GET /api/dishes` | list, search and filter |
+| `GET /api/dishes/{id}` | the full dish, its recipes and what uses it |
+| `GET /api/dishes/{id}/cascade` | what a delete would remove, and what blocks it |
+| `POST /api/edit/dishes` | |
+| `PATCH /api/edit/dishes/{id}` | |
+| `DELETE /api/edit/dishes/{id}` | requires the alias count |
+| `PUT /api/edit/dishes/{id}/images` | replace the gallery, in order |
+
+**`GET /api/dishes`** is the library: a bare array of summaries sorted by
+display name. A summary is the name slots and `display_name`, `kind`,
+`course` and `region` (`{id, display_name}` or null), `labels`
+(`{id, display_name}` list), `recipe_count` and `cover`. **`cover` is the
+dish's own first picture, else the first cover among its recipes**, in recipe
+id order, else null - a dish shows something before it has pictures of its
+own.
+
+Query parameters: `q` - any name slot or any alias, case-insensitively, as a
+substring, with `%`, `_` and `\` matched literally; `kind`, `course_id`,
+`region_id`, `label_id` - each may repeat, meaning **any of** its values,
+and different parameters narrow each other.
+
+**The full dish** is the name slots and `display_name`, `kind`, `course`,
+`region`, `description`, `aliases` (sorted strings), `serves_as` and `labels`
+(`{id, display_name}` lists), `images` (as an ingredient's), `created_at`,
+`updated_at`, and:
+
+- `recipes` - the dish's recipes, as the recipe library lists them (the
+  recipe summary below), by display name;
+- `used_in` - recipes with a line naming this dish **directly**, as
+  `{id, display_name, dish}`. What a sauce is used in.
+
+**`POST` takes `name_cn`, `name_en`, `name_alt`, `kind` (default `dish`),
+`course_id`, `region_id`, `description`, `aliases`, `serves_as_ids` and
+`label_ids`; `PATCH` takes any subset**, each list sent replacing the stored
+one and each absent left alone. Names are not unique - two dishes may share
+one. Refused with 422: no name left on the merged row, a `kind` outside its
+list (null included), the same alias twice, and an id that names nothing
+(`course_id`, `region_id`, either id list), the detail naming it. Unknown
+fields are refused.
+
+**`GET .../cascade` answers `{aliases, recipes, used_in}`.** `aliases` is what
+the delete removes and is echoed back; `recipes` (the dish's own) and
+`used_in` (recipes whose lines name it) block the delete.
+
+**`DELETE` takes `aliases` as a required query parameter.** A dish with
+recipes, or one a recipe's line names, is refused with 409 first, before the
+database is asked:
+
+```json
+{"detail": "This dish still has recipes, or recipes use it, so it cannot be removed.",
+ "recipes": [{"id": 5, "display_name": "阿基師版"}],
+ "used_in": [{"id": 8, "display_name": "照燒雞腿飯"}]}
+```
+
+A moved alias count is the 409 with `field`, `expected` and `actual`. Serves-as
+and label links and gallery rows go with the dish uncounted; the pictures
+stay.
+
+**`PUT /api/edit/dishes/{id}/images`** replaces the gallery exactly as an
+ingredient's does, and answers the full dish.
+
 ## Recipes
 
 | Route | |
 | --- | --- |
 | `GET /api/recipes` | list, search and filter |
 | `GET /api/recipes/{id}` | the full recipe |
-| `GET /api/recipes/{id}/cascade` | what a delete would remove, and what blocks it |
+| `GET /api/recipes/{id}/cascade` | what a delete would remove |
 | `POST /api/edit/recipes` | |
 | `PATCH /api/edit/recipes/{id}` | also the in-place status change |
 | `DELETE /api/edit/recipes/{id}` | requires the confirmation counts |
 | `PUT /api/edit/recipes/{id}/images` | replace the gallery, in order |
 
-**`GET /api/recipes`** is the library: a bare array of summaries sorted by
-display name. A summary is the name slots and `display_name`, `kind`,
-`status` (`{id, display_name}`), `course` (`{id, display_name}` or null), `methods`
-(`{id, display_name}` list), `authors` (`{id, display_name}`, the distinct
-authors of its sources, in source order, skipping sources with none), `time`,
-`written_up` and `cover`
-(the first gallery image's `thumb_url` and `focus`, or null).
+A recipe is one way of making a dish. **Its display name is its own `name`
+when it has one, else its dish's display name.** What is true of the dish
+whoever cooks it - names, kind, course, region, labels, serves-as, the
+description - is the dish's, read through the dish and written on it.
+
+How other rows point at these on the wire:
+
+- `DishRef` - `{id, display_name, kind}`;
+- `RecipeRef` - `{id, display_name, dish}`, `dish` a `DishRef`. An
+  ingredient's and a dish's `used_in` and a recipe's `other_recipes` are
+  lists of these.
+
+**`GET /api/recipes`** is the library: every recipe of every dish, a bare
+array of summaries sorted by display name. A summary is `id`, `display_name`,
+`name` (its own, or null), `dish` (a `DishRef`), `status`
+(`{id, display_name}`), `course` (the dish's, `{id, display_name}` or null),
+`methods` (`{id, display_name}` list), `authors` (`{id, display_name}`, the
+distinct authors of its sources, in source order, skipping sources with
+none), `time`, `written_up` and `cover` (the recipe's own first gallery
+image's `thumb_url` and `focus`, or null).
 
 Query parameters:
 
-- `q` — any name slot or any alias, case-insensitively, as a substring, with
-  `%`, `_` and `\` matched literally as on the ingredient list. The alias arm is a subquery, so a recipe matching two of its aliases comes back
+- `q` - the recipe's own `name`, or any of its dish's name slots or aliases,
+  case-insensitively, as a substring, with `%`, `_` and `\` matched
+  literally. Each arm is a subquery, so a recipe matching twice comes back
   once;
-- `course_id`, `status_id`, `kind`, `label_id`, `method_id`, `equipment_id`,
-  `author_id`, `ingredient_id` — each may repeat, and a repeated parameter means
-  **any of** its values (`?status_id=2&status_id=3`). Different
-  parameters narrow each other. `course_id` is the course a recipe is filed
-  under, not one it serves as; `author_id` matches recipes with a source by
-  that author;
+- `dish_id`, `kind`, `course_id`, `region_id`, `label_id`, `status_id`,
+  `method_id`, `equipment_id`, `author_id`, `ingredient_id` - each may repeat,
+  and a repeated parameter means **any of** its values
+  (`?status_id=2&status_id=3`). Different parameters narrow each other.
+  `kind`, `course_id`, `region_id` and `label_id` are the dish's and filter
+  through it; `course_id` is the course a dish is filed under, not one it
+  serves as; `author_id` matches recipes with a source by that author;
   `ingredient_id` matches recipes using that ingredient as "used in" defines
-  it — a line naming it or anything below it, depth zero through sub-recipes;
-- `written_up` — `true` for recipes with at least one line or step, `false`
+  it - a line naming it or anything below it, depth zero through sub-dishes;
+- `written_up` - `true` for recipes with at least one line or step, `false`
   for the rest.
 
-**`PUT /api/edit/recipes/{id}/images`** replaces the gallery exactly as an
-ingredient's does, and answers the full recipe.
+**`PUT /api/edit/recipes/{id}/images`** replaces the recipe's own gallery
+exactly as an ingredient's does, and answers the full recipe.
 
-**The full recipe** is the name slots and `display_name`, `kind` (`dish` or
-`base`), `status` (`{id, display_name}`), `course`
-(`{id, display_name}` or null), `servings`, `time`, `description`,
-`storage_notes`, `notes`, and:
+**The full recipe** is `id`, `display_name`, `name`, `status`, `servings`,
+`time`, `storage_notes`, `notes`, `created_at`, `updated_at`, and:
 
-- `aliases` — sorted strings;
-- `sources` — `{id, platform, author, url, title, sort_order}`, `platform`
+- `dish` - a `DishBrief`: the `DishRef` fields plus `course`, `region`,
+  `labels` and `serves_as`, so the page can show what the dish says without
+  a second read;
+- `sources` - `{id, platform, author, url, title, sort_order}`, `platform`
   being `{id, display_name}` and `author` `{id, display_name}` or null;
-- `lines` — the lines in no group, `{id, position, ingredient, sub_recipe,
+- `lines` - the lines in no group, `{id, position, ingredient, sub_dish,
   amount, note, is_optional}`, where exactly one of `ingredient`
-  (`{id, display_name, needs_detail}`) and `sub_recipe`
-  (`{id, display_name, kind}`) is set;
-- `line_groups` — the recipe's 材料分組, in order, each `{id, position, group,
+  (`{id, display_name, needs_detail}`) and `sub_dish` (a `DishRef`) is set;
+- `line_groups` - the recipe's 材料分組, in order, each `{id, position, group,
   name, display_name, lines}`: `group` is the 設定 value (`{id,
-  display_name}`) or null, `name` the one-off name or null — exactly one is
-  set — `display_name` is whichever it is, and `lines` the group's lines, as
+  display_name}`) or null, `name` the one-off name or null - exactly one is
+  set - `display_name` is whichever it is, and `lines` the group's lines, as
   above. An empty group is listed with `lines: []`;
-- `steps` — the steps in no group, `{id, position, kind, body}`: `kind` is
+- `steps` - the steps in no group, `{id, position, kind, body}`: `kind` is
   `step` (an ordinary step), `optional` (one that may be skipped) or `note`
   (a note among the steps);
-- `step_groups` — the 步驟分組, `{id, position, group, name, display_name,
+- `step_groups` - the 步驟分組, `{id, position, group, name, display_name,
   steps}`, as `line_groups`;
-- `serves_as`, `labels`, `methods`, `equipment` — `{id, display_name}` lists;
-- `images` — as an ingredient's;
-- `variant_of` — the original this is a version of, `{id, display_name,
-  kind}` or null;
-- `versions` — the other recipes in its version family: an original's
-  versions, or a version's siblings (its original is `variant_of`);
-- `used_in` — recipes with a line naming this one **directly**. A dish using a
-  base that uses this base is not listed;
-- `written_up` — true when it has at least one line or step, grouped or not.
+- `methods`, `equipment` - `{id, display_name}` lists;
+- `images` - as an ingredient's;
+- `other_recipes` - 其他版本: the dish's other recipes, as `RecipeRef`s, by
+  display name;
+- `written_up` - true when it has at least one line or step, grouped or not.
   Derived, never sent.
 
 A line's or step's `position` runs through the whole recipe in the order the
-page shows it — the ungrouped rows, then group by group. A group's `position`
+page shows it - the ungrouped rows, then group by group. A group's `position`
 is its place among the groups. A step's number is not stored: the page counts
 only `step`-kind steps, through every group, so an optional step or a note
 takes a place in the order and no number.
 
-**`POST` takes the whole recipe; `PATCH` takes any subset.** A recipe is
-filed under a course by `course_id` and a status by `status_id`. Defaults on
-create are `kind: dish` and, when `status_id` is left out, the first status in
+**`POST` takes the whole recipe; `PATCH` takes any subset.** The fields are
+`dish_id` or `new_dish`, `name`, `status_id`, `servings`, `time`,
+`storage_notes`, `notes`, and the lists `sources`, `lines`, `line_groups`,
+`steps`, `step_groups`, `method_ids` and `equipment_ids`. The fields that live
+on the dish - name slots, `kind`, `course_id`, `serves_as_ids`, `label_ids`,
+`aliases`, `description` - and the removed `variant_of_id` are unknown fields
+here, and a request naming one is a 422.
+
+**A recipe belongs to exactly one dish.** `POST` sends `dish_id` or
+`new_dish` (`{name_cn, name_en, kind}`, at least one name, `kind` `dish` or
+`sauce`, default `dish`), never both and never neither. `new_dish` reuses a
+dish whose name slot or alias equals a typed name, ignoring case - kind and
+all - and otherwise creates one. On `PATCH`, `dish_id` or `new_dish` moves the
+recipe to that dish and neither leaves it where it is; an explicit null
+`dish_id` is a 422.
+
+When `status_id` is left out on create, the recipe gets the first status in
 sort order (the oldest among equals); with no status at all to give, the create
-is a 422 saying so. The lists are `aliases`, `sources`,
-`lines`, `line_groups`, `steps`, `step_groups`, `serves_as_ids`, `label_ids`,
-`method_ids` and `equipment_ids`: on `PATCH` each one sent replaces the stored
-list and each one absent is left alone. Sources, lines, steps and groups take
-their order from the list — a request naming `sort_order` or `position` is a
-422 — and re-sending the same lines, steps and groups succeeds.
+is a 422 saying so. On `PATCH` each list sent replaces the stored list and each
+one absent is left alone. Sources, lines, steps and groups take their order
+from the list - a request naming `sort_order` or `position` is a 422 - and
+re-sending the same lines, steps and groups succeeds.
 
 **Lines and steps are each a pair, replaced together.** `lines` is the
 ungrouped lines and `line_groups` the groups with theirs; `steps` and
-`step_groups` likewise. A `PATCH` sends both halves of a pair or neither —
-one without the other, or either as null, is a 422 — because replacing one
+`step_groups` likewise. A `PATCH` sends both halves of a pair or neither -
+one without the other, or either as null, is a 422 - because replacing one
 half alone would have to guess what becomes of the rows in the other. A `PATCH` carrying only `status_id` is the status
 change; nothing else is needed for it.
 
@@ -352,59 +443,65 @@ ignoring case, is reused, and otherwise one is created (with `sort_order` 0,
 as every author). Names resolved earlier in the same save count, so one new
 name on two sources is one author. A step is `{body, kind}` with a non-blank
 `body`; `kind` is one of `step`, `optional` or `note` and defaults to `step`
-when left out — any other value, null included, is a 422.
+when left out - any other value, null included, is a 422.
 
 A group is `{line_group_id, name, lines}` (or `{step_group_id, name, steps}`):
 exactly one of the 設定 value's id and a one-off `name`, and its rows, which
-may be none — an empty group is kept. A `name` equal to a value's `name_cn`
+may be none - an empty group is kept. A `name` equal to a value's `name_cn`
 or `name_en`, trimmed and ignoring case, is stored as that value. A recipe may
 not hold the same group twice: the same value, a value and its name, or one
 one-off name in two cases.
 
-**A line names exactly one of `ingredient_id`, `sub_recipe_id` or
-`new_ingredient`** (`{name_cn, name_en}`, at least one), plus `amount`,
-`note` and `is_optional`, wherever it sits — ungrouped or in a group. There is no type field, and a payload
-sending one is a 422: the stored kind of line is whichever column is set.
+**A line names exactly one of `ingredient_id`, `sub_dish_id`,
+`new_ingredient` or `new_dish`**, plus `amount`, `note` and `is_optional`,
+wherever it sits - ungrouped or in a group. There is no type field, and a
+payload sending one is a 422: the stored kind of line is whichever column is
+set. A line names a **dish**, never one recipe of it.
 
-`new_ingredient` reuses an ingredient whose name slot or alias equals a typed
-name, ignoring case; otherwise it creates a stub in the fallback category with
-`needs_detail` set. Names resolved earlier in the same save count, so one new
-name typed into two lines is one stub. A near match is not reused — the
-typeahead (`GET /api/ingredients?q=`) is where a near match is offered.
+`new_ingredient` (`{name_cn, name_en}`, at least one) reuses an ingredient
+whose name slot or alias equals a typed name, ignoring case; otherwise it
+creates a stub in the fallback category with `needs_detail` set. `new_dish`
+(`{name_cn, name_en, kind}`) reuses a dish the same way and otherwise creates
+one - **a `sauce` unless `kind` says otherwise**, where the recipe's own
+`new_dish` defaults to `dish`. Names resolved earlier in the same save count,
+the recipe's own dish first, so one new name typed into two lines is one row.
+A near match is not reused - the typeahead (`GET /api/ingredients?q=`,
+`GET /api/dishes?q=`) is where a near match is offered.
 
-Refused with 422, and a refused save writes nothing — not even a stub an
-earlier line asked for:
+Refused with 422, and a refused save writes nothing - not a new dish, not an
+author, not a stub an earlier line asked for:
 
-- a `kind` outside its list, and an explicit null for `kind`, `status_id` or a
-  source's `platform_id`;
+- an explicit null for `status_id`, `dish_id` or a source's `platform_id`; a
+  `new_dish` kind outside its list;
 - a source sending both `author_id` and `new_author`;
 - a group naming both a value and a name, or neither; the same group twice in
   one recipe; on `PATCH`, one half of a lines or steps pair without the other;
 - creating a recipe without `status_id` when there is no status at all;
-- no name left on the merged row;
-- **an id inside the body that names nothing** — `course_id`, `status_id`,
-  `variant_of_id`, a source's `platform_id` or `author_id`, any of the four id lists, a group's `line_group_id` or `step_group_id`, `ingredient_id` or `sub_recipe_id` in a line. The
-  detail names the id. The URL's own recipe missing is 404;
-- a line whose recipe is reachable from its `sub_recipe_id` through sub-recipe
-  lines, at any depth — itself included;
-- **the version rule**: `variant_of_id` naming the recipe itself, naming a
-  recipe that is itself a version, or set on a recipe that has versions of its
-  own. Versions are one level deep.
+- **an id inside the body that names nothing** - `dish_id`, `status_id`, a
+  source's `platform_id` or `author_id`, either id list, a group's
+  `line_group_id` or `step_group_id`, `ingredient_id` or `sub_dish_id` in a
+  line. The detail names the id. The URL's own recipe missing is 404;
+- **a line naming the recipe's own dish** - by `sub_dish_id`, or by a
+  `new_dish` that resolves to it (an existing dish of that name, or the same
+  new name as the recipe's own `new_dish`);
+- **a loop through dishes**: dish A uses dish B when a recipe of A has a line
+  naming B, and a line may not name a dish from which the recipe's own dish is
+  reachable, at any depth and through any recipe of each dish. The recipe's
+  own stored lines are left out of the walk - they are being replaced;
+- **moving a recipe to a dish its lines name**, or to one that would close a
+  loop through the lines it keeps.
 
-**`GET .../cascade` answers `{aliases, sources, lines, steps, used_in}`.** The
-first four are what the delete removes and are echoed back — `lines` and
-`steps` count every row, grouped or not; the groups themselves go too and are
-not counted; `used_in` is a
-count of the recipes naming this one, and blocks the delete rather than being
-removed by it.
+**`GET .../cascade` answers `{sources, lines, steps}`**, what the delete
+removes; `lines` and `steps` count every row, grouped or not, and the groups
+themselves go too uncounted.
 
-**`DELETE` takes `aliases`, `sources`, `lines` and `steps` as required query
+**`DELETE` takes `sources`, `lines` and `steps` as required query
 parameters**, and a moved count is the 409 with `field`, `expected` and
-`actual` that an ingredient's is. A recipe another recipe's line names is
-refused with 409 first, before the database is asked, with
-`used_in: [{id, display_name}]` on the body. Its versions survive with
-`variant_of` null. Label, method, equipment and serves-as links and gallery
-rows go with it uncounted; the images themselves stay.
+`actual` that an ingredient's is. **Nothing refuses deleting a recipe**: a
+line names a dish, never a recipe, so no line depends on it. **The dish
+stays**, even when this was its last recipe - deleting a dish is its own
+decision. Method and equipment links and gallery rows go with the recipe
+uncounted; the images themselves stay.
 
 ## Kitchen notes
 
@@ -418,7 +515,7 @@ rows go with it uncounted; the images themselves stay.
 | `PUT /api/edit/kitchen-notes/{id}/images` | replace the gallery, in order |
 
 **`GET /api/kitchen-notes`** is a bare array of summaries, **newest first** —
-unlike the ingredient and recipe libraries, which sort by name: a note is
+unlike the ingredient, dish and recipe libraries, which sort by name: a note is
 found by when it was saved as often as by what it is called. A summary is
 `id`, `title`, `kind`, `url`, `labels` (`{id, display_name}` list) and `cover`.
 
@@ -454,11 +551,12 @@ answers the full note.
 
 ## Vocabularies
 
-Eight managed vocabularies share one shape, so one description covers them:
+Nine managed vocabularies share one shape, so one description covers them:
 
 | Route | |
 | --- | --- |
-| `GET /api/recipe-courses` | |
+| `GET /api/recipe-courses` | 類別, filing a dish |
+| `GET /api/regions` | 地區, where a dish comes from |
 | `GET /api/recipe-statuses` | |
 | `GET /api/source-platforms` | |
 | `GET /api/cooking-methods` | |
@@ -478,9 +576,9 @@ none, so their list is in name order.
 
 **Deleting a value that is in use is a 409 carrying `usage_count`**, answered
 before the database is asked; the `RESTRICT` foreign key is the backstop. The
-count is the number of `RESTRICT` references: for a course, the recipes filed
-in it (a recipe that only serves as that course does not count, and its link
-goes with the course); for a status, the recipes in it; for a source platform,
+count is the number of `RESTRICT` references: for a course, the dishes filed
+in it (a dish that only serves as that course does not count, and its link
+goes with the course); for a region, the dishes from it; for a status, the recipes in it; for a source platform,
 the sources naming it, so one recipe with two sources from one book counts
 twice; for an author, likewise the sources naming them; for a cooking method,
 ingredient heating rows plus recipes using it; for equipment, recipes using
@@ -490,7 +588,7 @@ counts for no value. Renaming a value renames every recipe group using it.
 
 **`GET /api/vocabularies/fixed`** serves every closed list the interface
 renders, as `{value, label}` pairs under `preservation_methods`,
-`preservation_states`, `ratings`, `recipe_kinds`, `kitchen_note_kinds` and
+`preservation_states`, `ratings`, `dish_kinds` (料理, 醬料), `kitchen_note_kinds` and
 `step_kinds` (步驟, 可省略, 備註),
 so no component keeps its own copy. These lists are constants in the code and
 are not editable through the API; recipe statuses and source platforms are not
@@ -509,7 +607,8 @@ among them — they are managed vocabularies, above.
 An image is `id`, `url`, `thumb_url`, `width`, `height`, `byte_size`,
 `original_filename`, `uploaded_at` and `attachment_count`; the single-image read
 adds `owners`, a list of `{type, id, display_name}` where `type` is
-`ingredient`, `recipe` or `kitchen_note` (whose `display_name` is its title).
+`ingredient`, `dish`, `recipe` or `kitchen_note` (whose `display_name` is its
+title).
 
 **`GET /api/images` takes `unused`, `limit` (default 60, at most 200) and
 `offset`.** `unused=true` returns only images nothing attaches, `false` only
@@ -656,13 +755,15 @@ so nothing cascades and the answer is a refusal rather than a number.
 | `DELETE /api/edit/labels/{id}` | |
 
 **A label counts every owner that carries it**: `ingredient_count`,
-`recipe_count` and `note_count` (kitchen notes), and `usage_count`, their sum —
+`dish_count` and `note_count` (kitchen notes), and `usage_count`, their sum —
 the name the other vocabularies use for the same question. A library's label
-filter shows its own owner's count; the settings page shows the total.
+filter shows its owner's count - the dish and recipe libraries both show
+`dish_count`, since a recipe's labels are its dish's; the settings page shows
+the total.
 
 Labels have no `sort_order`: they are listed by name, case-insensitively.
 
-**Deleting a label detaches it from every ingredient, recipe and note carrying
+**Deleting a label detaches it from every ingredient, dish and note carrying
 it**, and that is intended — removing a tag from the vocabulary means removing
 it from the things tagged. No confirmation count: no owner is touched, and
 re-tagging is typing the label again.

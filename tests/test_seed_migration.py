@@ -567,3 +567,163 @@ def test_the_step_kind_migration_makes_existing_steps_ordinary_and_drops_on_down
         bodies = conn.execute(text("SELECT body FROM recipe_step")).scalars().all()
     assert "kind" not in columns
     assert bodies == ["煮"]
+
+
+def _insert_recipe(conn, status: int, **columns) -> int:
+    names = ", ".join(["status_id", *columns])
+    values = ", ".join([":status_id", *(f":{c}" for c in columns)])
+    return conn.execute(
+        text(f"INSERT INTO recipe ({names}) VALUES ({values}) RETURNING id"),
+        {"status_id": status, **columns},
+    ).scalar()
+
+
+def test_the_dish_migration_groups_versions_into_dishes_and_back(scratch):
+    """Recipes already linked as versions are the fixture: on empty tables the
+    grouping touches nothing, and a migration that dropped the recipe columns
+    unread would pass.
+
+    A three-recipe version family (one original, two versions - one with its
+    own name and description, one sharing the original's name), a base
+    recipe a line names, and a lone recipe are what make each part of the
+    rule bite: one dish per family, the original's names, the labels' union,
+    base -> sauce, a version's own name kept and an identical one dropped, a
+    differing description appended to the notes, and the line repointed."""
+    _alembic("upgrade", "t1bd")
+    with scratch.begin() as conn:
+        status = conn.execute(text("SELECT id FROM recipe_status ORDER BY sort_order")).scalar()
+        course = conn.execute(text("SELECT id FROM recipe_course WHERE name_cn = '主食'")).scalar()
+        side = conn.execute(text("SELECT id FROM recipe_course WHERE name_cn = '配菜'")).scalar()
+        rice, noodle, meat = (
+            conn.execute(text("SELECT id FROM label WHERE name_cn = :n"), {"n": n}).scalar()
+            for n in ("飯", "麵", "肉")
+        )
+        original = _insert_recipe(
+            conn, status, name_cn="照燒雞腿排", name_en="teriyaki chicken",
+            course_id=course, description="甜鹹", notes="原本的筆記",
+        )
+        named = _insert_recipe(
+            conn, status, name_cn="照燒雞腿排 (詹姆士)", variant_of_id=original,
+            description="快速版", notes="版本筆記",
+        )
+        same = _insert_recipe(
+            conn, status, name_cn="照燒雞腿排", variant_of_id=original, description="甜鹹",
+        )
+        sauce = _insert_recipe(conn, status, name_cn="照燒醬", kind="base")
+        lone = _insert_recipe(conn, status, name_en="rice")
+        conn.execute(
+            text("INSERT INTO recipe_alias (recipe_id, value) VALUES (:r, 'teriyaki')"),
+            {"r": original},
+        )
+        conn.execute(
+            text("INSERT INTO recipe_serves_as (recipe_id, course_id) VALUES (:r, :c)"),
+            {"r": original, "c": side},
+        )
+        for recipe, label in ((original, rice), (named, noodle), (same, rice), (same, meat)):
+            conn.execute(
+                text("INSERT INTO recipe_label (recipe_id, label_id) VALUES (:r, :l)"),
+                {"r": recipe, "l": label},
+            )
+        conn.execute(
+            text("INSERT INTO recipe_line (recipe_id, position, sub_recipe_id) VALUES (:r, 0, :s)"),
+            {"r": named, "s": sauce},
+        )
+
+    _alembic("upgrade", "d1ishes")
+    with scratch.begin() as conn:
+        dishes = conn.execute(
+            text(
+                "SELECT id, name_cn, name_en, kind, course_id, description FROM dish ORDER BY id"
+            )
+        ).all()
+        by_name = {row.name_cn or row.name_en: row for row in dishes}
+        recipes = {
+            row.id: row
+            for row in conn.execute(text("SELECT id, dish_id, name, notes FROM recipe")).all()
+        }
+        teriyaki = by_name["照燒雞腿排"]
+        labels = set(
+            conn.execute(
+                text("SELECT label_id FROM dish_label WHERE dish_id = :d"), {"d": teriyaki.id}
+            ).scalars()
+        )
+        aliases = conn.execute(
+            text("SELECT value FROM dish_alias WHERE dish_id = :d"), {"d": teriyaki.id}
+        ).scalars().all()
+        serves = conn.execute(
+            text("SELECT course_id FROM dish_serves_as WHERE dish_id = :d"), {"d": teriyaki.id}
+        ).scalars().all()
+        line_target = conn.execute(text("SELECT sub_dish_id FROM recipe_line")).scalar()
+        regions = conn.execute(text("SELECT name_cn FROM region ORDER BY sort_order")).scalars().all()
+        columns = set(
+            conn.execute(
+                text(
+                    "SELECT table_name || '.' || column_name FROM information_schema.columns "
+                    "WHERE table_name IN ('recipe', 'recipe_line')"
+                )
+            ).scalars()
+        )
+
+    assert len(dishes) == 3
+    assert (teriyaki.name_en, teriyaki.kind, teriyaki.course_id, teriyaki.description) == (
+        "teriyaki chicken", "dish", course, "甜鹹",
+    )
+    assert by_name["照燒醬"].kind == "sauce"
+    assert by_name["rice"].kind == "dish"
+    assert {recipes[r].dish_id for r in (original, named, same)} == {teriyaki.id}
+    assert recipes[lone].dish_id == by_name["rice"].id
+    assert labels == {rice, noodle, meat}
+    assert aliases == ["teriyaki"] and serves == [side]
+    # The original names nothing of its own; the version with another name
+    # keeps it; the version sharing the dish's name does not repeat it.
+    assert recipes[original].name is None and recipes[original].notes == "原本的筆記"
+    assert recipes[named].name == "照燒雞腿排 (詹姆士)"
+    assert recipes[named].notes == "版本筆記\n\n原簡介：快速版"
+    assert recipes[same].name is None and recipes[same].notes is None
+    assert line_target == by_name["照燒醬"].id
+    assert regions == ["台式", "中式", "日式", "韓式", "泰式", "西式"]
+    for gone in ("recipe.name_cn", "recipe.kind", "recipe.course_id", "recipe.variant_of_id",
+                 "recipe.description", "recipe_line.sub_recipe_id"):
+        assert gone not in columns, gone
+
+    _alembic("downgrade", "t1bd")
+    with scratch.connect() as conn:
+        restored = {
+            row.id: row
+            for row in conn.execute(
+                text(
+                    "SELECT id, name_cn, name_en, kind, course_id, variant_of_id, description "
+                    "FROM recipe"
+                )
+            ).all()
+        }
+        restored_labels = set(
+            conn.execute(
+                text("SELECT label_id FROM recipe_label WHERE recipe_id = :r"), {"r": named}
+            ).scalars()
+        )
+        restored_aliases = conn.execute(
+            text("SELECT recipe_id FROM recipe_alias ORDER BY recipe_id")
+        ).scalars().all()
+        sub = conn.execute(text("SELECT sub_recipe_id FROM recipe_line")).scalar()
+        tables = conn.execute(
+            text(
+                "SELECT count(*) FROM information_schema.tables WHERE table_name IN "
+                "('dish', 'dish_alias', 'dish_label', 'dish_serves_as', 'dish_image', 'region')"
+            )
+        ).scalar()
+
+    assert tables == 0
+    assert restored[original].name_cn == "照燒雞腿排"
+    assert restored[original].name_en == "teriyaki chicken"
+    assert restored[original].variant_of_id is None
+    assert restored[named].name_cn == "照燒雞腿排 (詹姆士)"
+    assert restored[named].variant_of_id == original
+    assert restored[same].name_cn == "照燒雞腿排" and restored[same].variant_of_id == original
+    assert restored[named].course_id == course and restored[named].description == "甜鹹"
+    assert restored[sauce].kind == "base"
+    assert restored[lone].name_en == "rice" and restored[lone].variant_of_id is None
+    # The dish's labels and aliases land on every recipe of it.
+    assert restored_labels == {rice, noodle, meat}
+    assert restored_aliases == sorted([original, named, same])
+    assert sub == sauce

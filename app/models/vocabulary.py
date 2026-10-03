@@ -1,16 +1,16 @@
-"""Small managed vocabularies: recipe courses, recipe statuses, source
+"""Small managed vocabularies: courses, regions, recipe statuses, source
 platforms, cooking methods, equipment, authors, and the groups a recipe's
 ingredient lines and steps sit in.
 
-Eight tables with one shape, declared once through a mixin. They are tables
+Nine tables with one shape, declared once through a mixin. They are tables
 rather than lists in `app/constants.py` because the owner edits them - renaming
 煮 to 水煮 must be one row, not a deploy. The closed lists in constants are the
-ones the app's own logic branches on (storage state, recipe kind); these are
+ones the app's own logic branches on (storage state, dish kind); these are
 the ones it only displays and filters by.
 
 `declared_attr` builds each table's constraints from its own name and its own
 copied columns: `cls.name_cn` inside it is the subclass's column, not the
-mixin's, which is what lets one definition produce eight correctly-bound
+mixin's, which is what lets one definition produce nine correctly-bound
 expression indexes.
 """
 
@@ -42,9 +42,17 @@ class VocabularyMixin(NameFallbackMixin):
 
 
 class RecipeCourse(Base, VocabularyMixin):
-    """主食, 配菜, 湯 … - where a dish sits in a meal."""
+    """主食, 配菜, 湯 … - where a dish sits in a meal. Named for the recipe it
+    was first filed on; it files a dish now (`dish.course_id`)."""
 
     __tablename__ = "recipe_course"
+
+
+class Region(Base, VocabularyMixin):
+    """台式, 中式, 日式 … - where a dish comes from. Hand-ordered, as courses
+    are: the order is the one the forms and filters offer them in."""
+
+    __tablename__ = "region"
 
 
 class RecipeStatus(Base, VocabularyMixin):

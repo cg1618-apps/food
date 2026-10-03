@@ -119,6 +119,11 @@ const STEP_GROUPS = [
   { id: 2, display_name: '烹飪', name_cn: '烹飪', name_en: null, sort_order: 20, usage_count: 0 },
 ]
 
+const REGIONS = [
+  { id: 1, display_name: '台式', name_cn: '台式', name_en: null, sort_order: 10, usage_count: 2 },
+  { id: 2, display_name: '日式', name_cn: '日式', name_en: null, sort_order: 30, usage_count: 0 },
+]
+
 const LABELS = [
   {
     id: 7,
@@ -126,7 +131,7 @@ const LABELS = [
     name_cn: '常備',
     name_en: null,
     ingredient_count: 1,
-    recipe_count: 2,
+    dish_count: 2,
     note_count: 0,
     usage_count: 3,
   },
@@ -148,6 +153,7 @@ const INGREDIENT_SEARCH = [
 function settingsData({ url, method }) {
   if (method !== 'GET') return null
   if (url === '/api/recipe-courses') return json(COURSES)
+  if (url === '/api/regions') return json(REGIONS)
   if (url === '/api/recipe-statuses') return json(STATUSES)
   if (url === '/api/source-platforms') return json(PLATFORMS)
   if (url === '/api/authors') return json(AUTHORS)
@@ -174,6 +180,7 @@ describe('設定', () => {
       '常用食材',
       '標籤',
       '類別',
+      '地區',
       '狀態',
       '來源',
       '作者',
@@ -241,13 +248,25 @@ describe('設定', () => {
     expect(document.activeElement).toBe(tab('食材分類'))
   })
 
+  it('lists 地區 after 類別, in order, with how many dishes each files', async () => {
+    renderAt('/edit/settings?tab=regions')
+    expect(screen.getByRole('tab', { name: '地區' }).getAttribute('aria-selected')).toBe('true')
+    const regions = await screen.findByRole('list', { name: '地區' })
+    expect(within(regions).getAllByRole('listitem').map((row) => row.getAttribute('aria-label'))).toEqual([
+      '台式',
+      '日式',
+    ])
+    expect(within(regions).getByRole('listitem', { name: '台式' }).textContent).toContain('用在 2 個地方')
+    expect(calls.some(({ url }) => url === '/api/regions')).toBe(true)
+  })
+
   it('shows each vocabulary with its counts, and labels with every owner', async () => {
     renderAt('/edit/settings?tab=courses')
     const courses = await screen.findByRole('list', { name: '類別' })
     expect(within(courses).getByRole('listitem', { name: '主菜' }).textContent).toContain('用在 3 個地方')
     fireEvent.click(screen.getByRole('tab', { name: '標籤' }))
     const labels = await screen.findByRole('list', { name: '標籤' })
-    expect(labels.textContent).toContain('食材 1 · 食譜 2 · 筆記 0')
+    expect(labels.textContent).toContain('食材 1 · 料理 2 · 筆記 0')
     // Labels have no order to move by.
     expect(within(labels).queryByRole('button', { name: /^排序/ })).toBeNull()
   })

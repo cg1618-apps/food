@@ -25,10 +25,10 @@ PRESERVATION_STATES = {
 # How good one variety is: the Fruit sheet's grades.
 RATINGS = ["S", "A", "B", "C", "D"]
 
-# A dish is eaten; a base - a sauce, a stock, a dough - is cooked to be used
-# inside other recipes. The kind is how the library files a recipe, not a rule:
-# a recipe line's sub_recipe_id may name a recipe of either kind.
-RECIPE_KINDS = {"dish": "料理", "base": "基底"}
+# A dish is eaten; a 醬料 - a sauce, a stock, a dough - is cooked to be used
+# inside other dishes. The kind is how the libraries file a dish, not a rule:
+# a recipe line's sub_dish_id may name a dish of either kind.
+DISH_KINDS = {"dish": "料理", "sauce": "醬料"}
 
 # What a kitchen note is: a compilation of many dishes, one technique, or
 # something to look up. How the notes library files a note, not a rule.
@@ -46,7 +46,7 @@ FIXED_VOCABULARIES = {
     "preservation_methods": [{"value": m, "label": m} for m in PRESERVATION_METHODS],
     "preservation_states": [{"value": k, "label": v} for k, v in PRESERVATION_STATES.items()],
     "ratings": [{"value": r, "label": r} for r in RATINGS],
-    "recipe_kinds": [{"value": k, "label": v} for k, v in RECIPE_KINDS.items()],
+    "dish_kinds": [{"value": k, "label": v} for k, v in DISH_KINDS.items()],
     "kitchen_note_kinds": [{"value": k, "label": v} for k, v in KITCHEN_NOTE_KINDS.items()],
     "step_kinds": [{"value": k, "label": v} for k, v in STEP_KINDS.items()],
 }

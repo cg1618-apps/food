@@ -15,15 +15,18 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import EditSignIn from './components/layout/EditSignIn'
 import Layout from './components/layout/Layout'
 import Redirect from './components/layout/Redirect'
+import DishDetail from './pages/detail/Dish'
 import IngredientDetail from './pages/detail/Ingredient'
 import NoteDetail from './pages/detail/Note'
 import RecipeDetail from './pages/detail/Recipe'
+import DishForm from './pages/edit/DishForm'
 import ImageLibrary from './pages/edit/ImageLibrary'
 import IngredientForm from './pages/edit/IngredientForm'
 import NoteForm from './pages/edit/NoteForm'
 import RecipeForm from './pages/edit/RecipeForm'
 import Settings from './pages/edit/Settings'
 import TbdForm from './pages/edit/TbdForm'
+import DishLibrary from './pages/library/DishLibrary'
 import IngredientLibrary from './pages/library/IngredientLibrary'
 import NoteLibrary from './pages/library/NoteLibrary'
 import RecipeLibrary from './pages/library/RecipeLibrary'
@@ -37,6 +40,8 @@ export default function AppRoutes() {
         <Route path="/" element={<Navigate to="/recipes" replace />} />
 
         {/* Public reads. */}
+        <Route path="/dishes" element={<DishLibrary />} />
+        <Route path="/dishes/:id" element={<DishDetail />} />
         <Route path="/recipes" element={<RecipeLibrary />} />
         <Route path="/recipes/:id" element={<RecipeDetail />} />
         <Route path="/ingredients" element={<IngredientLibrary />} />
@@ -47,6 +52,8 @@ export default function AppRoutes() {
 
         {/* Behind Cloudflare Access, by path. */}
         <Route element={<EditSignIn />}>
+          <Route path="/edit/dishes/new" element={<DishForm />} />
+          <Route path="/edit/dishes/:id" element={<DishForm />} />
           <Route path="/edit/recipes/new" element={<RecipeForm />} />
           <Route path="/edit/recipes/:id" element={<RecipeForm />} />
           <Route path="/edit/ingredients/new" element={<IngredientForm />} />
@@ -75,6 +82,9 @@ export default function AppRoutes() {
           element={<Redirect to={({ id }) => `/edit/ingredients/${id}`} />}
         />
         <Route path="/edit/vocabularies" element={<Redirect to={() => '/edit/settings'} />} />
+        {/* The dish form's path as the design named it; the form lives at
+            /edit/dishes/:id like every other edit page. */}
+        <Route path="/edit/dishes/:id/edit" element={<Redirect to={({ id }) => `/edit/dishes/${id}`} />} />
 
         <Route path="*" element={<NotFound />} />
       </Route>

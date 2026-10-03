@@ -86,7 +86,7 @@ def pair(client, db, fallback_category, recipe_statuses):
     recipe = client.post(
         "/api/edit/recipes",
         json={
-            "name_cn": "蔥油餅",
+            "new_dish": {"name_cn": "蔥油餅"},
             "lines": [{"ingredient_id": source.id}, {"ingredient_id": source.id}],
         },
     ).json()
@@ -177,7 +177,9 @@ def test_the_merged_rows_belong_to_the_target(client, pair):
     after = merge(client, pair["source"], pair["target"]).json()
     assert [c["id"] for c in after["children"]] == [pair["child"]]
     assert {label["id"] for label in after["labels"]} == pair["labels"]
-    assert after["used_in"] == [{"id": pair["recipe"], "display_name": "蔥油餅", "kind": "dish"}]
+    [used] = after["used_in"]
+    assert (used["id"], used["display_name"]) == (pair["recipe"], "蔥油餅")
+    assert used["dish"]["display_name"] == "蔥油餅"
     assert after["name_cn"] == "蔥"  # the target's names are untouched
 
 
