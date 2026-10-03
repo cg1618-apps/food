@@ -17,7 +17,7 @@ export const DELETE_TARGETS = {
     blockers: [
       ['recipes', (n) => `它底下還有 ${n} 份食譜，要先刪掉或移到別的料理。`],
       ['used_in', (n) => `有 ${n} 份食譜把它當材料用，要先從那些食譜拿掉才能刪除。`],
-      ['meals', (n) => `排程裡有 ${n} 餐排了它，要先從排程拿掉才能刪除。`],
+      ['meals', (n) => `排程裡排了它 ${n} 次，要先從排程拿掉才能刪除。`],
     ],
     invalidate: [
       endpoints.dishes.list(),
@@ -38,7 +38,7 @@ export const DELETE_TARGETS = {
       ['steps', '個步驟'],
     ],
     // Nothing refuses deleting a recipe: lines name the dish, never one
-    // recipe of it, and the dish stays. A meal on the schedule naming it
+    // recipe of it, and the dish stays. A meal item on the schedule naming it
     // keeps its dish and loses only the recipe.
     blockers: [],
     invalidate: [

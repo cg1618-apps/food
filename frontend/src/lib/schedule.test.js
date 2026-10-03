@@ -63,52 +63,89 @@ describe('dates', () => {
 })
 
 const DISH = { id: 4, display_name: '咖哩', kind: 'dish' }
+const RICE = { id: 5, display_name: '白飯', kind: 'dish' }
 
 describe('the phone card', () => {
-  it('lists only the filled fields, in the sheet order', () => {
+  it('lists the filled meals, 水果, the true marks and 備註, in the columns’ order', () => {
     const day = {
-      to_buy: '雞腿',
-      thaw_morning: null,
-      thaw_noon: null,
-      thaw_evening: '豬肉',
-      fruit: null,
-      note: null,
-      meals: { breakfast: null, lunch: { text: null, dish: DISH, recipe: null }, afternoon: null, dinner: null },
+      to_buy: true,
+      thaw_morning: false,
+      thaw_noon: false,
+      thaw_evening: true,
+      fruit: '芭樂',
+      note: '外食',
+      meals: {
+        breakfast: null,
+        lunch: { text: null, items: [{ dish: DISH, recipe: null }] },
+        afternoon: { text: null, items: [] },
+        dinner: null,
+      },
     }
-    expect(filledFields(day, SLOTS).map((field) => field.label)).toEqual(['要買?', '中', '晚退冰?'])
+    const fields = filledFields(day, SLOTS)
+    expect(fields.map((field) => field.key)).toEqual(['lunch', 'fruit', 'marks', 'note'])
+    expect(fields[2].marks).toEqual(['要買', '晚退冰'])
+  })
+
+  it('leaves the marks out when none is true', () => {
+    const day = { to_buy: false, thaw_morning: false, thaw_noon: false, thaw_evening: false, meals: {} }
+    expect(filledFields(day, SLOTS)).toEqual([])
   })
 })
 
 describe('dayPayload', () => {
-  it('sends blanks as null, empty meals as null, and a picked recipe with its dish', () => {
+  it('sends marks as booleans, blanks as null, empty meals as null, and items in order', () => {
     const form = dayForm(
       {
-        to_buy: '雞腿',
-        meals: { dinner: { text: '配飯', dish: DISH, recipe: { id: 9, display_name: 'A', dish: DISH } } },
+        to_buy: true,
+        meals: {
+          dinner: {
+            text: '配飯',
+            items: [
+              { dish: DISH, recipe: { id: 9, display_name: 'A', dish: DISH } },
+              { dish: RICE, recipe: null },
+            ],
+          },
+        },
       },
       SLOTS,
     )
     form.fields.fruit = '  '
+    form.fields.thaw_noon = true
     form.meals.lunch.text = ' 麵 '
     expect(dayPayload(form)).toEqual({
-      to_buy: '雞腿',
-      thaw_morning: null,
-      thaw_noon: null,
-      thaw_evening: null,
+      to_buy: true,
+      thaw_morning: false,
+      thaw_noon: true,
+      thaw_evening: false,
       fruit: null,
       note: null,
       meals: {
         breakfast: null,
-        lunch: { text: '麵', dish_id: null, recipe_id: null },
+        lunch: { text: '麵', items: [] },
         afternoon: null,
-        dinner: { text: '配飯', dish_id: 4, recipe_id: 9 },
+        dinner: {
+          text: '配飯',
+          items: [
+            { dish_id: 4, recipe_id: 9 },
+            { dish_id: 5, recipe_id: null },
+          ],
+        },
       },
     })
   })
 
-  it('drops a recipe whose dish was cleared', () => {
-    const form = dayForm({ meals: { lunch: { text: null, dish: DISH, recipe: { id: 9 } } } }, SLOTS)
-    form.meals.lunch.dish = null
+  it('gives every item its own key, and starts a stored day’s marks from what is stored', () => {
+    const form = dayForm({ thaw_evening: true, meals: { lunch: { text: null, items: [{ dish: DISH }, { dish: RICE }] } } }, SLOTS)
+    const [a, b] = form.meals.lunch.items
+    expect(a.key).not.toBe(b.key)
+    expect(form.fields.thaw_evening).toBe(true)
+    expect(form.fields.to_buy).toBe(false)
+    expect(form.fields.fruit).toBe('')
+  })
+
+  it('drops an item whose dish was cleared, and a meal left with nothing', () => {
+    const form = dayForm({ meals: { lunch: { text: null, items: [{ dish: DISH, recipe: { id: 9 } }] } } }, SLOTS)
+    form.meals.lunch.items[0].dish = null
     expect(dayPayload(form).meals.lunch).toBeNull()
   })
 })

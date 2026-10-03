@@ -38,7 +38,7 @@ reference work.
 ## Status
 
 **Modules 1 and 2 are built, with dishes, recipe templates, kitchen notes,
-the weekly schedule and TBD.** The schema is at revision `s3chedule` (the
+the weekly schedule and TBD.** The schema is at revision `s4chedule` (the
 head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
@@ -48,8 +48,8 @@ head).
 - **Dishes** - a dish (料理) or a sauce (醬料) in general: names and aliases,
   kind, course, region, labels, serves-as, a description and a gallery; its
   recipes, and "used in" - the recipes whose lines name it. A dish with
-  recipes, one a line names, or one a meal on the schedule names cannot be
-  deleted.
+  recipes, one a line names, or one a meal item on the schedule names
+  cannot be deleted.
 - **Recipes** - each one way of making a dish, with an optional name of its
   own and 其他版本 (the dish's other recipes); lines naming an ingredient, a
   dish, or a new stub or dish made by the save, and steps (each a 步驟, 可省略
@@ -64,11 +64,12 @@ head).
   since deleted is dropped when it is read, and counted.
 - **Kitchen notes** - bookmarks with a title, a kind, a link, a body, labels
   and a gallery.
-- **The weekly schedule (排程)** - per date, 要買?, 早退冰? / 中退冰? /
-  晚退冰?, 水果, 備註 and four meals (早, 中, 下午, 晚), each free text, a
-  dish and optionally one of that dish's recipes; read two weeks at a time
-  at `/schedule` (a table on a desktop, a card per day on a phone) and edited
-  a day at a time at `/edit/schedule`.
+- **The weekly schedule (排程)** - per date, four meals (早, 中, 下午, 晚),
+  水果, the true-or-false marks 要買? / 早退冰? / 中退冰? / 晚退冰?, and 備註;
+  each meal free text and any number of items, each a dish and optionally
+  one of that dish's recipes; read two weeks at a time at `/schedule` (a
+  table on a desktop, a card per day on a phone, a mark shown only when
+  true) and edited a day at a time at `/edit/schedule`.
 - **TBD** - a standalone page of entries, each an optional name and any
   number of links, in the owner's order; read at `/tbd`, edited in place at
   `/edit/tbd`.

@@ -1,6 +1,6 @@
-// 排程: /schedule shows two weeks from a Saturday as the sheet's table and as
-// phone cards, moves a week at a time, and marks today; /edit/schedule edits
-// each day in a card and saves it whole with one PUT.
+// 排程: /schedule shows two weeks from a Saturday as a table and as phone
+// cards, moves a week at a time, and marks today; /edit/schedule edits each
+// day in a card and saves it whole with one PUT.
 //
 // Today is pinned to Wednesday 2026-10-07, so this week starts on Saturday
 // 2026-10-03. Only Date is faked: the fetches still resolve.
@@ -18,17 +18,21 @@ const SLOTS = [
   { value: 'dinner', label: '晚' },
 ]
 const CURRY = { id: 4, display_name: '咖哩', kind: 'dish' }
+const RICE = { id: 5, display_name: '白飯', kind: 'dish' }
 const RECIPE = { id: 9, display_name: '日式咖哩', dish: CURRY }
+
+// The columns after 星期幾, in the page's order.
+const COLUMNS = ['早', '中', '下午', '晚', '水果', '要買?', '早退冰?', '中退冰?', '晚退冰?', '備註']
 
 function emptyDay(date) {
   const weekday = (new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7
   return {
     date,
     weekday,
-    to_buy: null,
-    thaw_morning: null,
-    thaw_noon: null,
-    thaw_evening: null,
+    to_buy: false,
+    thaw_morning: false,
+    thaw_noon: false,
+    thaw_evening: false,
     fruit: null,
     note: null,
     meals: { breakfast: null, lunch: null, afternoon: null, dinner: null },
@@ -44,15 +48,26 @@ function range(start, days) {
   })
 }
 
-// Monday 10/5 is filled in; the rest of the fortnight is empty.
+// Monday 10/5 is filled in - two marks true, two false, and a dinner of text
+// and two items; the rest of the fortnight is empty.
 function schedule(start, days) {
   return range(start, days).map((day) =>
     day.date === '2026-10-05'
       ? {
           ...day,
-          to_buy: '雞腿',
+          to_buy: true,
+          thaw_evening: true,
           fruit: '芭樂',
-          meals: { ...day.meals, dinner: { text: '配白飯', dish: CURRY, recipe: RECIPE } },
+          meals: {
+            ...day.meals,
+            dinner: {
+              text: '配白飯',
+              items: [
+                { dish: CURRY, recipe: RECIPE },
+                { dish: RICE, recipe: null },
+              ],
+            },
+          },
         }
       : day,
   )
@@ -90,7 +105,11 @@ function read(call) {
   if (url.pathname === '/api/vocabularies/fixed') return json({ meal_slots: SLOTS })
   if (url.pathname === '/api/edit/session') return new Response(null, { status: 204 })
   if (url.pathname === '/api/dishes/4') return json({ ...CURRY, recipes: [RECIPE, { id: 10, display_name: '印度咖哩' }] })
-  if (url.pathname === '/api/dishes') return json([CURRY])
+  if (url.pathname === '/api/dishes/5') return json({ ...RICE, recipes: [] })
+  if (url.pathname === '/api/dishes') {
+    const q = url.searchParams.get('q') ?? ''
+    return json([CURRY, RICE].filter((dish) => dish.display_name.includes(q)))
+  }
   return null
 }
 
@@ -121,6 +140,7 @@ afterEach(() => {
 
 const scheduleReads = () => calls.filter((c) => c.method === 'GET' && c.url.startsWith('/api/schedule'))
 const location = () => screen.getByTestId('location').textContent
+const puts = () => calls.filter((c) => c.method === 'PUT')
 
 describe('the schedule page', () => {
   it('asks for two weeks from this week’s Saturday and shows them', async () => {
@@ -131,11 +151,11 @@ describe('the schedule page', () => {
     expect(screen.getByText('10/3 – 10/16（六–五）')).toBeTruthy()
   })
 
-  it('draws the sheet’s columns in the sheet’s order, with meal links', async () => {
+  it('draws the columns meals first, then 水果, the marks and 備註', async () => {
     renderAt('/schedule')
     const [week] = await screen.findAllByRole('table')
     const headers = within(week).getAllByRole('columnheader').map((th) => th.textContent)
-    expect(headers).toEqual(['星期幾', '要買?', '早退冰?', '中退冰?', '早', '中', '下午', '晚', '晚退冰?', '水果', '備註'])
+    expect(headers).toEqual(['星期幾', ...COLUMNS])
     const rows = within(week).getAllByRole('row').slice(1)
     expect(rows.map((row) => within(row).getByRole('rowheader').textContent)).toEqual([
       '星期六 10/3',
@@ -146,13 +166,37 @@ describe('the schedule page', () => {
       '星期四 10/8',
       '星期五 10/9',
     ])
-    const monday = rows[2]
-    const cells = within(monday).getAllByRole('cell').map((td) => td.textContent)
-    expect(cells[0]).toBe('雞腿')
-    expect(cells[6]).toContain('配白飯')
-    expect(cells[8]).toBe('芭樂')
-    expect(within(monday).getByRole('link', { name: '咖哩' }).getAttribute('href')).toBe('/dishes/4')
-    expect(within(monday).getByRole('link', { name: '食譜：日式咖哩' }).getAttribute('href')).toBe('/recipes/9')
+  })
+
+  it('ticks a true mark and leaves a false one empty', async () => {
+    renderAt('/schedule')
+    const [week] = await screen.findAllByRole('table')
+    const monday = within(week).getAllByRole('row')[3]
+    const cells = Object.fromEntries(
+      within(monday)
+        .getAllByRole('cell')
+        .map((td, i) => [COLUMNS[i], td.textContent]),
+    )
+    expect(cells['水果']).toBe('芭樂')
+    expect(cells['要買?']).toBe('✓')
+    expect(cells['早退冰?']).toBe('')
+    expect(cells['中退冰?']).toBe('')
+    expect(cells['晚退冰?']).toBe('✓')
+    // An empty day ticks nothing.
+    const sunday = within(week).getAllByRole('row')[2]
+    expect(within(sunday).queryByText('✓')).toBeNull()
+  })
+
+  it('shows a meal’s text, then each item on its own line, linked', async () => {
+    renderAt('/schedule')
+    const [week] = await screen.findAllByRole('table')
+    const monday = within(week).getAllByRole('row')[3]
+    const dinner = within(monday).getAllByRole('cell')[COLUMNS.indexOf('晚')]
+    const lines = Array.from(dinner.querySelectorAll('p')).map((p) => p.textContent)
+    expect(lines).toEqual(['配白飯', '咖哩 · 日式咖哩', '白飯'])
+    expect(within(dinner).getByRole('link', { name: '咖哩' }).getAttribute('href')).toBe('/dishes/4')
+    expect(within(dinner).getByRole('link', { name: '日式咖哩' }).getAttribute('href')).toBe('/recipes/9')
+    expect(within(dinner).getByRole('link', { name: '白飯' }).getAttribute('href')).toBe('/dishes/5')
   })
 
   it('marks today', async () => {
@@ -164,14 +208,24 @@ describe('the schedule page', () => {
     expect(today.map((row) => within(row).getByRole('rowheader').textContent)).toEqual(['星期三 10/7'])
   })
 
-  it('shows a phone card listing only the filled fields', async () => {
+  it('shows a phone card listing only what is filled, a chip per true mark', async () => {
     renderAt('/schedule')
     const [week] = await screen.findAllByRole('list', { name: '10/3 – 10/9' })
     const monday = within(week).getByRole('listitem', { name: '星期一 10/5' })
     const terms = within(monday).getAllByRole('term').map((dt) => dt.textContent)
-    expect(terms).toEqual(['要買?', '晚', '水果'])
+    expect(terms).toEqual(['晚', '水果'])
+    const chips = within(within(monday).getByRole('list', { name: '標記' }))
+      .getAllByRole('listitem')
+      .map((li) => li.textContent)
+    expect(chips).toEqual(['要買', '晚退冰'])
+    // The chips sit after 水果, as the columns do.
+    const fruit = within(monday).getByText('水果')
+    const marks = within(monday).getByRole('list', { name: '標記' })
+    expect(fruit.compareDocumentPosition(marks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
     const sunday = within(week).getByRole('listitem', { name: '星期日 10/4' })
     expect(within(sunday).queryAllByRole('term')).toEqual([])
+    expect(within(sunday).queryByRole('list', { name: '標記' })).toBeNull()
   })
 
   it('moves a week at a time, by the Saturday in ?week=', async () => {
@@ -193,19 +247,37 @@ describe('the schedule page', () => {
 describe('the schedule edit page', () => {
   const card = async (name) => screen.findByRole('listitem', { name })
 
-  it('fills each day from what is stored', async () => {
+  it('lays a day out in the columns’ order', async () => {
     renderAt('/edit/schedule')
     const monday = await card('星期一 10/5')
-    expect(within(monday).getByRole('textbox', { name: '要買?' }).value).toBe('雞腿')
+    const groups = within(monday)
+      .getAllByRole('group')
+      .map((group) => group.getAttribute('aria-label'))
+    expect(groups).toEqual(['早', '中', '下午', '晚', '其他'])
+    const others = within(monday).getByRole('group', { name: '其他' })
+    const controls = Array.from(others.querySelectorAll('input')).map((input) => input.getAttribute('aria-label'))
+    expect(controls).toEqual(['水果', '要買?', '早退冰?', '中退冰?', '晚退冰?', '備註'])
+  })
+
+  it('fills each day from what is stored, marks as checkboxes', async () => {
+    renderAt('/edit/schedule')
+    const monday = await card('星期一 10/5')
+    expect(within(monday).getByRole('checkbox', { name: '要買?' }).checked).toBe(true)
+    expect(within(monday).getByRole('checkbox', { name: '早退冰?' }).checked).toBe(false)
+    expect(within(monday).getByRole('checkbox', { name: '晚退冰?' }).checked).toBe(true)
+    expect(within(monday).getByRole('textbox', { name: '水果' }).value).toBe('芭樂')
     const dinner = within(monday).getByRole('group', { name: '晚' })
     expect(within(dinner).getByRole('textbox', { name: '晚 內容' }).value).toBe('配白飯')
     expect(within(dinner).getByText('咖哩')).toBeTruthy()
-    await waitFor(() => expect(within(dinner).getByRole('combobox', { name: '晚 食譜' }).value).toBe('9'))
-    expect(
-      within(within(dinner).getByRole('combobox', { name: '晚 食譜' }))
-        .getAllByRole('option')
-        .map((option) => option.textContent),
-    ).toEqual(['不指定食譜', '日式咖哩', '印度咖哩'])
+    expect(within(dinner).getByText('白飯')).toBeTruthy()
+    const first = within(dinner).getByRole('combobox', { name: '晚 料理 1 食譜' })
+    await waitFor(() => expect(first.value).toBe('9'))
+    expect(within(first).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      '不指定食譜',
+      '日式咖哩',
+      '印度咖哩',
+    ])
+    expect(within(dinner).getByRole('combobox', { name: '晚 料理 2 食譜' }).value).toBe('')
   })
 
   it('saves a day whole, with one PUT, and says it saved', async () => {
@@ -213,31 +285,40 @@ describe('the schedule edit page', () => {
     renderAt('/edit/schedule')
     const monday = await card('星期一 10/5')
     fireEvent.change(within(monday).getByRole('textbox', { name: '水果' }), { target: { value: ' ' } })
+    fireEvent.click(within(monday).getByRole('checkbox', { name: '要買?' }))
+    fireEvent.click(within(monday).getByRole('checkbox', { name: '早退冰?' }))
     fireEvent.change(within(monday).getByRole('textbox', { name: '早 內容' }), { target: { value: '吐司' } })
     const dinner = within(monday).getByRole('group', { name: '晚' })
-    await waitFor(() => expect(within(dinner).getAllByRole('option')).toHaveLength(3))
-    fireEvent.change(within(dinner).getByRole('combobox', { name: '晚 食譜' }), { target: { value: '10' } })
+    const first = within(dinner).getByRole('combobox', { name: '晚 料理 1 食譜' })
+    await waitFor(() => expect(within(first).getAllByRole('option')).toHaveLength(3))
+    fireEvent.change(first, { target: { value: '10' } })
     expect(within(monday).getByText('未儲存')).toBeTruthy()
     // The week cannot be left while a day is unsaved.
     expect(screen.getByRole('button', { name: '下週 →' }).disabled).toBe(true)
 
     fireEvent.click(within(monday).getByRole('button', { name: '儲存' }))
-    await waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1))
-    expect(calls.find((c) => c.method === 'PUT')).toEqual({
+    await waitFor(() => expect(puts()).toHaveLength(1))
+    expect(puts()[0]).toEqual({
       url: '/api/edit/schedule/2026-10-05',
       method: 'PUT',
       body: {
-        to_buy: '雞腿',
-        thaw_morning: null,
-        thaw_noon: null,
-        thaw_evening: null,
+        to_buy: false,
+        thaw_morning: true,
+        thaw_noon: false,
+        thaw_evening: true,
         fruit: null,
         note: null,
         meals: {
-          breakfast: { text: '吐司', dish_id: null, recipe_id: null },
+          breakfast: { text: '吐司', items: [] },
           lunch: null,
           afternoon: null,
-          dinner: { text: '配白飯', dish_id: 4, recipe_id: 10 },
+          dinner: {
+            text: '配白飯',
+            items: [
+              { dish_id: 4, recipe_id: 10 },
+              { dish_id: 5, recipe_id: null },
+            ],
+          },
         },
       },
     })
@@ -245,39 +326,80 @@ describe('the schedule edit page', () => {
     expect(screen.getByRole('link', { name: '下週 →' })).toBeTruthy()
   })
 
-  it('picks a dish from the library for a meal', async () => {
+  it('removes an item, and adds dishes one after another', async () => {
+    handler = (call) => (call.method === 'PUT' ? json(emptyDay('2026-10-05')) : null)
+    renderAt('/edit/schedule')
+    const monday = await card('星期一 10/5')
+    const dinner = within(monday).getByRole('group', { name: '晚' })
+    fireEvent.click(within(dinner).getByRole('button', { name: '移除 晚 料理 1' }))
+    expect(within(dinner).queryByText('咖哩')).toBeNull()
+
+    const add = within(dinner).getByRole('combobox', { name: '晚 加料理' })
+    fireEvent.change(add, { target: { value: '咖' } })
+    fireEvent.click(await within(dinner).findByRole('option', { name: /咖哩/ }))
+    // The box clears and stays, for the next dish.
+    expect(within(dinner).getByRole('combobox', { name: '晚 加料理' }).value).toBe('')
+    const recipe = within(dinner).getByRole('combobox', { name: '晚 料理 2 食譜' })
+    await waitFor(() => expect(within(recipe).getAllByRole('option')).toHaveLength(3))
+    fireEvent.change(recipe, { target: { value: '9' } })
+
+    fireEvent.click(within(monday).getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(puts()).toHaveLength(1))
+    expect(puts()[0].body.meals.dinner).toEqual({
+      text: '配白飯',
+      items: [
+        { dish_id: 5, recipe_id: null },
+        { dish_id: 4, recipe_id: 9 },
+      ],
+    })
+  })
+
+  it('picks a dish from the library for an empty meal', async () => {
     handler = (call) => (call.method === 'PUT' ? json(emptyDay('2026-10-04')) : null)
     renderAt('/edit/schedule')
     const sunday = await card('星期日 10/4')
     const lunch = within(sunday).getByRole('group', { name: '中' })
-    fireEvent.change(within(lunch).getByRole('combobox', { name: '中 料理' }), { target: { value: '咖' } })
+    fireEvent.change(within(lunch).getByRole('combobox', { name: '中 加料理' }), { target: { value: '咖' } })
     fireEvent.click(await within(lunch).findByRole('option', { name: /咖哩/ }))
     fireEvent.click(within(sunday).getByRole('button', { name: '儲存' }))
-    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true))
-    expect(calls.find((c) => c.method === 'PUT').body.meals.lunch).toEqual({
-      text: null,
-      dish_id: 4,
-      recipe_id: null,
-    })
+    await waitFor(() => expect(puts()).toHaveLength(1))
+    expect(puts()[0].body.meals.lunch).toEqual({ text: null, items: [{ dish_id: 4, recipe_id: null }] })
+  })
+
+  it('changes an item’s dish in place with 更換', async () => {
+    handler = (call) => (call.method === 'PUT' ? json(emptyDay('2026-10-05')) : null)
+    renderAt('/edit/schedule')
+    const monday = await card('星期一 10/5')
+    const dinner = within(monday).getByRole('group', { name: '晚' })
+    fireEvent.click(within(dinner).getAllByRole('button', { name: '更換' })[0])
+    fireEvent.change(within(dinner).getByRole('combobox', { name: '晚 料理 1' }), { target: { value: '白' } })
+    fireEvent.click(await within(dinner).findByRole('option', { name: /白飯/ }))
+    fireEvent.click(within(monday).getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(puts()).toHaveLength(1))
+    // The new dish keeps the item's place, and the old dish's recipe goes.
+    expect(puts()[0].body.meals.dinner.items).toEqual([
+      { dish_id: 5, recipe_id: null },
+      { dish_id: 5, recipe_id: null },
+    ])
   })
 
   it('refuses to save a dish typed but not picked, and sends nothing', async () => {
     renderAt('/edit/schedule')
     const sunday = await card('星期日 10/4')
-    fireEvent.change(within(sunday).getByRole('combobox', { name: '中 料理' }), { target: { value: '咖' } })
+    fireEvent.change(within(sunday).getByRole('combobox', { name: '中 加料理' }), { target: { value: '咖' } })
     fireEvent.click(within(sunday).getByRole('button', { name: '儲存' }))
     expect(await within(sunday).findByRole('alert')).toBeTruthy()
-    expect(calls.some((c) => c.method === 'PUT')).toBe(false)
+    expect(puts()).toHaveLength(0)
   })
 
   it('shows the server’s refusal on the day and keeps what was typed', async () => {
     handler = (call) =>
-      call.method === 'PUT' ? json({ detail: 'The 晚 recipe is not a recipe of that meal’s dish.' }, 422) : null
+      call.method === 'PUT' ? json({ detail: 'The 晚 meal names the same dish and recipe twice.' }, 422) : null
     renderAt('/edit/schedule')
     const monday = await card('星期一 10/5')
     fireEvent.change(within(monday).getByRole('textbox', { name: '備註' }), { target: { value: '外食' } })
     fireEvent.click(within(monday).getByRole('button', { name: '儲存' }))
-    expect((await within(monday).findByRole('alert')).textContent).toContain('not a recipe of that meal')
+    expect((await within(monday).findByRole('alert')).textContent).toContain('the same dish and recipe twice')
     expect(within(monday).getByRole('textbox', { name: '備註' }).value).toBe('外食')
     expect(within(monday).getByText('未儲存')).toBeTruthy()
   })

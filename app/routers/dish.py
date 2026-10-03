@@ -127,7 +127,7 @@ def delete_dish(
 ):
     """Delete, with the alias count the user was shown echoed back.
 
-    A dish with recipes, one a recipe's line names, or one a meal on the
+    A dish with recipes, one a recipe's line names, or one a meal item on the
     schedule names is refused BEFORE the database is asked, with those recipes
     and the meals' dates on the body - the RESTRICT would refuse too, but
     could only say that something refers to it, not what.

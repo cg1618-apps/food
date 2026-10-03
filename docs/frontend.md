@@ -178,7 +178,7 @@ which block, and which reads go stale:
   those in `used_in` - and under 排了它的日子： the dates in `meals`, each
   linked to its week on `/schedule`;
 - a recipe's dialog has nothing that blocks: lines name dishes, the dish
-  stays, and a meal on the schedule naming the recipe keeps its dish;
+  stays, and a meal item on the schedule naming the recipe keeps its dish;
 - a kitchen note has no cascade, so its dialog is the plain question.
 
 ## Detail pages
@@ -668,31 +668,39 @@ come from the fixed vocabulary `meal_slots`.
 
 **`/schedule`** (`pages/library/Schedule.jsx`) heads the page with the
 fortnight's range and 編輯, which opens `/edit/schedule` on the same week.
-Each week is a section titled with its range:
+Each week is a section titled with its range. **The columns run 星期幾, 早,
+中, 下午, 晚, 水果, 要買?, 早退冰?, 中退冰?, 晚退冰?, 備註** - the owner's
+order, not the sheet's (`lib/schedule.js` `DAY_FIELDS`):
 
-- **on a desktop, a table with the sheet's columns in the sheet's order** -
-  星期幾 (the weekday and date), 要買?, 早退冰?, 中退冰?, 早, 中, 下午, 晚,
-  晚退冰?, 水果, 備註. A meal cell shows its text, its dish linked to the
-  dish, and its recipe as 食譜：… linked to the recipe;
-- **on a phone, a card per day** listing only the fields that hold something,
-  in the same order, and a dash when nothing is planned.
+- **on a desktop, a table** - 星期幾 is the weekday and date. A meal cell
+  shows its text, then each item on a line of its own: the dish linked to the
+  dish, or 「dish · recipe」 with the recipe linked to the recipe. **A mark
+  shows only when true**, as a ✓; a false one is an empty cell;
+- **on a phone, a card per day** listing only what holds something, in the
+  same order - the filled meals, 水果, a chip for each true mark (「要買」,
+  「早退冰」 …) and 備註 - and a dash when nothing is planned.
 
 Today's row and card are marked (`aria-current="date"`, the brand tint).
 
 **`/edit/schedule`** (`pages/edit/ScheduleForm.jsx`) is the same two weeks,
-a card per day: the four meals - each 內容 (free text), a 料理 picked by
-`Typeahead` over the dish library (existing dishes only), and, once a dish is
-picked, a select of **that dish's** recipes (read from `GET
-/api/dishes/{id}`) with 不指定食譜 first - then the six plain fields.
+a card per day, in the read page's order: the four meals, then 水果, the four
+marks as checkboxes and 備註. A meal is its 內容 (free text), then its items,
+then 「＋ 料理」 - a `Typeahead` over the dish library (existing dishes only)
+that appends an item and clears itself for the next. Each item shows its dish
+picked (`Picked`, whose 更換 searches for another dish in the same place), a
+select of **that dish's** recipes (read from `GET /api/dishes/{id}`) with
+不指定食譜 first, and ✕, which removes it.
 
-- **Each card saves with its own 儲存** - one `PUT` of the whole day, blanks
-  as null and empty meals as null (`lib/schedule.js` `dayPayload`). Not on
+- **Each card saves with its own 儲存** - one `PUT` of the whole day, marks
+  as booleans, blanks as null, the items in their order, and empty meals as
+  null (`lib/schedule.js` `dayPayload`). Not on
   blur: a phone does not reliably blur a field, and a save that silently did
   not happen is the failure this page must not have.
 - **Nothing typed is lost silently.** A changed card says 未儲存 until it is
   saved; while any card is unsaved the page counts them, the week buttons are
   disabled, 完成 reads 放棄修改, and closing the tab asks. A dish typed into
-  the search but not picked refuses the save with a sentence.
+  any of the card's searches but not picked refuses the save with a
+  sentence.
 - A refusal shows the server's sentence on the card and keeps what was typed;
   a save says 已儲存. A card keeps its own state, so another card's save never
   throws it away.

@@ -139,6 +139,12 @@ with it. No recipe, ingredient or vocabulary is touched.
 `s3chedule`'s downgrade drops `schedule_meal` and `schedule_day`, and every
 planned day with them. No dish or recipe is touched.
 
+`s4chedule`'s downgrade turns the four marks back into text - a true mark
+becomes `✓` and a false one NULL, so what the sheet-era text said is not
+recovered - and keeps only each meal's first item (the lowest position) as
+its dish and recipe, dropping `schedule_meal_item` with every later item. A
+meal's free text is kept.
+
 **So there is no route that keeps the data.** The real choice is:
 
 - **roll back**, and lose everything entered since the release, or
@@ -180,7 +186,8 @@ they ever do not, believe the box.
 | TBD | `t1bd` — thirty-six tables |
 | Dishes, regions; recipes as ways of making a dish | `d1ishes` — thirty-nine tables |
 | Recipe templates | `t2emplates` — forty tables |
-| The weekly schedule | `s3chedule` — forty-two tables, the current head |
+| The weekly schedule | `s3chedule` — forty-two tables |
+| Schedule marks as booleans, several dishes per meal | `s4chedule` — forty-three tables, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target
