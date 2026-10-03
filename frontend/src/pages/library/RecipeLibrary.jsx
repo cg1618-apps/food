@@ -1,4 +1,4 @@
-// Frontend: the recipe library, /recipes - the app's front page. Every
+// Frontend: the recipe library, /recipes. Every
 // recipe, of every dish.
 //
 // The sidebar: dish, kind, course, status, method, equipment, author, label,

@@ -73,7 +73,7 @@ describe('every detail page has a route', () => {
 
 describe('redirects', () => {
   it.each([
-    ['/', '/recipes'],
+    ['/', '/schedule'],
     ['/settings', '/edit/settings'],
     // The first release's paths: bookmarks survive, query string included.
     ['/library/ingredient', '/ingredients'],

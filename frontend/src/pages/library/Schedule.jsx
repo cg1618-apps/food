@@ -1,4 +1,5 @@
-// Frontend: 排程, /schedule - the weekly schedule, two weeks at a time.
+// Frontend: 排程, /schedule - the weekly schedule, two weeks at a time, and
+// the app's front page (`/` redirects here).
 //
 // The owner's sheet, as a page: a week runs Saturday to Friday, and this week
 // and next are shown together. `?week=YYYY-MM-DD` names the Saturday shown

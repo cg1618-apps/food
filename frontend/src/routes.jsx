@@ -40,7 +40,7 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route path="/" element={<Navigate to="/recipes" replace />} />
+        <Route path="/" element={<Navigate to="/schedule" replace />} />
 
         {/* Public reads. */}
         <Route path="/dishes" element={<DishLibrary />} />
