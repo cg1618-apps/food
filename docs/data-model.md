@@ -1,6 +1,6 @@
 # Data model
 
-What the database holds today: thirty-nine tables, at revision `d1ishes`.
+What the database holds today: forty tables, at revision `t2emplates`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the nine managed
 vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
@@ -8,7 +8,7 @@ its four galleries (`image`, `ingredient_image`, `dish_image`, `recipe_image`,
 `kitchen_note_image`), the dish family's four (`dish`, `dish_alias`,
 `dish_serves_as`, `dish_label`), the recipe family's eight (`recipe`,
 `recipe_method`, `recipe_equipment`, `recipe_source`, `recipe_line_group`,
-`recipe_line`, `recipe_step_group`, `recipe_step`), kitchen notes' two (`kitchen_note`, `kitchen_note_label`),
+`recipe_line`, `recipe_step_group`, `recipe_step`), `recipe_template`, kitchen notes' two (`kitchen_note`, `kitchen_note_label`),
 `common_ingredient`, the 常用食材 list, and TBD's two (`tbd_entry`,
 `tbd_link`).
 
@@ -442,6 +442,38 @@ or `note` (備註, a note among the steps). Only a `step` is numbered, so a
 step's number is not its position plus one; it is counted by whoever draws
 the steps and never stored (`s1tepkinds`).
 
+## `recipe_template`
+
+A named skeleton a new recipe starts from: a NOT NULL `name`, refused when
+blank (`ck_recipe_template_has_a_name`) and unique whatever its case
+(`uq_recipe_template_name`, on `lower(name)`); a NOT NULL `sort_order`, the
+owner's order on 設定 and in the new-recipe chooser - a new template is given
+the end, and a reorder renumbers every template 0, 1, 2 …, ties falling back
+to the name; a NOT NULL JSONB `body`; and `created_at` / `updated_at`.
+
+`body` is one document in the recipe payload's own shapes, always stored in
+this canonical form:
+
+```json
+{"servings": null, "time": null,
+ "lines": [{"ingredient_id": 1, "sub_dish_id": null, "amount": null, "note": null, "is_optional": false}],
+ "line_groups": [{"line_group_id": 5, "name": null, "lines": []}],
+ "steps": [{"body": "…", "kind": "step"}],
+ "step_groups": [{"step_group_id": null, "name": "收尾", "steps": []}],
+ "method_ids": [], "equipment_ids": []}
+```
+
+A line names exactly one of an ingredient and a dish, and a group exactly one
+of a 設定 value and a one-off name, as a recipe's do; a template never names
+an ingredient or a dish that does not exist yet.
+
+**Nothing in the body is a foreign key**, and nothing references the table.
+An ingredient, a dish, a method, a piece of equipment or a group value a body
+names can be deleted without a refusal; the API leaves the missing reference
+out when it reads the template, and counts it. An ingredient merge rewrites the
+merged ingredient's id to the target's in every body. Why JSONB rather than
+tables mirroring the recipe's is in `notes/decisions.md`.
+
 ## `kitchen_note`
 
 A bookmark to something worth keeping that is not a recipe: a compilation video
@@ -485,6 +517,7 @@ Labels have two name slots, not three; a tag has no formal alternative form.
 | dish → the recipe lines that name it | `RESTRICT` |
 | recipe → its sources, line and step groups, lines, steps, gallery rows, and method and equipment links | `CASCADE` |
 | recipe → its dish | none — deleting a recipe leaves the dish |
+| recipe template → what its body names | none — not a foreign key; a missing reference is left out when the template is read |
 | line or step group → the lines or steps in it | `SET NULL` — they become ungrouped |
 | kitchen note → its label links and gallery rows | `CASCADE` |
 | TBD entry → its links | `CASCADE` |

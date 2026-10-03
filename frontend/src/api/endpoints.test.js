@@ -24,6 +24,7 @@ const WRITE_KEYS = new Set([
   'session',
   'replace',
   'order',
+  'fromRecipe',
 ])
 const READ_KEYS = new Set([
   'list',
@@ -98,6 +99,10 @@ describe('paths the backend actually serves', () => {
     [endpoints.tbd.update(4), '/api/edit/tbd/4'],
     [endpoints.tbd.remove(4), '/api/edit/tbd/4'],
     [endpoints.tbd.order(), '/api/edit/tbd/order'],
+    [endpoints.templates.list(), '/api/recipe-templates'],
+    [endpoints.templates.detail(3), '/api/recipe-templates/3'],
+    [endpoints.templates.order(), '/api/edit/recipe-templates/order'],
+    [endpoints.templates.fromRecipe(9), '/api/edit/recipe-templates/from-recipe/9'],
   ])('%s', (actual, expected) => {
     expect(actual).toBe(expected)
   })

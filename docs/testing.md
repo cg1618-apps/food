@@ -203,6 +203,16 @@ is load-bearing and says so. Some examples worth knowing about:
   the 409 for the same reason - the `RESTRICT` alone answers 409 too, with no
   owners on the body. Both were proved to fail with their service check
   removed.
+- `body_refs` (`tests/api/test_recipe_templates.py`) gives a template one of
+  everything its body can name - an ingredient, a dish, a 材料分組 value, a
+  method, a piece of equipment - so the stale-reference test has something to
+  drop, and that test reads the same template first and asserts `dropped`
+  is 0: a count that was always 4, or always 0, fails one of the two reads.
+  The merge test names a third ingredient beside the source, so a rewrite
+  that changed every line would fail; it was proved to fail with the rewrite
+  removed from `merge()`. The `new_ingredient` / `new_dish` refusal has its
+  mirror in a line naming an existing ingredient, and the unique-name
+  refusal in a template renamed to its own name in another case.
 
 One more that is weaker than it looks unless read carefully:
 `test_uvicorns_own_loggers_are_taken_over` asserts the handler **by identity**
@@ -232,6 +242,7 @@ the entire failure.
 | `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, ordering after the target's rows, the fingerprint and its 409, refusals |
 | `tests/api/test_common_ingredients.py` | 常用食材: the whole-list `PUT` and its order, the unknown-id and duplicate 422s that change nothing, the write only under the gated prefix, CASCADE on an ingredient's delete, and a merge moving or dropping the source's entry |
 | `tests/api/test_tbd.py` | TBD: the blank-url CHECK and CASCADE to links, the round trip, the name-or-link 422 on create and on a `PATCH` that would leave neither (with the mirror that keeps a name), a new entry last, `https://` given to a link without a scheme and the 422 for a blank or non-web one, links replaced wholesale or left alone, the delete, the order `PUT` and each of its 422s against three real entries, the writes only under the gated prefix |
+| `tests/api/test_recipe_templates.py` | recipe templates: the round trip with every reference resolved, the empty template, a group name stored as its 設定 value, the list's order and counts, the `new_*` 422 that creates nothing (with its mirror), unknown ids, the case-insensitive unique name and blank name, fields a template does not carry, `PATCH` semantics and a refused `PATCH` changing nothing, delete, the order `PUT` and its 422s, stale references dropped and counted (a dropped group's lines kept as ungrouped), a template from a recipe's structure, and an ingredient merge rewriting template lines |
 | `tests/test_seed_migration.py` | the seeds, the storage migration's copy and lossy downgrade, `v2ocabulary`'s string-to-row mapping, `a1uthors`'s creator-to-author mapping, `g1roups`' sections-to-groups move, `s1tepkinds`' default for existing steps and `d1ishes`' grouping of recipes into dishes, each with its downgrade, on a scratch database |
 | `tests/test_ingredient_import.py` | `i3import`: the committed CSV passes validation, each validation refusal with a good mirror, and the load on a scratch database — stubs, aliases, parents, categories, the skip rule, the cycle guard, a second run, the no-op downgrade |
 | `tests/unit/test_prod_compose.py` | the production compose file, including the image bind mount |
@@ -284,6 +295,23 @@ a sauce `new_dish`, and the dish form's payload), `pages/edit/settings.test.jsx`
 routes and the `/edit/dishes/:id/edit` redirect), `lib/nav.test.js` (料理
 first), `lib/typeahead.test.js`, `lib/recipeLines.test.js` and
 `lib/imageOwners.test.js`.
+
+Recipe templates are covered in: `pages/edit/templates.test.jsx` (the
+new-recipe chooser's three ways in and the URL each writes, `?dish=` kept
+through them; the form prefilled from a template - the dropped notice, and
+nothing written before 儲存 - and from another recipe - its dish unless
+`?dish=` names one, and not its name, sources, status or pictures; a
+template that cannot be read; the template form's payload, its refusal of
+新增 and of a missing name, and a saved template sent back whole),
+`pages/edit/settings.test.jsx` (the 範本 tab: order, counts and links, the
+keyboard reorder frozen until the `PUT` lands and put back on a refusal,
+rename with a refused name explained in the row, delete after asking),
+`pages/detail/details.test.jsx` (存成範本: the name asked for, a refused
+name, the link to the new template), `lib/newRecipe.test.js`,
+`lib/recipeStructure.test.js` and `lib/typeahead.test.js` (recipes as
+options). The recipe form's own tests in `components/forms/forms.test.jsx`
+open it at `/edit/recipes/new?blank=1` and are otherwise unchanged by the
+move of 材料, 步驟 and 做法、器材 into shared sections.
 
 ## Constraint violations are tested through HTTP
 

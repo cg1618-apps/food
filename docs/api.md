@@ -232,7 +232,10 @@ The target wins every collision:
   not touched;
 - the source's 常用食材 entry moves to the target in the same place, unless
   the target is listed already, when it is dropped. It is not in the preview
-  or the fingerprint: it moves no content.
+  or the fingerprint: it moves no content;
+- every recipe template line naming the source names the target. Not in the
+  preview or the fingerprint either: a template is a starting point, not
+  content the merge moves.
 
 Refused with 422: into itself, into one of its own descendants, and an `into`
 that names nothing. A missing source — the id in the URL — is 404. The body
@@ -502,6 +505,83 @@ line names a dish, never a recipe, so no line depends on it. **The dish
 stays**, even when this was its last recipe - deleting a dish is its own
 decision. Method and equipment links and gallery rows go with the recipe
 uncounted; the images themselves stay.
+
+## Recipe templates
+
+| Route | |
+| --- | --- |
+| `GET /api/recipe-templates` | every template, in order, with counts |
+| `GET /api/recipe-templates/{id}` | the body, resolved, and `dropped` |
+| `POST /api/edit/recipe-templates` | creates one, at the end; 201 |
+| `POST /api/edit/recipe-templates/from-recipe/{recipe_id}` | creates one from that recipe; 201 |
+| `PATCH /api/edit/recipe-templates/{id}` | |
+| `DELETE /api/edit/recipe-templates/{id}` | 204; nothing refers to a template |
+| `PUT /api/edit/recipe-templates/order` | saves the order of every template |
+
+A template is a named skeleton a new recipe starts from: servings, time, the
+lines and steps in their groups (steps with their kinds), methods and
+equipment. No dish, name, status, sources, notes or pictures.
+
+**The list** is light - `{id, name, sort_order, line_count, step_count}` - in
+`sort_order`, ties by name. The counts are of the body as stored, grouped rows
+included.
+
+**`GET /api/recipe-templates/{id}`** answers the body in a recipe response's
+shapes, so a form reads a template with the code that reads a recipe:
+
+```json
+{"id": 11, "name": "基本照燒", "sort_order": 0, "dropped": 1,
+ "body": {"servings": "2 人份", "time": null,
+          "lines": [{"ingredient": {"id": 1, "display_name": "薑", "needs_detail": false},
+                     "sub_dish": null, "amount": "1 片", "note": null, "is_optional": false}],
+          "line_groups": [{"group": {"id": 5, "display_name": "主料"}, "name": null,
+                           "display_name": "主料", "lines": []}],
+          "steps": [{"kind": "step", "body": "煎皮"}],
+          "step_groups": [{"group": null, "name": "收尾", "display_name": "收尾",
+                           "steps": [{"kind": "note", "body": "別燒焦"}]}],
+          "methods": [{"id": 3, "display_name": "煎"}], "equipment": []},
+ "created_at": "…", "updated_at": "…"}
+```
+
+Lines and steps carry no `id` or `position`: they are not rows. `POST` and
+`PATCH` answer this same shape.
+
+**What the body names can be deleted from under it** - nothing in the
+database ties a template to an ingredient, a dish, a method, a piece of
+equipment or a group value. Reading a template leaves out each reference that
+no longer exists and counts it in `dropped`: a line whose ingredient or dish
+is gone, a method or a piece of equipment that is gone, and a group whose
+材料分組 / 步驟分組 value is gone - whose rows then join the end of the
+ungrouped ones, as removing a group in the form does. The stored body is left
+alone; the next save writes what the form then holds.
+
+**The `POST` body is `{"name": …, "body": {…}}`**, and `PATCH` sends either
+or both. `body` takes the recipe payload's structural fields -
+`servings`, `time`, `lines` with `line_groups`, `steps` with `step_groups`,
+`method_ids`, `equipment_ids` - each optional, validated by the recipe's own
+input models, and replaces the whole body when sent. Refused with 422, each
+changing nothing:
+
+- a blank name, or a name another template has, whatever its case;
+- a line naming `new_ingredient` or `new_dish` - **a template never creates
+  rows**; pick an existing ingredient or dish;
+- an id naming nothing - an ingredient, a dish, a method, a piece of
+  equipment, a group value;
+- a line naming none or several targets, a group naming both or neither of a
+  value and a name, or the same group twice;
+- a field a template does not carry (`dish_id`, `sources`, `notes` …), and
+  `null` for `name` or `body` on a `PATCH`.
+
+A one-off group name that is a 設定 value's name is stored as that value, as
+on a recipe.
+
+**`POST /api/edit/recipe-templates/from-recipe/{recipe_id}`** takes `{"name":
+…}` and makes a template of that recipe's structure - its lines and steps in
+their groups, the steps' kinds, its methods, equipment, servings and time.
+A missing recipe is 404; a taken name is 422.
+
+**The order `PUT` body is `{"ids": [11, 12, …]}`** and must hold exactly the
+current templates, each once, as TBD's does; the answer is the list.
 
 ## Kitchen notes
 

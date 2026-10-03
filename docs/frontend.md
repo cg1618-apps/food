@@ -32,7 +32,8 @@ them readable at 360px with room for more.
 | Kitchen note | `/notes/:id` | public |
 | TBD | `/tbd` | public |
 | Add / edit a dish | `/edit/dishes/new`, `/edit/dishes/:id` | Access |
-| Add / edit a recipe (`?dish=<id>` presets the dish) | `/edit/recipes/new`, `/edit/recipes/:id` | Access |
+| Add / edit a recipe (a new one first asks how to start; `?dish=<id>` presets the dish) | `/edit/recipes/new`, `/edit/recipes/:id` | Access |
+| Add / edit a recipe template | `/edit/templates/new`, `/edit/templates/:id` | Access |
 | Add / edit an ingredient | `/edit/ingredients/new`, `/edit/ingredients/:id` | Access |
 | Add / edit a note | `/edit/notes/new`, `/edit/notes/:id` | Access |
 | 設定 (`/settings` redirects here) | `/edit/settings` | Access |
@@ -198,7 +199,8 @@ empties.
   (to `/dishes?label=`); the description; then **食譜**, the dish's recipes
   as cover cards (the recipe's own cover, its display name, authors · status,
   書籤 when not written up), with **「＋ 新增食譜」** opening
-  `/edit/recipes/new?dish=<id>` - the one section drawn even when empty
+  `/edit/recipes/new?dish=<id>` - the new-recipe chooser, the dish kept for
+  whichever start is chosen - the one section drawn even when empty
   (還沒有食譜。), since its button is how a new dish gets a recipe; and
   **用在**, the recipes whose lines name this dish, which is what a sauce's
   page is mostly for.
@@ -218,6 +220,12 @@ empties.
   備註 drawn as a ruled, tinted callout with no number); 保存; 筆記. A line
   links to its ingredient or to its dish (`/dishes/:id`); an optional line is
   drawn faint with （可省略）; a stub ingredient carries 待補.
+- **存成範本**, beside 編輯, makes a recipe template of the recipe's
+  structure: a dialog asks for the name (the recipe's display name to start
+  with) and says what a template takes - 材料, 步驟, 做法, 器材, 份量, 時間 -
+  and what it leaves; `POST /api/edit/recipe-templates/from-recipe/{id}`;
+  then it says 「已存成範本「…」」 with links to the template's form. A refused
+  name (another template has it) is said in the dialog, which stays open.
 - **The status change** is `PATCH /api/edit/recipes/{id}` with `{status_id}`
   alone. The toggle offers the statuses 設定 manages, in their order
   (`GET /api/recipe-statuses`); it shows the chosen value while the
@@ -256,7 +264,7 @@ result list, which would otherwise be clipped by the body's scroll.
 
 ## Forms
 
-`/edit/dishes/...`, `/edit/recipes/...`, `/edit/ingredients/...` and `/edit/notes/...` are one page
+`/edit/dishes/...`, `/edit/recipes/...`, `/edit/templates/...`, `/edit/ingredients/...` and `/edit/notes/...` are one page
 per entity, in sections on the reading column (`Section`), ending in
 `components/forms/FormActions.jsx`: the error, then 儲存 / 取消 / 刪除. **The
 error sits directly above the save button** with the server's own sentence -
@@ -286,7 +294,9 @@ if the categories fail to load.
   marks the dish reads too; an ingredient save, its delete and a merge move the category
   tree, labels, methods (heating rows), recipes (line names, used-in),
   images and 常用食材 (a renamed, deleted or merged ingredient is a changed
-  chip); a note moves labels and images.
+  chip), and a merge the recipe templates too (their lines move to the
+  target); a note moves labels and images; a template save moves only the
+  template list.
 - **Every list is `components/forms/RowEditor.jsx`**: controlled `rows` /
   `onChange`, each row with a drag handle (⠿) and ✕, an add button under
   the list, and a render prop for the row's cells (`children(row, { index,
@@ -324,7 +334,8 @@ if the categories fail to load.
 **The typeahead** (`components/forms/Typeahead.jsx`) searches the list
 endpoints' `q` - every name slot and alias, on the server - 250 ms after the
 typing stops: `sources` is `['ingredient']`, `['dish']` or both (the
-default), `exclude` keeps a row out (a recipe's lines never offer its own
+default), or `['recipe']` - the new-recipe chooser's search, each recipe
+offered by its display name with its dish's beside it when the two differ, `exclude` keeps a row out (a recipe's lines never offer its own
 dish), and `allowNew` adds 「新增 'xxx'」 when no result's name equals the
 typed text exactly (`lib/typeahead.js`) - and only once the search has
 answered, so a quick Enter cannot make a stub named after something the
@@ -339,7 +350,7 @@ words beside 「新增」 saying what the save will make. Up / Down
 move, Enter picks - and never submits the form
 around it - Escape closes the list without closing a dialog it sits in. It only
 picks: `onSelect(option)` hands the caller `{ type, id, label, needsDetail,
-kind }` - `type` one of `ingredient`, `dish`, `item`, `new`, `new-dish` - and
+kind }` - `type` one of `ingredient`, `dish`, `recipe`, `item`, `new`, `new-dish` - and
 the box clears. `Picked`, from the same file, is how every caller
 shows the choice in its place, with 待補 for a stub and 更換 to search again.
 
@@ -348,6 +359,30 @@ caller what is in the box ('' after a pick), and every caller refuses to save
 over it: a recipe line holding text is not blank (below); the ingredient's
 品種 parent and the recipe's 料理 refuse the save with a sentence naming the
 text; the merge picker says it under the box.
+
+**A new recipe asks how to start** (`pages/edit/NewRecipeChooser.jsx`):
+`/edit/recipes/new` with none of `blank`, `template` or `from` in its query
+string shows three sections instead of the form - **空白** (「空白食譜」),
+**從範本** (the templates, in 設定's order, each with its line and step
+counts; while there are none, where they come from and a link to 設定's 範本
+tab) and **複製另一份食譜** (the typeahead over the recipe library). A choice
+is written into the URL (`lib/newRecipe.js`) - `?blank=1`, `?template=<id>`
+or `?from=<recipe id>`, pushed, so Back returns to the question - keeping
+`?dish=` and nothing else, and the form opens on it. The dish page's
+「＋ 新增食譜」 lands here too, the chooser saying which dish the recipe will
+be under. The form waits for the template or recipe it was opened on before
+it draws, so nothing typed is overwritten, and fills it in once:
+
+- **from a template**: 份量, 時間, 材料 and 步驟 in their groups (steps with
+  their kinds), 做法 and 器材. The header says 「從範本「…」開始。」 and, when
+  the server left references out, 「範本裡有 n 個項目已不存在，已略過。」.
+- **from another recipe**: all of that, and 保存 and 筆記; its dish is chosen
+  unless `?dish=` names one. **Not its name, sources, status or pictures**:
+  the header says 「複製自「…」」, linking to it, and that those were not
+  copied. The new recipe starts on the first status, as any new recipe.
+
+Nothing is written until 儲存, and what it writes is a new recipe. A template
+or recipe that cannot be read says so with 「重新選擇」 back to the chooser.
 
 **A recipe's 料理** is the form's first section, with the recipe's optional
 **名稱** beside it (blank shows the dish's name) and 狀態, 份量 and 時間 under
@@ -361,6 +396,21 @@ dish chosen meanwhile; 取消 then goes back to the dish. With no dish, the save
 is refused - 「這份食譜是哪道料理？」. The fields that are the dish's - names,
 kind, course, serves-as, labels, description, aliases - are the dish form's,
 not this one's.
+
+**材料, 步驟 and 做法、器材 are shared sections**
+(`components/forms/RecipeLinesSection.jsx`, `RecipeStepsSection.jsx`,
+`RecipeMethodsSection.jsx`), drawn by the recipe form and the template form
+alike; `lib/recipeStructure.js` reads a recipe response or a template body
+into their state and builds the `lines` / `line_groups` / `steps` /
+`step_groups` / `method_ids` / `equipment_ids` payload from it.
+`RecipeLinesSection`'s `allowNew` is the one difference: off on the template
+form, so a line's typeahead offers only what is already in the libraries.
+
+**The template form** (`pages/edit/TemplateForm.jsx`) is 名稱 (required -
+「範本要有名稱。」), 份量, 時間 and those three sections. A saved template
+read back with `dropped` says how many items no longer exist and that saving
+removes them for good. POST or PATCH sends `{name, body}`, the whole body;
+saving and 取消 go to 設定's 範本 tab.
 
 **The dish form** (`pages/edit/DishForm.jsx`) is the names, 種類 (a 料理 /
 醬料 toggle), 類別 and 地區 selects, 也可以當作 (never the dish's own course)
@@ -461,7 +511,7 @@ cover and a thumbnail) and 移除.
 ## 設定 and 圖片
 
 `/edit/settings` is `pages/edit/Settings.jsx`: a tab each for 食材分類,
-常用食材, 標籤, 類別, 地區, 狀態, 來源, 作者, 材料分組, 步驟分組, 做法 and 器材, with 圖片庫 - the way
+常用食材, 範本, 標籤, 類別, 地區, 狀態, 來源, 作者, 材料分組, 步驟分組, 做法 and 器材, with 圖片庫 - the way
 into `/edit/images` - beside the heading. 類別 and 地區 file a dish (地區 is
 台式, 中式, 日式 …, hand-ordered, the order the dish form and filters offer);
 renaming either marks the dish and recipe reads stale. 狀態 is the recipe statuses (想試,
@@ -474,7 +524,7 @@ them marks every recipe read stale, as a course does. 作者 is listed by name, 
 drag handle and a new author is added without a `sort_order`.
 
 - **The tab is in the URL**, `?tab=` with `categories`, `common-ingredients`,
-  `labels`, `courses`, `regions`,
+  `templates`, `labels`, `courses`, `regions`,
   `statuses`, `platforms`, `authors`, `line-groups`, `step-groups`, `methods` or
   `equipment` (`hooks/useUrlTab.js`), so a tab can be linked to
   and survives a reload. A missing or unknown tab is the first, 食材分類, and
@@ -539,6 +589,16 @@ vocabulary's move follows: the new list shows immediately, the handles and
 failure puts the stored list back with the server's sentence above it. A
 change makes only `GET /api/common-ingredients` stale - which is what the
 recipe form's chips read.
+
+**範本** (`components/settings/TemplatesEditor.jsx`) is the recipe templates,
+in the order the new-recipe chooser offers them. Each row is the template's
+name - a link to its form - with 材料 n · 步驟 m, a drag handle, 改名 (one
+name box in place; Enter saves, Escape puts the row back, a taken name is
+said in the row) and 刪除 after asking in `ConfirmModal`. 「＋ 新增範本」 opens
+an empty form. A drag `PUT`s the whole order (`{ids}`) at once, by the same
+rule: shown immediately, the handles off until it has landed and the list has
+been read again, the stored order back with the server's sentence on a
+refusal.
 
 Label rows show where each label is used - 食材, 料理 and 筆記 separately; the
 other vocabularies show `usage_count`. A change invalidates the vocabulary

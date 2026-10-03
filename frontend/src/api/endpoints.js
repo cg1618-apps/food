@@ -47,6 +47,19 @@ export const endpoints = {
     // PUT [{image_id, focus}] in order: replaces the gallery.
     images: (id) => `${WRITE}/recipes/${id}/images`,
   },
+  // 範本: a named skeleton a new recipe starts from. The detail is the body
+  // resolved into a recipe's shapes, with `dropped` counting what no longer
+  // exists; PUT {ids} saves the order of them all after a drag; POST {name}
+  // to fromRecipe makes one from that recipe's structure.
+  templates: {
+    list: () => `${API}/recipe-templates`,
+    detail: (id) => `${API}/recipe-templates/${id}`,
+    create: () => `${WRITE}/recipe-templates`,
+    update: (id) => `${WRITE}/recipe-templates/${id}`,
+    remove: (id) => `${WRITE}/recipe-templates/${id}`,
+    order: () => `${WRITE}/recipe-templates/order`,
+    fromRecipe: (recipeId) => `${WRITE}/recipe-templates/from-recipe/${recipeId}`,
+  },
   ingredients: {
     list: () => `${API}/ingredients`,
     detail: (id) => `${API}/ingredients/${id}`,

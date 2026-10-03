@@ -40,7 +40,9 @@ function secondary(row) {
 /**
  * The options for `query`.
  *
- *   ingredients, dishes  the server's answers (either may be absent)
+ *   ingredients, dishes, recipes  the server's answers (any may be absent);
+ *                        a recipe is offered by its display name, its dish's
+ *                        beside it when the two differ
  *   exclude              { ingredient: [ids], dish: [ids] } never offered -
  *                        a recipe's own dish on its lines, an ingredient not
  *                        merged into itself
@@ -48,13 +50,14 @@ function secondary(row) {
  *   allowNewDish         offer 「新增 料理」 as well (type 'new-dish')
  *   limit                per source
  *
- * Each option: { key, type: 'ingredient' | 'dish' | 'new' | 'new-dish', id,
+ * Each option: { key, type: 'ingredient' | 'dish' | 'recipe' | 'new' | 'new-dish', id,
  * label, detail, needsDetail, kind }. A new option's `label` is the typed
  * text.
  */
 export function mergeResults({
   ingredients = [],
   dishes = [],
+  recipes = [],
   query = '',
   exclude = {},
   allowNew = false,
@@ -89,6 +92,14 @@ export function mergeResults({
         kind: row.kind,
         exact: isExactMatch(row, query),
       })),
+    ...(recipes ?? []).slice(0, limit).map((row) => ({
+      key: `recipe-${row.id}`,
+      type: 'recipe',
+      id: row.id,
+      label: row.display_name,
+      detail: row.dish && row.dish.display_name !== row.display_name ? row.dish.display_name : '',
+      exact: isExactMatch(row, query),
+    })),
   ]
 
   return withNew(options, query, allowNew, allowNewDish)

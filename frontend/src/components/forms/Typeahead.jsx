@@ -12,10 +12,11 @@
 // It only PICKS. What a pick means - a recipe line's target, a recipe's dish,
 // a merge target - is the caller's, through `onSelect(option)`; the box
 // clears itself afterwards. Options are lib/typeahead.js's:
-// { type: 'ingredient' | 'dish' | 'item' | 'new' | 'new-dish', id, label,
-// detail, needsDetail, kind }.
+// { type: 'ingredient' | 'dish' | 'recipe' | 'item' | 'new' | 'new-dish', id,
+// label, detail, needsDetail, kind }.
 //
-//   sources      which libraries to search: ['ingredient'], ['dish'] or both
+//   sources      which libraries to search: ['ingredient'], ['dish'] or both;
+//                or ['recipe'] - the new-recipe chooser's 複製另一份食譜
 //   items        rows ({ id, display_name, name_cn, name_en }) to filter in
 //                the browser instead of searching; options are type 'item'
 //   onSelect     (option) => void
@@ -41,7 +42,7 @@ import { cx } from '../../lib/cx'
 import { localResults, mergeResults, stepActive } from '../../lib/typeahead'
 import { Badge, Chip, Input } from '../ui/primitives'
 
-const TYPE_WORDS = { ingredient: '食材', dish: '料理' }
+const TYPE_WORDS = { ingredient: '食材', dish: '料理', recipe: '食譜' }
 
 /**
  * What a typeahead chose, shown in its place: the name (a link when `to` is
@@ -97,6 +98,7 @@ export default function Typeahead({
   const local = items !== undefined
   const searchIngredients = !local && sources.includes('ingredient') && settled !== ''
   const searchDishes = !local && sources.includes('dish') && settled !== ''
+  const searchRecipes = !local && sources.includes('recipe') && settled !== ''
   const ingredients = useApiQuery(
     endpoints.ingredients.list(),
     { q: settled },
@@ -107,11 +109,19 @@ export default function Typeahead({
     { q: settled },
     { enabled: searchDishes, placeholderData: keepPreviousData },
   )
+  const recipes = useApiQuery(
+    endpoints.recipes.list(),
+    { q: settled },
+    { enabled: searchRecipes, placeholderData: keepPreviousData },
+  )
 
   const typed = query.trim()
   const searching =
     !local &&
-    (typed !== settled || (searchIngredients && ingredients.isFetching) || (searchDishes && dishes.isFetching))
+    (typed !== settled ||
+      (searchIngredients && ingredients.isFetching) ||
+      (searchDishes && dishes.isFetching) ||
+      (searchRecipes && recipes.isFetching))
   // 「新增」 waits for the search to answer: offered before it, a quick Enter
   // makes a stub named after something the library already has.
   let options = []
@@ -121,6 +131,7 @@ export default function Typeahead({
     options = mergeResults({
       ingredients: searchIngredients ? ingredients.data : [],
       dishes: searchDishes ? dishes.data : [],
+      recipes: searchRecipes ? recipes.data : [],
       query: typed,
       exclude,
       allowNew: allowNew && !searching,

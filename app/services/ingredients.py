@@ -31,6 +31,7 @@ from app.models import (
     Label,
     RecipeLine,
 )
+from app.services import recipe_templates
 from app.services.hierarchy import check_parent, is_descendant
 from app.services.search import ESCAPE, contains
 
@@ -479,6 +480,11 @@ def merge(db: Session, plan: MergePlan) -> Ingredient:
     re-read and hold only what stayed behind - the dropped notes, the images
     the target already had, its aliases - which go with it.
 
+    Recipe templates follow too: every template line naming the source names
+    the target (`recipe_templates.rewrite_ingredient`). Like a 常用食材 entry,
+    that is not in the plan - a template is a starting point, not content the
+    merge moves.
+
     A 常用食材 entry follows the source to the target, keeping its place in
     the list, unless the target is listed already - then the source's entry
     is left to go with the source (CASCADE). It is not in the plan: it moves
@@ -512,6 +518,8 @@ def merge(db: Session, plan: MergePlan) -> Ingredient:
     _move_after(db, IngredientHeating, plan.heating, target_id, "sort_order", heating)
     _move_after(db, IngredientImage, plan.images, target_id, "position", positions)
     _move_after(db, IngredientPreservation, plan.preservation, target_id, "sort_order", kept)
+
+    recipe_templates.rewrite_ingredient(db, source_id, target_id)
 
     target.labels.extend(plan.labels)
     target.aliases.extend(IngredientAlias(value=v) for v in plan.new_aliases)

@@ -18,6 +18,18 @@ describe('mergeResults', () => {
     expect(options[1]).toMatchObject({ kind: 'sauce' })
   })
 
+  it('offers recipes by their name, with the dish beside one that has its own', () => {
+    const recipes = [
+      { id: 3, display_name: '阿嬤版', name: '阿嬤版', dish: { id: 9, display_name: '滷肉' } },
+      { id: 4, display_name: '滷肉', name: null, dish: { id: 9, display_name: '滷肉' } },
+    ]
+    const options = mergeResults({ recipes, query: '滷' })
+    expect(options.map((o) => [o.type, o.id, o.label, o.detail])).toEqual([
+      ['recipe', 3, '阿嬤版', '滷肉'],
+      ['recipe', 4, '滷肉', ''],
+    ])
+  })
+
   it('offers 新增 only when nothing matches the typed text exactly', () => {
     const near = mergeResults({ ingredients: [ginger], query: '薑末', allowNew: true })
     expect(near.at(-1)).toMatchObject({ type: 'new', label: '薑末' })

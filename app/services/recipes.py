@@ -361,7 +361,7 @@ def _flat(lists: dict, rows_field: str) -> list:
     return rows
 
 
-def _resolve_groups(db: Session, rows_field: str, entries) -> list[tuple[int | None, str | None]]:
+def resolve_groups(db: Session, rows_field: str, entries) -> list[tuple[int | None, str | None]]:
     """`(value id, one-off name)` per group, exactly one of the two set.
 
     Read-only, so it runs with the checks. Every id sent must exist; a name
@@ -369,6 +369,9 @@ def _resolve_groups(db: Session, rows_field: str, entries) -> list[tuple[int | N
     becomes that value. After that a recipe may not hold one group twice -
     the same value, or the same one-off name in any case - which the uniques
     on the group tables would refuse anyway, but only as "something clashed".
+
+    Public because a recipe template's groups follow the same rules
+    (app/services/recipe_templates.py).
     """
     _, model, id_field, _, what = _PAIRS[rows_field]
     ids = [getattr(e, id_field) for e in entries if getattr(e, id_field) is not None]
@@ -403,7 +406,7 @@ def _resolve_groups(db: Session, rows_field: str, entries) -> list[tuple[int | N
 def _check_groups(db: Session, lists: dict) -> dict[str, list]:
     """Rows field -> its resolved groups, for every pair that was sent."""
     return {
-        rows_field: _resolve_groups(db, rows_field, lists[groups_field])
+        rows_field: resolve_groups(db, rows_field, lists[groups_field])
         for rows_field, (groups_field, *_rest) in _PAIRS.items()
         if lists.get(groups_field) is not None
     }
