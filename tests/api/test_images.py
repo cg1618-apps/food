@@ -12,6 +12,9 @@ from PIL import Image as PILImage
 
 from app import config
 
+# Every recipe needs a status; the migration seeds them and create_all does not.
+pytestmark = pytest.mark.usefixtures("recipe_statuses")
+
 
 @pytest.fixture(autouse=True)
 def image_dir(tmp_path, monkeypatch):

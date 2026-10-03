@@ -32,7 +32,13 @@ from app.models.recipe import (
     RecipeSource,
     RecipeStep,
 )
-from app.models.vocabulary import CookingMethod, Equipment, RecipeCourse
+from app.models.vocabulary import (
+    CookingMethod,
+    Equipment,
+    RecipeCourse,
+    RecipeStatus,
+    SourcePlatform,
+)
 
 __all__ = [
     "CookingMethod",
@@ -60,5 +66,7 @@ __all__ = [
     "RecipeMethod",
     "RecipeServesAs",
     "RecipeSource",
+    "RecipeStatus",
     "RecipeStep",
+    "SourcePlatform",
 ]

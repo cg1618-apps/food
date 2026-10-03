@@ -30,8 +30,8 @@ def _vocab(rows) -> list[schemas.VocabRef]:
     return [schemas.VocabRef(id=r.id, display_name=r.display_name) for r in rows]
 
 
-def _course(row: Recipe) -> schemas.VocabRef | None:
-    return schemas.VocabRef(id=row.course.id, display_name=row.course.display_name) if row.course else None
+def _ref(value) -> schemas.VocabRef | None:
+    return schemas.VocabRef(id=value.id, display_name=value.display_name) if value else None
 
 
 def _summary(row: Recipe) -> schemas.RecipeSummary:
@@ -42,8 +42,8 @@ def _summary(row: Recipe) -> schemas.RecipeSummary:
         name_en=row.name_en,
         name_alt=row.name_alt,
         kind=row.kind,
-        status=row.status,
-        course=_course(row),
+        status=_ref(row.status),
+        course=_ref(row.course),
         methods=_vocab(row.methods),
         creators=recipes.creators(row),
         time=row.time,
@@ -63,15 +63,25 @@ def _response(row: Recipe, used_in: list[Recipe]) -> schemas.RecipeResponse:
         name_en=row.name_en,
         name_alt=row.name_alt,
         kind=row.kind,
-        status=row.status,
-        course=_course(row),
+        status=_ref(row.status),
+        course=_ref(row.course),
         servings=row.servings,
         time=row.time,
         description=row.description,
         storage_notes=row.storage_notes,
         notes=row.notes,
         aliases=sorted(alias.value for alias in row.aliases),
-        sources=[schemas.SourceResponse.model_validate(s) for s in row.sources],
+        sources=[
+            schemas.SourceResponse(
+                id=s.id,
+                platform=_ref(s.platform),
+                creator=s.creator,
+                url=s.url,
+                title=s.title,
+                sort_order=s.sort_order,
+            )
+            for s in row.sources
+        ],
         lines=[
             schemas.LineResponse(
                 id=line.id,
@@ -119,7 +129,7 @@ def _full(db: Session, row: Recipe) -> schemas.RecipeResponse:
 def list_recipes(
     q: str | None = Query(default=None, description="Matches any name slot or an alias"),
     course_id: list[int] | None = Query(None),
-    status: list[str] | None = Query(None),
+    status_id: list[int] | None = Query(None),
     kind: list[str] | None = Query(None),
     label_id: list[int] | None = Query(None),
     method_id: list[int] | None = Query(None),
@@ -135,7 +145,7 @@ def list_recipes(
         db,
         q=q,
         course_id=course_id,
-        status=status,
+        status_id=status_id,
         kind=kind,
         label_id=label_id,
         method_id=method_id,
@@ -183,7 +193,7 @@ def create_recipe(payload: schemas.RecipeCreate, db: Session = Depends(get_db)):
 
 @edit.patch("/{recipe_id}", response_model=schemas.RecipeResponse)
 def update_recipe(recipe_id: int, payload: schemas.RecipeUpdate, db: Session = Depends(get_db)):
-    """Also the in-place status change: a PATCH carrying only `status`."""
+    """Also the in-place status change: a PATCH carrying only `status_id`."""
     return _full(db, recipes.update(db, recipe_id, payload))
 
 

@@ -7,7 +7,12 @@ sub-recipes are refused at any depth; a new name typed twice is one stub; a
 typed name matching an existing alias reuses that row.
 """
 
+import pytest
+
 from app.models import Ingredient, IngredientAlias
+
+# Every recipe needs a status; the migration seeds them and create_all does not.
+pytestmark = pytest.mark.usefixtures("recipe_statuses")
 
 
 def create(client, **body):

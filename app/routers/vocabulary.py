@@ -1,4 +1,4 @@
-"""One factory, three vocabularies. Reads are public; writes sit behind Access.
+"""One factory, five vocabularies. Reads are public; writes sit behind Access.
 
 A delete of a value still in use is refused here with a 409 that carries the
 count, before the database is asked. The RESTRICT foreign keys are the
@@ -13,7 +13,7 @@ from app import schemas
 from app.constants import FIXED_VOCABULARIES
 from app.database import get_db
 from app.errors import AppError
-from app.models import CookingMethod, Equipment, RecipeCourse
+from app.models import CookingMethod, Equipment, RecipeCourse, RecipeStatus, SourcePlatform
 from app.routing import read_router, write_router
 from app.services import vocabularies
 
@@ -86,6 +86,10 @@ def build(model, resource: str, tag: str, noun: str) -> tuple[APIRouter, APIRout
 
 
 course_router, course_edit = build(RecipeCourse, "recipe-courses", "Recipe courses", "course")
+status_router, status_edit = build(RecipeStatus, "recipe-statuses", "Recipe statuses", "status")
+platform_router, platform_edit = build(
+    SourcePlatform, "source-platforms", "Source platforms", "source platform"
+)
 method_router, method_edit = build(
     CookingMethod, "cooking-methods", "Cooking methods", "cooking method"
 )
@@ -103,6 +107,10 @@ def fixed_vocabularies():
 ROUTERS = [
     course_router,
     course_edit,
+    status_router,
+    status_edit,
+    platform_router,
+    platform_edit,
     method_router,
     method_edit,
     equipment_router,

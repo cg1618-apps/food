@@ -7,7 +7,11 @@ Every refusal test sets up the thing it refuses, and has a mirror that commits.
 
 import pytest
 
-from app.models import CookingMethod, Equipment, Label, Recipe, RecipeCourse
+from app.models import CookingMethod, Equipment, Label, Recipe, RecipeCourse, RecipeStatus
+
+# Every recipe needs a status, and a source a platform; the migration seeds
+# both and create_all does not.
+pytestmark = pytest.mark.usefixtures("recipe_statuses", "source_platforms")
 
 
 @pytest.fixture
@@ -37,13 +41,17 @@ def delete_params(client, recipe_id):
     return {k: counts[k] for k in ("aliases", "sources", "lines", "steps")}
 
 
-def test_a_recipe_round_trips_through_create_read_update_delete(client, vocab, ingredient):
+def test_a_recipe_round_trips_through_create_read_update_delete(
+    client, vocab, ingredient, recipe_statuses, source_platforms
+):
+    can_cook = recipe_statuses["可煮"]
+    youtube = source_platforms["YouTube"]
     created = create(
         client,
         name_cn="番茄炒蛋",
         name_en="tomato and egg",
         kind="dish",
-        status="can_cook",
+        status_id=can_cook.id,
         course_id=vocab["course"].id,
         servings="2 人",
         time="15m",
@@ -51,7 +59,7 @@ def test_a_recipe_round_trips_through_create_read_update_delete(client, vocab, i
         storage_notes="當天吃完",
         notes="蛋先炒",
         aliases=["西紅柿炒雞蛋"],
-        sources=[{"platform": "youtube", "creator": "阿基師", "url": "https://example.com/v"}],
+        sources=[{"platform_id": youtube.id, "creator": "阿基師", "url": "https://example.com/v"}],
         lines=[{"ingredient_id": ingredient.id, "amount": "1 小塊", "section": "爆香"}],
         steps=[{"body": "蛋打散"}, {"section": "炒", "body": "下番茄"}],
         serves_as_ids=[vocab["side"].id],
@@ -61,10 +69,11 @@ def test_a_recipe_round_trips_through_create_read_update_delete(client, vocab, i
     )
     read = client.get(f"/api/recipes/{created['id']}").json()
     assert read["display_name"] == "番茄炒蛋"
-    assert read["status"] == "can_cook"
+    assert read["status"] == {"id": can_cook.id, "display_name": "可煮"}
     assert read["course"]["display_name"] == "主菜"
     assert read["aliases"] == ["西紅柿炒雞蛋"]
     assert read["sources"][0]["creator"] == "阿基師"
+    assert read["sources"][0]["platform"] == {"id": youtube.id, "display_name": "YouTube"}
     assert read["sources"][0]["sort_order"] == 0
     assert read["lines"][0]["ingredient"]["display_name"] == "生薑"
     assert read["lines"][0]["sub_recipe"] is None
@@ -104,7 +113,7 @@ def test_a_recipe_round_trips_through_create_read_update_delete(client, vocab, i
 def test_a_bare_recipe_is_a_dish_nobody_has_tried_and_not_written_up(client):
     created = create(client, name_cn=None, name_en="curry")
     assert created["kind"] == "dish"
-    assert created["status"] == "want_to_try"
+    assert created["status"]["display_name"] == "想試"
     assert created["written_up"] is False
     assert created["display_name"] == "curry"
 
@@ -113,11 +122,13 @@ def test_a_step_alone_makes_a_recipe_written_up(client):
     assert create(client, steps=[{"body": "煮"}])["written_up"] is True
 
 
-def test_patch_leaves_absent_lists_alone_and_replaces_sent_ones(client, vocab, ingredient):
+def test_patch_leaves_absent_lists_alone_and_replaces_sent_ones(
+    client, vocab, ingredient, source_platforms
+):
     created = create(
         client,
         aliases=["a"],
-        sources=[{"platform": "book", "title": "家常菜"}],
+        sources=[{"platform_id": source_platforms["書"].id, "title": "家常菜"}],
         lines=[{"ingredient_id": ingredient.id}],
         steps=[{"body": "one"}],
         label_ids=[vocab["label"].id],
@@ -136,7 +147,7 @@ def test_patch_leaves_absent_lists_alone_and_replaces_sent_ones(client, vocab, i
 
 
 def test_re_sending_the_same_lists_unchanged_does_not_collide_with_itself(
-    client, ingredient, vocab
+    client, ingredient, vocab, source_platforms
 ):
     """The unit of work INSERTs before it DELETEs, so a wholesale replace that
     reuses position 0 collides with uq_recipe_line_position / _step_position
@@ -144,7 +155,7 @@ def test_re_sending_the_same_lists_unchanged_does_not_collide_with_itself(
     so positions 0 AND 1 are both reused."""
     payload = {
         "aliases": ["x", "y"],
-        "sources": [{"platform": "website", "url": "https://example.com"}],
+        "sources": [{"platform_id": source_platforms["網站"].id, "url": "https://example.com"}],
         "lines": [{"ingredient_id": ingredient.id}, {"ingredient_id": ingredient.id, "amount": "2"}],
         "steps": [{"body": "one"}, {"body": "two"}],
         "label_ids": [vocab["label"].id],
@@ -160,28 +171,58 @@ def test_re_sending_the_same_lists_unchanged_does_not_collide_with_itself(
     assert body["aliases"] == ["x", "y"]
 
 
-def test_a_status_only_patch_changes_the_status_and_nothing_else(client, ingredient):
+def test_a_status_only_patch_changes_the_status_and_nothing_else(
+    client, ingredient, recipe_statuses
+):
+    regular = recipe_statuses["常煮"]
     created = create(client, lines=[{"ingredient_id": ingredient.id}], notes="keep")
-    body = client.patch(f"/api/edit/recipes/{created['id']}", json={"status": "regular"}).json()
-    assert body["status"] == "regular"
+    body = client.patch(
+        f"/api/edit/recipes/{created['id']}", json={"status_id": regular.id}
+    ).json()
+    assert body["status"] == {"id": regular.id, "display_name": "常煮"}
     assert body["notes"] == "keep"
     assert len(body["lines"]) == 1
 
 
 @pytest.mark.parametrize(
     "field, value",
-    [("kind", "snack"), ("status", "done"), ("kind", None), ("status", None)],
+    [("kind", "snack"), ("status_id", 999999), ("kind", None), ("status_id", None)],
 )
 def test_an_unknown_or_empty_kind_or_status_is_refused(client, field, value):
+    """The statuses fixture makes the table non-empty, so 999999 is refused
+    for naming nothing rather than for there being nothing to name."""
     created = create(client)
     response = client.patch(f"/api/edit/recipes/{created['id']}", json={field: value})
     assert response.status_code == 422
     assert client.post("/api/edit/recipes", json={"name_cn": "x", field: value}).status_code == 422
 
 
-def test_a_known_kind_and_status_are_accepted(client):
-    created = create(client, kind="base", status="regular")
-    assert (created["kind"], created["status"]) == ("base", "regular")
+def test_a_known_kind_and_status_are_accepted(client, recipe_statuses):
+    regular = recipe_statuses["常煮"]
+    created = create(client, kind="base", status_id=regular.id)
+    assert (created["kind"], created["status"]["id"]) == ("base", regular.id)
+
+
+def test_a_recipe_saved_without_a_status_gets_the_first_in_sort_order(
+    client, db, recipe_statuses
+):
+    """Reordered so the first is no longer the one with the lowest id: the
+    default follows sort_order, not insertion."""
+    recipe_statuses["常煮"].sort_order = 1
+    db.flush()
+    created = create(client)
+    assert created["status"]["display_name"] == "常煮"
+
+
+def test_a_recipe_saved_without_a_status_when_there_are_none_is_422(client, db):
+    """The table is emptied first - the fixture filled it - so this is the
+    empty case on purpose; every other save in this file is the mirror."""
+    db.query(RecipeStatus).delete()
+    db.flush()
+    response = client.post("/api/edit/recipes", json={"name_cn": "x"})
+    assert response.status_code == 422
+    assert "狀態" in response.json()["detail"]
+    assert db.query(Recipe).count() == 0
 
 
 def test_a_recipe_needs_a_name(client):
@@ -202,23 +243,34 @@ def test_clearing_the_only_name_is_refused_but_clearing_one_of_two_is_not(client
 @pytest.mark.parametrize(
     "source",
     [
-        {"platform": "youtube"},  # none of creator, url, title
-        {"platform": "youtube", "creator": "  "},  # blank is absent
-        {"platform": "tiktok", "creator": "x"},  # unknown platform
-        {"platform": "website", "url": "javascript:alert(1)"},
-        {"platform": "book", "title": "x", "sort_order": 3},  # order is the list's
+        {"platform_id": "YouTube"},  # none of creator, url, title
+        {"platform_id": "YouTube", "creator": "  "},  # blank is absent
+        {"platform_id": 999999, "creator": "x"},  # a platform that does not exist
+        {"platform_id": None, "creator": "x"},  # a source needs a platform
+        {"creator": "x"},
+        {"platform_id": "網站", "url": "javascript:alert(1)"},
+        {"platform_id": "書", "title": "x", "sort_order": 3},  # order is the list's
     ],
 )
-def test_a_bad_source_is_refused(client, source):
+def test_a_bad_source_is_refused(client, source_platforms, source):
+    """A platform is written by name here and swapped for its id, so the
+    platforms table is non-empty and 999999 is refused for naming nothing."""
+    source = dict(source)
+    if isinstance(source.get("platform_id"), str):
+        source["platform_id"] = source_platforms[source["platform_id"]].id
     response = client.post("/api/edit/recipes", json={"name_cn": "x", "sources": [source]})
     assert response.status_code == 422
 
 
-def test_a_source_with_only_a_creator_is_accepted(client):
-    created = create(client, sources=[{"platform": "shorts", "creator": "x"}, {"platform": "book", "title": "y"}])
-    assert [(s["platform"], s["sort_order"]) for s in created["sources"]] == [
-        ("shorts", 0),
-        ("book", 1),
+def test_a_source_with_only_a_creator_is_accepted(client, source_platforms):
+    shorts, book = source_platforms["Shorts"].id, source_platforms["書"].id
+    created = create(
+        client,
+        sources=[{"platform_id": shorts, "creator": "x"}, {"platform_id": book, "title": "y"}],
+    )
+    assert [(s["platform"]["display_name"], s["sort_order"]) for s in created["sources"]] == [
+        ("Shorts", 0),
+        ("書", 1),
     ]
 
 

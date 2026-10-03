@@ -13,9 +13,10 @@
 // TABS is the whole list: a new vocabulary is one entry there - an id for the
 // URL, the label, and what its panel renders.
 //
-// What a change here makes stale is named per vocabulary: a renamed course is
-// shown on every recipe, a renamed method on recipes and on ingredient
-// heating rows, a renamed label on all three kinds of owner.
+// What a change here makes stale is named per vocabulary: a renamed course,
+// status or source platform is shown on every recipe, a renamed method on
+// recipes and on ingredient heating rows, a renamed label on all three kinds
+// of owner.
 import { endpoints } from '../../api/endpoints'
 import CategoryEditor from '../../components/settings/CategoryEditor'
 import VocabularyEditor from '../../components/settings/VocabularyEditor'
@@ -27,7 +28,7 @@ const RECIPES = endpoints.recipes.list()
 const INGREDIENTS = endpoints.ingredients.list()
 const NOTES = endpoints.notes.list()
 
-// The three factory vocabularies: one shape, one count (`usage_count`, the
+// The five factory vocabularies: one shape, one count (`usage_count`, the
 // RESTRICT references that would stop a delete).
 const FACTORY = [
   {
@@ -36,6 +37,20 @@ const FACTORY = [
     hint: '食譜放在哪一類：主菜、湯、甜點…',
     addLabel: '新增類別',
     invalidate: [endpoints.courses.list(), RECIPES],
+  },
+  {
+    key: 'statuses',
+    title: '狀態',
+    hint: '食譜做到哪一步：想試、可煮、常煮…。新食譜預設排第一的那個。',
+    addLabel: '新增狀態',
+    invalidate: [endpoints.statuses.list(), RECIPES],
+  },
+  {
+    key: 'platforms',
+    title: '來源',
+    hint: '食譜是在哪裡看到的：YouTube、網站、書…',
+    addLabel: '新增來源',
+    invalidate: [endpoints.platforms.list(), RECIPES],
   },
   {
     key: 'methods',

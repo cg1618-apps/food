@@ -78,6 +78,8 @@ describe('paths the backend actually serves', () => {
     [endpoints.notes.list(), '/api/kitchen-notes'],
     [endpoints.recipes.creators(), '/api/recipe-creators'],
     [endpoints.courses.list(), '/api/recipe-courses'],
+    [endpoints.statuses.update(3), '/api/edit/recipe-statuses/3'],
+    [endpoints.platforms.list(), '/api/source-platforms'],
     [endpoints.methods.update(4), '/api/edit/cooking-methods/4'],
     [endpoints.equipment.remove(5), '/api/edit/equipment/5'],
     [endpoints.ingredients.mergePreview(7), '/api/ingredients/7/merge-preview'],

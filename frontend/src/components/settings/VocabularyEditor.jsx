@@ -1,7 +1,8 @@
-// Frontend: one flat vocabulary on 設定 - labels, courses, cooking methods,
-// equipment. Add, rename, reorder and delete, each in place.
+// Frontend: one flat vocabulary on 設定 - labels, courses, recipe statuses,
+// source platforms, cooking methods, equipment. Add, rename, reorder and
+// delete, each in place.
 //
-// The three factory vocabularies (app/routers/vocabulary.py) carry a
+// The five factory vocabularies (app/routers/vocabulary.py) carry a
 // sort_order and are reordered by dragging (lib/vocabulary.js decides the
 // PATCHes, hooks/useSortOrderMove.js holds the list still while they land);
 // labels have none and are listed by name, so `ordered` is off for them. A

@@ -46,6 +46,8 @@ const INVALIDATE = [
   endpoints.categories.tree(),
   endpoints.labels.list(),
   endpoints.courses.list(),
+  endpoints.statuses.list(),
+  endpoints.platforms.list(),
   endpoints.methods.list(),
   endpoints.equipment.list(),
   endpoints.images.list(),
@@ -58,7 +60,8 @@ const EMPTY = {
   kind: 'dish',
   course_id: '',
   serves_as_ids: [],
-  status: 'want_to_try',
+  // '' until chosen: the first status is shown, and sent, in its place.
+  status_id: '',
   servings: '',
   time: '',
   variant_of: null,
@@ -75,9 +78,12 @@ const EMPTY = {
   gallery: [],
 }
 
+// A new row's platform is '' until chosen, and shown and sent as the first
+// platform in its place - so a row added before the platforms load still
+// lands on the first one.
 const sourceRow = (entry = {}) =>
   keyed({
-    platform: entry.platform ?? 'youtube',
+    platform_id: entry.platform ? String(entry.platform.id) : '',
     creator: entry.creator ?? '',
     url: entry.url ?? '',
     title: entry.title ?? '',
@@ -99,7 +105,7 @@ function fromRecipe(row) {
     kind: row.kind ?? 'dish',
     course_id: row.course ? String(row.course.id) : '',
     serves_as_ids: ids(row.serves_as),
-    status: row.status ?? 'want_to_try',
+    status_id: row.status ? String(row.status.id) : '',
     servings: row.servings ?? '',
     time: row.time ?? '',
     variant_of: row.variant_of ? { id: row.variant_of.id, label: row.variant_of.display_name } : null,
@@ -126,6 +132,8 @@ export default function RecipeForm() {
 
   const existing = useApiQuery(endpoints.recipes.detail(id), null, { enabled: !isNew })
   const courses = useApiQuery(endpoints.courses.list())
+  const statuses = useApiQuery(endpoints.statuses.list())
+  const platforms = useApiQuery(endpoints.platforms.list())
   const methods = useApiQuery(endpoints.methods.list())
   const equipment = useApiQuery(endpoints.equipment.list())
   const labels = useApiQuery(endpoints.labels.list())
@@ -161,6 +169,9 @@ export default function RecipeForm() {
       lines: previous.lines.map((line) => (line._key === key ? { ...line, pending } : line)),
     }))
   const sections = sectionsOf(form.lines, form.steps)
+  const firstId = (query) => (query.data?.length ? String(query.data[0].id) : '')
+  const statusId = form.status_id || firstId(statuses)
+  const platformOf = (row) => row.platform_id || firstId(platforms)
 
   function payload() {
     return {
@@ -171,12 +182,14 @@ export default function RecipeForm() {
       course_id: form.course_id ? Number(form.course_id) : null,
       // The UI does not offer the recipe's own course as a serves-as.
       serves_as_ids: form.serves_as_ids.filter((courseId) => String(courseId) !== form.course_id),
-      status: form.status,
+      // Left out when there is no status to choose: the server then gives
+      // the first one, or says there is none.
+      ...(statusId ? { status_id: Number(statusId) } : {}),
       servings: blankToNull(form.servings),
       time: blankToNull(form.time),
       variant_of_id: form.variant_of?.id ?? null,
       sources: form.sources.filter((row) => !isBlankSource(row)).map((row) => ({
-        platform: row.platform,
+        platform_id: Number(platformOf(row)),
         creator: blankToNull(row.creator),
         url: blankToNull(row.url),
         title: blankToNull(row.title),
@@ -222,6 +235,12 @@ export default function RecipeForm() {
     (list ?? []).map((entry) => (
       <option key={entry.value} value={entry.value}>
         {entry.label}
+      </option>
+    ))
+  const vocabularyOptions = (rows) =>
+    (rows ?? []).map((row) => (
+      <option key={row.id} value={row.id}>
+        {row.display_name}
       </option>
     ))
   const otherCourses = (courses.data ?? []).filter((course) => String(course.id) !== form.course_id)
@@ -280,8 +299,8 @@ export default function RecipeForm() {
                 </Select>
               </Field>
               <Field label="狀態">
-                <Select value={form.status} onChange={set('status')}>
-                  {fixedOptions(fixed.data?.recipe_statuses ?? [{ value: form.status, label: form.status }])}
+                <Select value={statusId} onChange={set('status_id')}>
+                  {vocabularyOptions(statuses.data)}
                 </Select>
               </Field>
               <Field label="份量">
@@ -337,10 +356,10 @@ export default function RecipeForm() {
                 <div className="grid gap-2 sm:grid-cols-4">
                   <Select
                     aria-label="平台"
-                    value={row.platform}
-                    onChange={(event) => update({ platform: event.target.value })}
+                    value={platformOf(row)}
+                    onChange={(event) => update({ platform_id: event.target.value })}
                   >
-                    {fixedOptions(fixed.data?.source_platforms ?? [{ value: row.platform, label: row.platform }])}
+                    {vocabularyOptions(platforms.data)}
                   </Select>
                   <Input
                     aria-label="作者"

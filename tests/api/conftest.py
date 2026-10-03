@@ -140,3 +140,37 @@ def ingredient(db, fallback_category):
     db.add(row)
     db.flush()
     return row
+
+
+@pytest.fixture
+def recipe_statuses(db):
+    """The three statuses the migration seeds, by name_cn, in their order.
+
+    `recipe.status_id` is NOT NULL and `create_all` seeds nothing, so a test
+    that saves a recipe needs these as it needs `fallback_category` for an
+    ingredient. 想試 is first, so it is what a recipe saved without a status
+    is given.
+    """
+    from app.models import RecipeStatus
+
+    rows = {
+        name: RecipeStatus(name_cn=name, sort_order=(i + 1) * 10)
+        for i, name in enumerate(["想試", "可煮", "常煮"])
+    }
+    db.add_all(rows.values())
+    db.flush()
+    return rows
+
+
+@pytest.fixture
+def source_platforms(db):
+    """The five platforms the migration seeds, by name_cn, in their order."""
+    from app.models import SourcePlatform
+
+    rows = {
+        name: SourcePlatform(name_cn=name, sort_order=(i + 1) * 10)
+        for i, name in enumerate(["YouTube", "Shorts", "網站", "書", "其他"])
+    }
+    db.add_all(rows.values())
+    db.flush()
+    return rows

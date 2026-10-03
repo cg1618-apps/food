@@ -14,12 +14,12 @@ import { endpoints } from '../../api/endpoints'
 import { FilterGroup, FilterOptions } from '../../components/layout/FilterPanel'
 import LibraryLayout from '../../components/layout/LibraryLayout'
 import { Badge } from '../../components/ui/primitives'
-import { fixedLabel, useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
+import { useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
 import { useUrlFilters } from '../../hooks/useUrlFilters'
 
 const SPEC = {
   course: { type: 'multi', api: 'course_id', id: true },
-  status: { type: 'multi', api: 'status' },
+  status: { type: 'multi', api: 'status_id', id: true },
   kind: { type: 'multi', api: 'kind' },
   method: { type: 'multi', api: 'method_id', id: true },
   equipment: { type: 'multi', api: 'equipment_id', id: true },
@@ -49,13 +49,12 @@ export default function RecipeLibrary() {
     placeholderData: keepPreviousData,
   })
   const courses = useApiQuery(endpoints.courses.list())
+  const statuses = useApiQuery(endpoints.statuses.list())
   const methods = useApiQuery(endpoints.methods.list())
   const equipment = useApiQuery(endpoints.equipment.list())
   const creators = useApiQuery(endpoints.recipes.creators())
   const labels = useApiQuery(endpoints.labels.list())
   const fixed = useFixedVocabularies()
-
-  const statusLabel = (value) => fixedLabel(fixed.data?.recipe_statuses, value)
 
   const card = (row) => ({
     cover: row.cover,
@@ -78,7 +77,7 @@ export default function RecipeLibrary() {
       key: 'status',
       header: '狀態',
       className: 'whitespace-nowrap',
-      render: (row) => statusLabel(row.status),
+      render: (row) => row.status?.display_name ?? null,
     },
   ]
 
@@ -100,7 +99,7 @@ export default function RecipeLibrary() {
       </FilterGroup>
       <FilterGroup title="狀態">
         <FilterOptions
-          options={fixedOptions(fixed.data?.recipe_statuses)}
+          options={asOptions(statuses.data)}
           selected={values.status}
           onToggle={(value) => toggle('status', value)}
         />
