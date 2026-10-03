@@ -4,7 +4,8 @@
 // purpose (docs/notes/decisions.md): media's picker holds ONE image per role,
 // and food's recipes, ingredients and notes each hold an ordered gallery whose
 // first picture is the cover. So this is a list: upload (several files at
-// once), choose from the library, reorder, set each picture's focus, remove.
+// once), choose from the library, reorder by dragging a tile's handle
+// (components/ui/Sortable.jsx), set each picture's focus, remove.
 //
 // It is controlled and saves nothing itself. `value` is lib/gallery.js's
 // `[{ image_id, url, thumb_url, focus }]`; the form PUTs it with the rest of
@@ -23,6 +24,7 @@ import { rowsReducer } from '../../lib/rowList'
 import Dialog from '../ui/Dialog'
 import { Button, Chip } from '../ui/primitives'
 import { ErrorNote, Loading } from '../ui/states'
+import { DragHandle, SortableItem, SortableList } from '../ui/Sortable'
 import FocusPicker from './FocusPicker'
 
 const PAGE_SIZE = 30
@@ -42,7 +44,7 @@ export default function GalleryPicker({ value, onChange }) {
     latest.current = value ?? []
   }, [value])
 
-  const move = (index, delta) => onChange(rowsReducer(items, { type: 'move', index, delta }))
+  const move = (from, to) => onChange(rowsReducer(items, { type: 'move', from, to }))
   const remove = (index) => onChange(rowsReducer(items, { type: 'remove', index }))
 
   async function onFiles(fileList) {
@@ -69,52 +71,44 @@ export default function GalleryPicker({ value, onChange }) {
   return (
     <div className="space-y-3">
       {items.length ? (
-        <ol className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {items.map((item, index) => (
-            <li
-              key={item.image_id}
-              aria-label={`圖片 ${index + 1}`}
-              className="overflow-hidden rounded-md border border-border bg-surface"
-            >
-              <div className="relative aspect-[4/3] bg-surface-2">
-                <img
-                  loading="lazy"
-                  src={item.thumb_url}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  style={focusStyle(item.focus)}
-                />
-                {index === 0 ? (
-                  <Chip tone="brand" className="absolute left-1.5 top-1.5">
-                    封面
-                  </Chip>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-0.5 p-1">
-                <IconButton
-                  label={`往前移圖片 ${index + 1}`}
-                  disabled={index === 0}
-                  onClick={() => move(index, -1)}
-                >
-                  ◀
-                </IconButton>
-                <IconButton
-                  label={`往後移圖片 ${index + 1}`}
-                  disabled={index === items.length - 1}
-                  onClick={() => move(index, 1)}
-                >
-                  ▶
-                </IconButton>
-                <IconButton label={`調整圖片 ${index + 1} 的焦點`} onClick={() => setFocusing(index)}>
-                  焦點
-                </IconButton>
-                <IconButton label={`移除圖片 ${index + 1}`} danger onClick={() => remove(index)}>
-                  移除
-                </IconButton>
-              </div>
-            </li>
-          ))}
-        </ol>
+        <SortableList ids={items.map((item) => item.image_id)} onMove={move} layout="grid">
+          <ol className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+            {items.map((item, index) => (
+              <SortableItem
+                key={item.image_id}
+                id={item.image_id}
+                as="li"
+                aria-label={`圖片 ${index + 1}`}
+                className="overflow-hidden rounded-md border border-border bg-surface"
+              >
+                <div className="relative aspect-[4/3] bg-surface-2">
+                  <img
+                    loading="lazy"
+                    src={item.thumb_url}
+                    alt=""
+                    draggable={false}
+                    className="h-full w-full object-cover"
+                    style={focusStyle(item.focus)}
+                  />
+                  {index === 0 ? (
+                    <Chip tone="brand" className="absolute left-1.5 top-1.5">
+                      封面
+                    </Chip>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-0.5 p-1">
+                  <DragHandle label={`圖片 ${index + 1}`} />
+                  <IconButton label={`調整圖片 ${index + 1} 的焦點`} onClick={() => setFocusing(index)}>
+                    焦點
+                  </IconButton>
+                  <IconButton label={`移除圖片 ${index + 1}`} danger onClick={() => remove(index)}>
+                    移除
+                  </IconButton>
+                </div>
+              </SortableItem>
+            ))}
+          </ol>
+        </SortableList>
       ) : (
         <p className="text-sm text-text-faint">還沒有圖片。第一張會是封面。</p>
       )}
@@ -177,15 +171,14 @@ export default function GalleryPicker({ value, onChange }) {
   )
 }
 
-function IconButton({ label, danger = false, disabled = false, onClick, children }) {
+function IconButton({ label, danger = false, onClick, children }) {
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
-      disabled={disabled}
       onClick={onClick}
-      className={`rounded-sm px-1.5 py-0.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-25 ${
+      className={`rounded-sm px-1.5 py-0.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
         danger ? 'text-text-muted hover:text-danger' : 'text-text-muted hover:text-text'
       }`}
     >

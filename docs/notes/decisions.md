@@ -337,6 +337,32 @@ so a later reader can tell a decision from an accident. These are food's.
   here has the same contract - cascade counts echoed back, `field`/`actual` on
   a stale 409, `used_in` on a refusal - so the differences are data, not code.
 
+### Reordering is a drag, as it now is in `media`
+
+Every reorderable list - the form lists, the gallery, the ordered
+vocabularies and the category tree - is reordered by dragging a handle, through
+`components/ui/Sortable.jsx`, ported from media's. food first copied media's
+earlier ▲ / ▼ buttons (◀ / ▶ in the gallery), on media's reasoning that two
+buttons work on a phone, with a keyboard and with a screen reader; media then
+replaced its own chevrons with drag, and food followed at the owner's request.
+
+- **Drag rather than step buttons.** A button costs one click per place, so
+  moving the twentieth step of a recipe to the top was nineteen clicks.
+- **dnd-kit's pointer events rather than native HTML5 drag.** A native drag
+  does nothing on a touch screen, and this app is used on a phone; it also
+  swallows the mouse wheel on Windows, so a row could only be dropped
+  somewhere already on screen.
+- **The keyboard path stays.** Up / Down on a focused handle moves the row
+  one place and focus follows it, so nothing the buttons did needs a pointer.
+  It is also what the tests drive.
+- **A move that saves at once freezes its list until it settles**, media's
+  rule: 設定's reorders build their PATCHes from the order on screen, so a
+  second drag sent before the first lands would be computed from a stale
+  order.
+- **The category tree became nested lists.** A drag needs each sibling group
+  contiguous on screen, and dragging a parent should carry its children; the
+  flat indented list could do neither.
+
 ### The one that is not a divergence but reads like one
 
 **Single-column unique name indexes use Postgres's DEFAULT null handling, not
