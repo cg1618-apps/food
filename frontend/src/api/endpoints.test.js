@@ -23,6 +23,7 @@ const WRITE_KEYS = new Set([
   'upload',
   'session',
   'replace',
+  'order',
 ])
 const READ_KEYS = new Set([
   'list',
@@ -92,6 +93,11 @@ describe('paths the backend actually serves', () => {
     [endpoints.ingredients.label(7, 2), '/api/edit/ingredients/7/labels/2'],
     [endpoints.images.upload(), '/api/edit/images'],
     [endpoints.vocabularies.fixed(), '/api/vocabularies/fixed'],
+    [endpoints.tbd.list(), '/api/tbd'],
+    [endpoints.tbd.create(), '/api/edit/tbd'],
+    [endpoints.tbd.update(4), '/api/edit/tbd/4'],
+    [endpoints.tbd.remove(4), '/api/edit/tbd/4'],
+    [endpoints.tbd.order(), '/api/edit/tbd/order'],
   ])('%s', (actual, expected) => {
     expect(actual).toBe(expected)
   })

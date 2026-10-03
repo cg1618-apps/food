@@ -35,6 +35,7 @@ from app.models.recipe import (
     RecipeStep,
     RecipeStepGroup,
 )
+from app.models.tbd import TbdEntry, TbdLink
 from app.models.vocabulary import (
     Author,
     CookingMethod,
@@ -81,4 +82,6 @@ __all__ = [
     "RecipeStepGroup",
     "SourcePlatform",
     "StepGroup",
+    "TbdEntry",
+    "TbdLink",
 ]

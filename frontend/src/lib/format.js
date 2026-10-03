@@ -22,3 +22,23 @@ export function linkHost(url) {
     return url
   }
 }
+
+const LINK_TEXT_MAX = 40
+
+/**
+ * A link as words, for one shown without a label: host (without `www.`) and
+ * path, no scheme, query or trailing slash, cut to LINK_TEXT_MAX characters
+ * with an ellipsis. Null for no link; the raw text for one that does not
+ * parse.
+ */
+export function linkText(url) {
+  if (!url) return null
+  let text
+  try {
+    const parsed = new URL(url)
+    text = `${parsed.hostname.replace(/^www\./, '')}${parsed.pathname}`.replace(/\/+$/, '')
+  } catch {
+    return url
+  }
+  return text.length > LINK_TEXT_MAX ? `${text.slice(0, LINK_TEXT_MAX - 1)}…` : text
+}

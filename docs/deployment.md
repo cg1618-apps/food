@@ -94,6 +94,9 @@ optional step or a note comes back as an ordinary step.
 `c1ommon`'s downgrade drops `common_ingredient`, and the 常用食材 list with
 it. No ingredient is touched.
 
+`t1bd`'s downgrade drops `tbd_link` and `tbd_entry`, and every entry on the
+TBD page with them. Nothing else is touched.
+
 **So there is no route that keeps the data.** The real choice is:
 
 - **roll back**, and lose everything entered since the release, or
@@ -131,7 +134,8 @@ they ever do not, believe the box.
 | Authors as a vocabulary | `a1uthors` — twenty-nine tables |
 | Line and step groups | `g1roups` — thirty-three tables |
 | Step kinds | `s1tepkinds` — no new table |
-| 常用食材 | `c1ommon` — thirty-four tables, the current head |
+| 常用食材 | `c1ommon` — thirty-four tables |
+| TBD | `t1bd` — thirty-six tables, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

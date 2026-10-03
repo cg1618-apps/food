@@ -18,6 +18,7 @@ from app.routers import (
     kitchen_note,
     label,
     recipe,
+    tbd,
     vocabulary,
 )
 
@@ -58,6 +59,8 @@ def create_app(dist: Path = DIST) -> FastAPI:
     app.include_router(recipe.edit)
     app.include_router(kitchen_note.router)
     app.include_router(kitchen_note.edit)
+    app.include_router(tbd.router)
+    app.include_router(tbd.edit)
     app.include_router(image.router)
     app.include_router(image.edit)
     for vocabulary_router in vocabulary.ROUTERS:
