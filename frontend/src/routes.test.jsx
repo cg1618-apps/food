@@ -95,3 +95,54 @@ describe('navigation', () => {
     ])
   })
 })
+
+// A click into the edit pages never reaches Access, so the page asks the
+// session probe and, when Access answers with a redirect, sends the whole
+// window through the login (components/layout/EditSignIn.jsx).
+describe('signing in on entering the edit pages', () => {
+  const SESSION = '/api/edit/session'
+
+  function stubAccess({ signedIn }) {
+    const assign = vi.fn()
+    vi.stubGlobal('location', { ...window.location, assign })
+    const fetchMock = vi.fn(async (url) => {
+      if (url !== SESSION) return new Response('[]', { status: 200 })
+      return signedIn
+        ? new Response(null, { status: 204 })
+        : { type: 'opaqueredirect', ok: false, status: 0 }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    return { assign, fetchMock }
+  }
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+  beforeEach(() => window.sessionStorage.clear())
+
+  it('sends a signed-out browser through the login and back to the page', async () => {
+    const { assign } = stubAccess({ signedIn: false })
+    renderAt('/edit/settings?tab=labels')
+    await vi.waitFor(() =>
+      expect(assign).toHaveBeenCalledWith(`${SESSION}?next=%2Fedit%2Fsettings%3Ftab%3Dlabels`),
+    )
+  })
+
+  // The mirror, with the same stub: a green above is the probe's answer doing
+  // the redirecting, not the wrapper redirecting unconditionally.
+  it('leaves a signed-in browser where it is', async () => {
+    const { assign, fetchMock } = stubAccess({ signedIn: true })
+    renderAt('/edit/settings')
+    await vi.waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(SESSION, expect.objectContaining({ redirect: 'manual' })),
+    )
+    await settle()
+    expect(assign).not.toHaveBeenCalled()
+  })
+
+  it('never asks on the public pages', async () => {
+    const { fetchMock } = stubAccess({ signedIn: false })
+    renderAt('/recipes')
+    await settle()
+    expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain(SESSION)
+  })
+})

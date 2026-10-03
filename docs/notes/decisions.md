@@ -68,6 +68,21 @@ What differs, and why:
   Access. `WRITE_PREFIX` in `app/routing.py` is the single definition,
   `deploy/gated-paths` is generated from it, and the platform's `apps.yml`
   carries `gated_paths` checked against that file in both directions.
+- **Access gates the edit pages too, and the frontend sends the browser
+  through the login itself.** With only `/api/edit` gated, 設定 opened signed
+  out and its first save failed as "Failed to fetch": Access answered the
+  background request with a redirect to its login on another origin, which a
+  fetch cannot follow, so the app never even saw a status. Gating `/edit` puts
+  the login in front of a page opened by URL. It cannot cover a page reached
+  by a click inside the SPA, which never reaches Access, so the edit pages
+  also probe `GET /api/edit/session` with `redirect: 'manual'` and, when
+  signed out, navigate the whole window through it — a path Access already
+  gates, so this works whether or not `/edit` is. Rejected: making every edit
+  link a full document load (scattered across a dozen components, and still
+  blind to a session that expires on an open page); reloading the page on a
+  failed save (throws away the form being saved). The probe is not a route
+  guard and does not contradict that rule: it renders the page whatever
+  happens and refuses nothing.
 
 Two things the skeleton pins that cost travel a production failure each, kept
 deliberately rather than inherited by accident:

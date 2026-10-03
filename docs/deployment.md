@@ -17,10 +17,18 @@ The platform's `bin/deploy food` does it, from `~/cg1618` on the box:
 4. Probes `/health`, which answers 200 only when the database is reachable *and*
    its Alembic revision matches the one the running code expects.
 
-`apps.yml` declares `gated_paths: ["/api/edit"]`, and `bin/deploy` refuses when
-that disagrees with this repository's `deploy/gated-paths` in either direction.
-Both must name the same prefix, and `deploy/gated-paths` is read from the
-commit — not the working tree.
+`apps.yml` declares `gated_paths: ["/api/edit", "/edit"]`, and `bin/deploy`
+refuses when that disagrees with this repository's `deploy/gated-paths` in
+either direction. Both must name the same prefixes, and `deploy/gated-paths` is
+read from the commit — not the working tree.
+
+**Adding a gated path is three steps in a fixed order**, because each later one
+fails loudly without the one before: the Access application covers the path
+first (dashboard work, and the only step that makes the gate real); then the
+platform's `apps.yml` declares it, which `bin/check-exposure` verifies against
+the live hostname; then this app's release ships it in `deploy/gated-paths`.
+Between the last two landing on `main`, `bin/deploy` refuses a food deploy —
+land the release rather than removing the declaration.
 
 ## Rolling back
 

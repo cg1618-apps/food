@@ -18,6 +18,12 @@ write endpoint sits below it.
 their prefixes from it, `deploy/gated-paths` is generated from it, and
 `tests/api/test_route_prefixes.py` asserts nothing escapes it.
 
+**Access also gates `/edit`, the edit pages.** That protects no data — the
+pages are the same public bundle as every other — but it puts the login in
+front of the page someone opens rather than behind their first save. So
+`GATED_PATHS`, and therefore `deploy/gated-paths` and `apps.yml`, list both
+`/api/edit` and `/edit`.
+
 ## Conventions
 
 - **`201` on create, `204` on delete**, uniformly.
@@ -529,6 +535,22 @@ Labels have no `sort_order`: they are listed by name, case-insensitively.
 it**, and that is intended — removing a tag from the vocabulary means removing
 it from the things tagged. No confirmation count: no owner is touched, and
 re-tagging is typing the label again.
+
+## Session
+
+`GET /api/edit/session` — the probe the edit pages use to reach the Access
+login. It checks nothing itself: Access answers before the app does, so a
+request that arrives has already been let through.
+
+- No query: **204**. A signed-out browser never gets this far — Access answers
+  with a redirect to its login, which the frontend reads as "signed out".
+- `?next=/edit/...`: **303** to that path. The frontend sends the browser here
+  as a top-level navigation when it is signed out; Access takes it through the
+  login and back to this URL, and this sends it on to the edit page it left.
+- A `next` that is not `/edit` or a path under it — another host, a
+  protocol-relative `//`, a backslash, a control character, a public page — is
+  **400**. An open redirect on a signed-in path would be a phishing link
+  carrying this hostname.
 
 ## Health
 

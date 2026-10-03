@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { buildUrl, errorMessage, fetchJson, jsonBody } from './client'
+import { buildUrl, errorMessage, fetchJson, jsonBody, SIGN_IN_MESSAGE } from './client'
 
 describe('errorMessage', () => {
   it('reads a plain detail string', () => {
@@ -88,5 +88,36 @@ describe('fetchJson request headers', () => {
       status: 409,
       body: { usage_count: 3 },
     })
+  })
+})
+
+// Access answers a signed-out write with a redirect to its login on another
+// origin. Followed, that dies as a bare "Failed to fetch"; not followed, it is
+// an opaqueredirect, which is readable and means exactly one thing here.
+describe('fetchJson and the Access sign-in', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('does not follow redirects under the gated prefix', async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await fetchJson('/api/edit/ingredient-categories', { method: 'POST' })
+    expect(fetchMock.mock.calls[0][1].redirect).toBe('manual')
+  })
+
+  // The mirror: a public read keeps the browser's default, so a redirect the
+  // server means (a trailing slash) is still followed rather than read as a
+  // sign-in.
+  it('leaves public reads to follow redirects as usual', async () => {
+    const fetchMock = vi.fn(async () => new Response('[]', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await fetchJson('/api/ingredient-categories')
+    expect(fetchMock.mock.calls[0][1]).not.toHaveProperty('redirect')
+  })
+
+  it('turns the redirect into a 401 that says what to do', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ type: 'opaqueredirect', ok: false, status: 0 })))
+    await expect(
+      fetchJson('/api/edit/ingredient-categories', { method: 'POST' }),
+    ).rejects.toMatchObject({ status: 401, signInRequired: true, message: SIGN_IN_MESSAGE })
   })
 })
