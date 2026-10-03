@@ -362,6 +362,36 @@ describe('the recipe page', () => {
     expect(within(sources).getByText('家常菜')).toBeTruthy()
   })
 
+  it('saves itself as a template under the name asked for, then links to it', async () => {
+    handler = ({ url, method, body }) => {
+      if (method === 'GET' && url === '/api/recipes/5') return json(RECIPE)
+      if (method === 'POST' && body.name === '麻婆豆腐') {
+        return json({ detail: 'Another template already has that name.' }, 422)
+      }
+      if (method === 'POST') return json({ id: 21, name: body.name, sort_order: 0, body: {}, dropped: 0 }, 201)
+      return null
+    }
+    renderAt('/recipes/5')
+    fireEvent.click(await screen.findByRole('button', { name: '存成範本' }))
+    const dialog = screen.getByRole('dialog', { name: '存成範本' })
+    // The recipe's name to start with; a name another template has is
+    // refused, said, and the dialog stays.
+    const box = within(dialog).getByRole('textbox', { name: '範本名稱' })
+    expect(box.value).toBe('麻婆豆腐')
+    fireEvent.click(within(dialog).getByRole('button', { name: '存成範本' }))
+    expect((await within(dialog).findByRole('alert')).textContent).toBe('Another template already has that name.')
+
+    fireEvent.change(box, { target: { value: '麻婆系' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: '存成範本' }))
+    const link = await within(dialog).findByRole('link', { name: '麻婆系' })
+    expect(link.getAttribute('href')).toBe('/edit/templates/21')
+    expect(within(dialog).getByRole('link', { name: '開啟範本' }).getAttribute('href')).toBe('/edit/templates/21')
+    expect(calls.filter((c) => c.method === 'POST')).toEqual([
+      { url: '/api/edit/recipe-templates/from-recipe/5', method: 'POST', body: { name: '麻婆豆腐' } },
+      { url: '/api/edit/recipe-templates/from-recipe/5', method: 'POST', body: { name: '麻婆系' } },
+    ])
+  })
+
   it('changes the status in place with a PATCH of status alone', async () => {
     renderAt('/recipes/5')
     const group = await screen.findByRole('group', { name: '狀態' })

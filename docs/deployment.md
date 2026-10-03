@@ -133,6 +133,9 @@ restore**, and drops:
 - the upgrade's choice of original - the downgrade takes the lowest id, which
   need not be the recipe the family had as its root.
 
+`t2emplates`'s downgrade drops `recipe_template`, and every recipe template
+with it. No recipe, ingredient or vocabulary is touched.
+
 **So there is no route that keeps the data.** The real choice is:
 
 - **roll back**, and lose everything entered since the release, or
@@ -172,7 +175,8 @@ they ever do not, believe the box.
 | Step kinds | `s1tepkinds` — no new table |
 | 常用食材 | `c1ommon` — thirty-four tables |
 | TBD | `t1bd` — thirty-six tables |
-| Dishes, regions; recipes as ways of making a dish | `d1ishes` — thirty-nine tables, the current head |
+| Dishes, regions; recipes as ways of making a dish | `d1ishes` — thirty-nine tables |
+| Recipe templates | `t2emplates` — forty tables, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

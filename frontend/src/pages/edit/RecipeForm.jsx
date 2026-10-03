@@ -1,5 +1,17 @@
 // Frontend: add or edit a recipe, /edit/recipes/new and /edit/recipes/:id.
 //
+// A new recipe asks first how to start (NewRecipeChooser): 空白, 從範本 or
+// 複製另一份食譜. The answer is in the URL (lib/newRecipe.js) - ?blank=1,
+// ?template=<id>, ?from=<recipe id> - and the form opens on it:
+//   - from a template: servings, time, the lines and steps in their groups
+//     (steps keeping their kinds), methods and equipment. A reference the
+//     template still holds to something since deleted is left out by the
+//     server, and the form says how many (「範本裡有 n 個項目已不存在，已略過」).
+//   - from another recipe: all of that, and its storage notes and notes, with
+//     its dish chosen unless ?dish= names another. Not its name, sources,
+//     status or pictures - and the form says which recipe it was copied from.
+// Nothing is saved until 儲存, and what is saved is a new recipe.
+//
 // In the order the page reads: the dish this is a recipe of, and the
 // recipe's own optional name; status, servings, time; sources; ingredient
 // lines; steps; methods, equipment; storage and notes; the gallery. What is
@@ -10,84 +22,45 @@
 // nothing matches, 「新增」 names a dish the save creates, as a 料理 or a 醬料
 // (料理 unless switched); a name the server already knows is reused instead.
 // `?dish=<id>` - the dish page's 「＋ 新增食譜」 - starts a new recipe with that
-// dish chosen.
+// dish chosen, whichever start is chosen.
 //
-// A line's ingredient or dish is picked the same way, searching both
-// libraries. When nothing matches, 「新增」 makes the line name an
-// ingredient that does not exist yet - shown with 待補 until the save, which
-// creates it as a stub in the same transaction - and 「新增料理」 a dish, a
-// 醬料, made by the save the same way. The server folds a name it already
-// knows into that row rather than duplicating it.
-// A source's author is picked the same way from the authors list, which is
-// small enough to fetch once and filter in the browser; 「新增」 there makes
-// the author on save, and a name the server already knows is reused.
-// Steps take a pasted block too: 「貼上多行」 splits it into one step per line,
-// strips the numbering (lib/steps.js) and adds them to the group chosen in
-// the dialog, or to the ungrouped steps, each an ordinary step.
-//
-// Each step row has a kind switch - 步驟 / 可省略 / 備註, the fixed
-// `step_kinds` list - beside its number. Only an ordinary step shows a
-// number, counted through every group as the recipe's page counts them; a
-// 備註 row's box is ruled and tinted the way the page draws a note. The rows'
-// accessible names (「步驟 3」) keep a running index, so every row has a
-// unique one whatever its kind.
-//
-// Above 材料 sit the 常用 chips, one per 設定's 常用食材, in its order
-// (components/forms/CommonIngredientChips.jsx). A tap appends a line naming
-// that ingredient to the ungrouped lines and puts the cursor in its 份量, so
-// the amount is typed next; a chip whose ingredient is already on a line is
-// marked used and still adds. No chips, no row.
-//
-// 材料 and 步驟 each sit in groups (components/forms/GroupedRowEditor.jsx):
-// the ungrouped rows first, then a box per group, picked from 設定's
-// 材料分組 / 步驟分組 or named for this recipe only. Rows are numbered through
-// every group, as the recipe's page numbers its steps.
+// 材料, 步驟 and 做法、器材 are the sections the template form shares
+// (components/forms/RecipeLinesSection.jsx, RecipeStepsSection.jsx,
+// RecipeMethodsSection.jsx): the 常用 chips, the groups, the line typeahead
+// with its 「新增」 and 「新增料理」 - a stub ingredient or a 醬料 made by the
+// save, folded into an existing row when the server already knows the name -
+// the step kinds and numbering, and 「貼上多行」.
+// A source's author is picked from the authors list, which is small enough to
+// fetch once and filter in the browser; 「新增」 there makes the author on
+// save, and a name the server already knows is reused.
 //
 // POST takes the whole recipe and PATCH replaces each list wholesale, so the
 // form always sends every list - lines with line_groups, steps with
 // step_groups, the pairs the server replaces together. Saving goes to the
 // recipe's page.
-import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { endpoints } from '../../api/endpoints'
-import ChipPicker from '../../components/forms/ChipPicker'
-import CommonIngredientChips from '../../components/forms/CommonIngredientChips'
 import DeleteDialog from '../../components/forms/DeleteDialog'
 import FormActions from '../../components/forms/FormActions'
 import GalleryPicker from '../../components/forms/GalleryPicker'
-import GroupedRowEditor from '../../components/forms/GroupedRowEditor'
+import RecipeLinesSection from '../../components/forms/RecipeLinesSection'
+import RecipeMethodsSection from '../../components/forms/RecipeMethodsSection'
+import RecipeStepsSection from '../../components/forms/RecipeStepsSection'
 import RowEditor from '../../components/forms/RowEditor'
 import Typeahead, { Picked } from '../../components/forms/Typeahead'
-import Dialog from '../../components/ui/Dialog'
-import { Button, Field, Input, Section, Select, TextArea, Toggle } from '../../components/ui/primitives'
+import { Field, Input, LinkButton, Section, Select, TextArea, Toggle } from '../../components/ui/primitives'
 import { ErrorNote, Loading } from '../../components/ui/states'
 import { fixedLabel, useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
 import { useOwnerSave } from '../../hooks/useOwnerSave'
 import { galleryChanged, galleryFromImages } from '../../lib/gallery'
-import {
-  UNGROUPED,
-  emptyGrouped,
-  flatRows,
-  groupedReducer,
-  groupsFromResponse,
-  groupsPayload,
-  rowsOf,
-  setRows,
-  updateRowByKey,
-} from '../../lib/groupedRows'
-import {
-  DISH,
-  emptyLine,
-  isStub,
-  lineFromResponse,
-  linesPayload,
-  newNames,
-  targetFromOption,
-} from '../../lib/recipeLines'
+import { newRecipeStart } from '../../lib/newRecipe'
+import { DISH, newNames, targetFromOption } from '../../lib/recipeLines'
 import { authorFromOption, sourceRow, sourcesPayload } from '../../lib/recipeSources'
-import { blankToNull, keyed } from '../../lib/rowList'
-import { NOTE, STEP, splitSteps, stepNumbers } from '../../lib/steps'
+import { emptyStructure, structureFromResponse, structurePayload } from '../../lib/recipeStructure'
+import { blankToNull } from '../../lib/rowList'
+import NewRecipeChooser from './NewRecipeChooser'
 
 // A recipe save moves its own reads, the dish library (its dish's recipe
 // count, cover and "used in"; a 新增 dish is a new row), the authors list, the
@@ -109,24 +82,19 @@ const INVALIDATE = [
   endpoints.images.list(),
 ]
 
-const EMPTY = {
+const empty = () => ({
   // { type: 'dish', id, label, kind } or { type: 'new-dish', label, kind }.
   dish: null,
   name: '',
   // '' until chosen: the first status is shown, and sent, in its place.
   status_id: '',
-  servings: '',
-  time: '',
+  // servings, time, lines, steps, method_ids, equipment_ids.
+  ...emptyStructure(),
   sources: [],
-  // { ungrouped, groups } each (lib/groupedRows.js).
-  lines: emptyGrouped(),
-  steps: emptyGrouped(),
-  method_ids: [],
-  equipment_ids: [],
   storage_notes: '',
   notes: '',
   gallery: [],
-}
+})
 
 const dishPick = (dish) => ({ type: 'dish', id: dish.id, label: dish.display_name, kind: dish.kind })
 
@@ -137,75 +105,64 @@ const dishFromOption = (option) =>
     ? { ...targetFromOption(option), kind: DISH }
     : { type: 'dish', id: option.id, label: option.label, kind: option.kind }
 
-const stepRow = (entry = {}) => keyed({ body: entry.body ?? '', kind: entry.kind ?? STEP })
-
-// A step left blank is an "add" pressed once too often, not a step.
-const stepsPayload = (rows) =>
-  rows.filter((row) => blankToNull(row.body)).map((row) => ({ body: row.body.trim(), kind: row.kind }))
-
-const ids = (refs) => (refs ?? []).map((ref) => ref.id)
-
 function fromRecipe(row) {
   return {
     dish: row.dish ? dishPick(row.dish) : null,
     name: row.name ?? '',
     status_id: row.status ? String(row.status.id) : '',
-    servings: row.servings ?? '',
-    time: row.time ?? '',
+    ...structureFromResponse(row),
     sources: (row.sources ?? []).map(sourceRow),
-    lines: {
-      ungrouped: (row.lines ?? []).map(lineFromResponse),
-      groups: groupsFromResponse(row.line_groups, 'lines', lineFromResponse),
-    },
-    steps: {
-      ungrouped: (row.steps ?? []).map(stepRow),
-      groups: groupsFromResponse(row.step_groups, 'steps', stepRow),
-    },
-    method_ids: ids(row.methods),
-    equipment_ids: ids(row.equipment),
     storage_notes: row.storage_notes ?? '',
     notes: row.notes ?? '',
     gallery: galleryFromImages(row.images),
   }
 }
 
+// What a copy of another recipe carries: its structure and its two notes.
+// Not its name, sources, status or pictures - those are what make it that
+// recipe rather than this one.
+const copiedFrom = (row) => ({
+  ...structureFromResponse(row),
+  storage_notes: row.storage_notes ?? '',
+  notes: row.notes ?? '',
+})
+
 export default function RecipeForm() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
+  const start = id === undefined ? newRecipeStart(searchParams) : null
+  if (start && !start.chosen) return <NewRecipeChooser />
+  // Keyed by the start, so choosing again from the chooser opens a fresh form.
+  return <RecipeEditor key={`${id ?? 'new'}:${start?.template}:${start?.from}`} id={id} start={start} />
+}
+
+function RecipeEditor({ id, start }) {
   const isNew = id === undefined
   const navigate = useNavigate()
   // ?dish=<id>: the dish page's 「＋ 新增食譜」. Only a new recipe reads it.
-  const [searchParams] = useSearchParams()
-  const presetId = isNew && /^\d+$/.test(searchParams.get('dish') ?? '') ? searchParams.get('dish') : null
+  const presetId = start?.dish ?? null
+  const templateId = start?.template ?? null
+  const fromId = start?.from ?? null
 
   const existing = useApiQuery(endpoints.recipes.detail(id), null, { enabled: !isNew })
   const preset = useApiQuery(endpoints.dishes.detail(presetId), null, { enabled: presetId !== null })
+  const template = useApiQuery(endpoints.templates.detail(templateId), null, { enabled: templateId !== null })
+  const source = useApiQuery(endpoints.recipes.detail(fromId), null, { enabled: fromId !== null })
   const statuses = useApiQuery(endpoints.statuses.list())
   const platforms = useApiQuery(endpoints.platforms.list())
-  const methods = useApiQuery(endpoints.methods.list())
-  const equipment = useApiQuery(endpoints.equipment.list())
   const authors = useApiQuery(endpoints.authors.list())
-  const lineGroups = useApiQuery(endpoints.lineGroups.list())
-  const stepGroups = useApiQuery(endpoints.stepGroups.list())
-  const common = useApiQuery(endpoints.commonIngredients.list())
   const fixed = useFixedVocabularies()
-  const stepKinds = fixed.data?.step_kinds ?? []
   const { save, saving } = useOwnerSave({ group: endpoints.recipes, invalidate: INVALIDATE })
 
-  const [form, setForm] = useState(EMPTY)
+  const [form, setForm] = useState(empty)
   const [loaded, setLoaded] = useState(null)
   const [error, setError] = useState(null)
   const [deleting, setDeleting] = useState(false)
-  const [pasting, setPasting] = useState(false)
   // Typed into the dish box and not picked: refused on save, never dropped
   // (Typeahead's onQueryChange).
   const [dishTyped, setDishTyped] = useState('')
   const [presetApplied, setPresetApplied] = useState(false)
-  // The line a 常用 chip just added, whose 份量 takes the focus once drawn.
-  const [focusAmountOf, setFocusAmountOf] = useState(null)
-  const amountInputs = useRef(new Map())
-  useEffect(() => {
-    if (focusAmountOf) amountInputs.current.get(focusAmountOf)?.focus()
-  }, [focusAmountOf])
+  const [prefilled, setPrefilled] = useState(false)
 
   // Adjusting state to the loaded row during render, keyed on the id so a
   // background refetch never throws away what is being typed.
@@ -219,52 +176,38 @@ export default function RecipeForm() {
     setPresetApplied(true)
     setForm((previous) => (previous.dish ? previous : { ...previous, dish: dishPick(preset.data) }))
   }
+  // The start, once, the first time it answers. The form is not drawn until
+  // then, so it never lands on top of something already typed.
+  if (isNew && !prefilled && template.data) {
+    setPrefilled(true)
+    setForm((previous) => ({ ...previous, ...structureFromResponse(template.data.body) }))
+  }
+  if (isNew && !prefilled && source.data) {
+    setPrefilled(true)
+    setForm((previous) => ({
+      ...previous,
+      ...copiedFrom(source.data),
+      // The copied recipe's dish, unless ?dish= named one.
+      dish: presetId !== null || previous.dish ? previous.dish : dishPick(source.data.dish),
+    }))
+  }
+  const starting = templateId !== null ? template : fromId !== null ? source : null
 
   const setField = (field, value) => setForm((previous) => ({ ...previous, [field]: value }))
   const set = (field) => (event) => setField(field, event.target.value)
+  // A section's setter: a value, or (previous) => value from the latest state.
+  const setter = (field) => (next) =>
+    setForm((previous) => ({ ...previous, [field]: typeof next === 'function' ? next(previous[field]) : next }))
 
-  // The number each ordinary step row shows, by its key, counted through
-  // every group as the page counts them; an optional step or a note has none.
-  const stepRows = flatRows(form.steps)
-  const stepNumber = new Map(
-    stepNumbers(stepRows)
-      .map((value, index) => [stepRows[index]._key, value])
-      .filter(([, value]) => value !== null),
-  )
-  // A line's typed-but-unpicked text, by the row's key and from the latest
+  // A source's typed-but-unpicked author, by the row's key and from the latest
   // state: a pick calls onSelect and then reports '' in the same tick, and
   // RowEditor's update() would build the second change from the rows the
   // first had not yet replaced.
-  const setLinePending = (key, pending) =>
-    setForm((previous) => ({ ...previous, lines: updateRowByKey(previous.lines, key, { pending }) }))
-  // The same for a source's author box.
   const setSourcePending = (key, pendingAuthor) =>
     setForm((previous) => ({
       ...previous,
       sources: previous.sources.map((row) => (row._key === key ? { ...row, pendingAuthor } : row)),
     }))
-  // A 常用 chip: a new ungrouped line naming that ingredient.
-  function addCommonLine(ingredient) {
-    const row = {
-      ...emptyLine(),
-      target: {
-        type: 'ingredient',
-        id: ingredient.id,
-        label: ingredient.display_name,
-        needsDetail: ingredient.needs_detail,
-      },
-    }
-    setForm((previous) => ({
-      ...previous,
-      lines: groupedReducer(previous.lines, { type: 'rows', container: UNGROUPED, action: { type: 'add', row } }),
-    }))
-    setFocusAmountOf(row._key)
-  }
-  const usedIngredients = new Set(
-    flatRows(form.lines)
-      .filter((line) => line.target?.type === 'ingredient')
-      .map((line) => line.target.id),
-  )
   const firstId = (query) => (query.data?.length ? String(query.data[0].id) : '')
   const statusId = form.status_id || firstId(statuses)
   const platformOf = (row) => row.platform_id || firstId(platforms)
@@ -278,25 +221,8 @@ export default function RecipeForm() {
       // Left out when there is no status to choose: the server then gives
       // the first one, or says there is none.
       ...(statusId ? { status_id: Number(statusId) } : {}),
-      servings: blankToNull(form.servings),
-      time: blankToNull(form.time),
       sources: sourcesPayload(form.sources, platformOf),
-      lines: linesPayload(form.lines.ungrouped),
-      line_groups: groupsPayload(form.lines, {
-        idField: 'line_group_id',
-        inner: 'lines',
-        what: '材料分組',
-        rowsPayload: linesPayload,
-      }),
-      steps: stepsPayload(form.steps.ungrouped),
-      step_groups: groupsPayload(form.steps, {
-        idField: 'step_group_id',
-        inner: 'steps',
-        what: '步驟分組',
-        rowsPayload: stepsPayload,
-      }),
-      method_ids: form.method_ids,
-      equipment_ids: form.equipment_ids,
+      ...structurePayload(form),
       storage_notes: blankToNull(form.storage_notes),
       notes: blankToNull(form.notes),
     }
@@ -339,6 +265,10 @@ export default function RecipeForm() {
         {row.display_name}
       </option>
     ))
+  // A new recipe's form waits for the start it was opened on; an existing
+  // one for the recipe.
+  const ready = isNew ? !starting || prefilled : Boolean(existing.data)
+  const chooseAgain = `/edit/recipes/new${presetId !== null ? `?dish=${presetId}` : ''}`
 
   return (
     <form onSubmit={submit} className="mx-auto max-w-3xl space-y-6">
@@ -347,12 +277,41 @@ export default function RecipeForm() {
         {!isNew && existing.data ? (
           <p className="text-sm text-text-muted">{existing.data.display_name}</p>
         ) : null}
+        {isNew && template.data ? (
+          <div role="status" className="space-y-0.5 text-sm text-text-muted">
+            <p>從範本「{template.data.name}」開始。</p>
+            {template.data.dropped ? (
+              <p className="text-danger">範本裡有 {template.data.dropped} 個項目已不存在，已略過。</p>
+            ) : null}
+          </div>
+        ) : null}
+        {isNew && source.data ? (
+          <p role="status" className="text-sm text-text-muted">
+            複製自「
+            <Link to={`/recipes/${source.data.id}`} className="text-brand hover:underline">
+              {source.data.display_name}
+            </Link>
+            」。名稱、來源、狀態和圖片沒有複製。
+          </p>
+        ) : null}
       </header>
 
       {!isNew && existing.isPending ? <Loading /> : null}
       {!isNew && existing.error ? <ErrorNote error={existing.error} /> : null}
+      {starting?.isPending ? <Loading /> : null}
+      {starting?.error ? (
+        <div className="space-y-2">
+          <ErrorNote error={starting.error}>
+            {templateId !== null ? '讀不到這個範本：' : '讀不到要複製的食譜：'}
+            {starting.error.message}
+          </ErrorNote>
+          <LinkButton to={chooseAgain} size="sm">
+            重新選擇
+          </LinkButton>
+        </div>
+      ) : null}
 
-      {isNew || existing.data ? (
+      {ready ? (
         <>
           <Section title="料理">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -460,149 +419,9 @@ export default function RecipeForm() {
             </RowEditor>
           </Section>
 
-          <Section title="材料">
-            <CommonIngredientChips
-              ingredients={(common.data ?? []).map((row) => row.ingredient)}
-              usedIds={usedIngredients}
-              onAdd={addCommonLine}
-            />
-            <GroupedRowEditor
-              value={form.lines}
-              onChange={(value) => setField('lines', value)}
-              values={lineGroups.data}
-              newRow={() => emptyLine()}
-              addLabel="加一行材料"
-              itemLabel="材料"
-              groupLabel="材料分組"
-            >
-              {(line, { update, number }) => (
-                <div className="grid gap-2 sm:grid-cols-6">
-                  <div className="sm:col-span-3">
-                    {line.target ? (
-                      <Picked
-                        label={line.target.label}
-                        stub={isStub(line.target)}
-                        tag={
-                          line.target.type === 'dish'
-                            ? kindWord(line.target.kind)
-                            : line.target.type === 'new-dish'
-                              ? `新${kindWord(line.target.kind)}`
-                              : null
-                        }
-                        onClear={() => update({ target: null, pending: '' })}
-                      />
-                    ) : (
-                      <Typeahead
-                        allowNew
-                        allowNewDish
-                        label={`材料 ${number}`}
-                        placeholder="食材或料理（醬料）…"
-                        exclude={{ dish: ownDish }}
-                        onSelect={(option) => update({ target: targetFromOption(option) })}
-                        onQueryChange={(text) => setLinePending(line._key, text)}
-                      />
-                    )}
-                  </div>
-                  <Input
-                    ref={(element) => {
-                      if (element) amountInputs.current.set(line._key, element)
-                      else amountInputs.current.delete(line._key)
-                    }}
-                    aria-label="份量"
-                    placeholder="份量"
-                    value={line.amount}
-                    onChange={(event) => update({ amount: event.target.value })}
-                    className="sm:col-span-1"
-                  />
-                  <Input
-                    aria-label="材料備註"
-                    placeholder="備註，例如 切絲"
-                    value={line.note}
-                    onChange={(event) => update({ note: event.target.value })}
-                    className="sm:col-span-2"
-                  />
-                  <label className="flex items-center gap-1.5 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={line.is_optional}
-                      onChange={(event) => update({ is_optional: event.target.checked })}
-                    />
-                    可省略
-                  </label>
-                </div>
-              )}
-            </GroupedRowEditor>
-          </Section>
-
-          <Section title="步驟">
-            <GroupedRowEditor
-              value={form.steps}
-              onChange={(value) => setField('steps', value)}
-              values={stepGroups.data}
-              newRow={() => stepRow()}
-              addLabel="加一個步驟"
-              itemLabel="步驟"
-              groupLabel="步驟分組"
-              actions={
-                <Button size="sm" onClick={() => setPasting(true)}>
-                  貼上多行
-                </Button>
-              }
-            >
-              {(row, { update, number }) => {
-                const note = row.kind === NOTE
-                return (
-                  <div className="flex gap-2">
-                    <span className="w-6 shrink-0 pt-1 text-right font-display font-bold text-text-faint">
-                      {stepNumber.has(row._key) ? <span data-testid="step-number">{stepNumber.get(row._key)}</span> : null}
-                    </span>
-                    <div className="min-w-0 flex-1 space-y-1.5">
-                      {stepKinds.length ? (
-                        <Toggle
-                          label={`步驟 ${number} 的種類`}
-                          options={stepKinds}
-                          value={row.kind}
-                          onChange={(kind) => update({ kind })}
-                        />
-                      ) : null}
-                      <div className={note ? 'rounded-md border-l-4 border-border-strong bg-surface-2 p-1.5' : undefined}>
-                        <TextArea
-                          aria-label={`步驟 ${number}`}
-                          rows={2}
-                          placeholder={note ? '備註：火候、替換、提醒' : undefined}
-                          value={row.body}
-                          onChange={(event) => update({ body: event.target.value })}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )
-              }}
-            </GroupedRowEditor>
-          </Section>
-
-          <Section title="做法、器材">
-            <div className="space-y-1">
-              <span className="text-sm font-medium text-text-muted">做法</span>
-              <ChipPicker
-                label="做法"
-                options={methods.data}
-                value={form.method_ids}
-                onChange={(value) => setField('method_ids', value)}
-                empty="還沒有做法，可以在設定裡新增。"
-              />
-            </div>
-            <div className="space-y-1">
-              <span className="text-sm font-medium text-text-muted">器材</span>
-              <ChipPicker
-                label="器材"
-                options={equipment.data}
-                value={form.equipment_ids}
-                onChange={(value) => setField('equipment_ids', value)}
-                empty="還沒有器材，可以在設定裡新增。"
-              />
-            </div>
-          </Section>
+          <RecipeLinesSection value={form.lines} setValue={setter('lines')} excludeDishes={ownDish} />
+          <RecipeStepsSection value={form.steps} setValue={setter('steps')} />
+          <RecipeMethodsSection methodIds={form.method_ids} equipmentIds={form.equipment_ids} onChange={setField} />
 
           <Section title="說明">
             <Field label="保存">
@@ -628,18 +447,6 @@ export default function RecipeForm() {
         </>
       ) : null}
 
-      {pasting ? (
-        <PasteSteps
-          groups={form.steps.groups}
-          onClose={() => setPasting(false)}
-          onAdd={(bodies, container) => {
-            const rows = [...rowsOf(form.steps, container), ...bodies.map((body) => stepRow({ body }))]
-            setField('steps', setRows(form.steps, container, rows))
-            setPasting(false)
-          }}
-        />
-      ) : null}
-
       {deleting ? (
         <DeleteDialog
           kind="recipe"
@@ -649,43 +456,5 @@ export default function RecipeForm() {
         />
       ) : null}
     </form>
-  )
-}
-
-// 「貼上多行」: one step per line, numbering stripped, previewed by count
-// before anything is added - at the end of the chosen group, 不分組 unless
-// another is picked.
-function PasteSteps({ groups, onAdd, onClose }) {
-  const [text, setText] = useState('')
-  const [container, setContainer] = useState(UNGROUPED)
-  const bodies = splitSteps(text)
-  return (
-    <Dialog
-      title="貼上多行步驟"
-      size="md"
-      onClose={onClose}
-      footer={
-        <>
-          <Button onClick={onClose}>取消</Button>
-          <Button kind="primary" disabled={!bodies.length} onClick={() => onAdd(bodies, container)}>
-            加入 {bodies.length} 個步驟
-          </Button>
-        </>
-      }
-    >
-      <Field label="一行一個步驟" hint="開頭的編號（1.、1)、①、一、、第一步）會自動拿掉。">
-        <TextArea rows={10} value={text} onChange={(event) => setText(event.target.value)} autoFocus />
-      </Field>
-      <Field label="加到">
-        <Select value={container} onChange={(event) => setContainer(event.target.value)}>
-          <option value={UNGROUPED}>不分組</option>
-          {groups.map((group, index) => (
-            <option key={group._key} value={group._key}>
-              {group.name.trim() || `第 ${index + 1} 組`}
-            </option>
-          ))}
-        </Select>
-      </Field>
-    </Dialog>
   )
 }

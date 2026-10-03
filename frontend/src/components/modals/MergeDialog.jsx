@@ -31,10 +31,12 @@ import { ErrorNote, Loading } from '../ui/states'
 
 // A merge moves recipe lines, varieties, labels, pictures and heating rows
 // onto the target and deletes the source: every read those touch is stale,
-// 常用食材 among them (the source's chip moves to the target, or goes).
+// 常用食材 among them (the source's chip moves to the target, or goes), and
+// the recipe templates (their lines naming the source now name the target).
 const INVALIDATE = [
   endpoints.ingredients.list(),
   endpoints.commonIngredients.list(),
+  endpoints.templates.list(),
   endpoints.categories.tree(),
   endpoints.labels.list(),
   endpoints.recipes.list(),

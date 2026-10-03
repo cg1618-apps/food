@@ -150,6 +150,12 @@ const INGREDIENT_SEARCH = [
   { id: 9, display_name: '洋蔥', name_cn: '洋蔥', needs_detail: false },
 ]
 
+const TEMPLATES = [
+  { id: 11, name: '基本炒青菜', sort_order: 0, line_count: 3, step_count: 4 },
+  { id: 12, name: '燉湯', sort_order: 1, line_count: 0, step_count: 2 },
+  { id: 13, name: '涼拌', sort_order: 2, line_count: 1, step_count: 0 },
+]
+
 function settingsData({ url, method }) {
   if (method !== 'GET') return null
   if (url === '/api/recipe-courses') return json(COURSES)
@@ -161,6 +167,7 @@ function settingsData({ url, method }) {
   if (url === '/api/ingredient-categories') return json(TREE)
   if (url === '/api/labels') return json(LABELS)
   if (url === '/api/common-ingredients') return json(COMMON)
+  if (url === '/api/recipe-templates') return json(TEMPLATES)
   if (url.startsWith('/api/ingredients?')) return json(INGREDIENT_SEARCH)
   return null
 }
@@ -178,6 +185,7 @@ describe('設定', () => {
     expect(tabs.map((tab) => tab.textContent)).toEqual([
       '食材分類',
       '常用食材',
+      '範本',
       '標籤',
       '類別',
       '地區',
@@ -574,6 +582,97 @@ describe('設定', () => {
       renderAt('/edit/settings?tab=common-ingredients')
       expect(await screen.findByText(/還沒有常用食材/)).toBeTruthy()
       expect(screen.getByRole('combobox', { name: '加常用食材' })).toBeTruthy()
+    })
+  })
+
+  describe('範本', () => {
+    const listed = () =>
+      within(section('範本'))
+        .getAllByRole('listitem')
+        .map((row) => row.getAttribute('aria-label'))
+
+    it('lists the templates in order with their counts, each a link to its form', async () => {
+      renderAt('/edit/settings?tab=templates')
+      await screen.findByRole('list', { name: '範本' })
+      expect(listed()).toEqual(['基本炒青菜', '燉湯', '涼拌'])
+      const row = within(section('範本')).getByRole('listitem', { name: '基本炒青菜' })
+      expect(row.textContent).toContain('材料 3 · 步驟 4')
+      expect(within(row).getByRole('link', { name: '基本炒青菜' }).getAttribute('href')).toBe('/edit/templates/11')
+      expect(screen.getByRole('link', { name: '＋ 新增範本' }).getAttribute('href')).toBe('/edit/templates/new')
+    })
+
+    it('reorders by keyboard, sending the whole order, frozen until it lands', async () => {
+      let release
+      handler = (call) =>
+        call.method === 'PUT'
+          ? new Promise((resolve) => {
+              release = () => resolve(json([]))
+            })
+          : settingsData(call)
+      renderAt('/edit/settings?tab=templates')
+      fireEvent.keyDown(await screen.findByRole('button', { name: '排序 「涼拌」' }), { key: 'ArrowUp' })
+      expect(listed()).toEqual(['基本炒青菜', '涼拌', '燉湯'])
+      expect(screen.getByRole('button', { name: '排序 「基本炒青菜」' }).disabled).toBe(true)
+      await waitFor(() => expect(writes()).toHaveLength(1))
+      expect(writes()[0]).toEqual({
+        url: '/api/edit/recipe-templates/order',
+        method: 'PUT',
+        body: { ids: [11, 13, 12] },
+      })
+      release()
+      await waitFor(() => expect(screen.getByRole('button', { name: '排序 「基本炒青菜」' }).disabled).toBe(false))
+    })
+
+    it("puts the stored order back and shows the server's sentence when a move is refused", async () => {
+      handler = (call) =>
+        call.method === 'PUT'
+          ? json({ detail: 'The order must list every template exactly once.' }, 422)
+          : settingsData(call)
+      renderAt('/edit/settings?tab=templates')
+      fireEvent.keyDown(await screen.findByRole('button', { name: '排序 「涼拌」' }), { key: 'ArrowUp' })
+      expect((await screen.findByRole('alert')).textContent).toBe('The order must list every template exactly once.')
+      expect(listed()).toEqual(['基本炒青菜', '燉湯', '涼拌'])
+    })
+
+    it('renames in place, and explains a refused name in the row', async () => {
+      handler = (call) => {
+        if (call.method === 'PATCH' && call.body.name === '燉湯') {
+          return json({ detail: 'Another template already has that name.' }, 422)
+        }
+        if (call.method === 'PATCH') return json({ ...TEMPLATES[0], name: call.body.name })
+        return settingsData(call)
+      }
+      renderAt('/edit/settings?tab=templates')
+      fireEvent.click(await screen.findByRole('button', { name: '改名「基本炒青菜」' }))
+      const box = screen.getByRole('textbox', { name: '基本炒青菜 的新名稱' })
+      fireEvent.change(box, { target: { value: '燉湯' } })
+      fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+      expect((await screen.findByRole('alert')).textContent).toBe('Another template already has that name.')
+
+      fireEvent.change(box, { target: { value: '炒青菜' } })
+      fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+      await waitFor(() => expect(screen.queryByRole('textbox', { name: '基本炒青菜 的新名稱' })).toBeNull())
+      expect(writes().map((call) => [call.method, call.url, call.body])).toEqual([
+        ['PATCH', '/api/edit/recipe-templates/11', { name: '燉湯' }],
+        ['PATCH', '/api/edit/recipe-templates/11', { name: '炒青菜' }],
+      ])
+    })
+
+    it('deletes one after asking', async () => {
+      handler = (call) => (call.method === 'DELETE' ? json(null, 204) : settingsData(call))
+      renderAt('/edit/settings?tab=templates')
+      fireEvent.click(await screen.findByRole('button', { name: '刪除「燉湯」' }))
+      const dialog = screen.getByRole('dialog', { name: '刪除「燉湯」？' })
+      expect(writes()).toEqual([])
+      fireEvent.click(within(dialog).getByRole('button', { name: '刪除' }))
+      await waitFor(() => expect(writes()).toHaveLength(1))
+      expect(writes()[0]).toMatchObject({ method: 'DELETE', url: '/api/edit/recipe-templates/12' })
+    })
+
+    it('says so while there are none', async () => {
+      handler = (call) => (call.url === '/api/recipe-templates' ? json([]) : settingsData(call))
+      renderAt('/edit/settings?tab=templates')
+      expect(await screen.findByText('還沒有範本。')).toBeTruthy()
     })
   })
 

@@ -395,7 +395,7 @@ describe('RecipeForm', () => {
       if (url === '/api/edit/recipes/42/images' && method === 'PUT') return json({ id: 42 })
       return json([])
     }
-    wrap(<AppRoutes />, '/edit/recipes/new')
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
 
     await chooseNewDish('薑汁燒肉')
 
@@ -475,7 +475,7 @@ describe('RecipeForm', () => {
       if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
       return json([])
     }
-    wrap(<AppRoutes />, '/edit/recipes/new')
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
     await chooseNewDish('湯')
     await screen.findByRole('option', { name: '可煮' })
     expect(screen.getByLabelText('狀態').value).toBe('8')
@@ -501,7 +501,7 @@ describe('RecipeForm', () => {
 
   it("picks a source's author from the authors list, or makes a new one on save", async () => {
     handler = withAuthors
-    wrap(<AppRoutes />, '/edit/recipes/new')
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
     await chooseNewDish('湯')
 
     fireEvent.click(screen.getByRole('button', { name: /加一個來源/ }))
@@ -523,7 +523,7 @@ describe('RecipeForm', () => {
 
   it('refuses to save an author that was typed but never picked', async () => {
     handler = withAuthors
-    wrap(<AppRoutes />, '/edit/recipes/new')
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
     await chooseNewDish('湯')
     fireEvent.click(screen.getByRole('button', { name: /加一個來源/ }))
     fireEvent.change(screen.getByRole('combobox', { name: '作者 1' }), { target: { value: '詹姆士' } })
@@ -535,7 +535,7 @@ describe('RecipeForm', () => {
   it('leaves the status to the server when there are no statuses to choose from', async () => {
     handler = ({ url, method }) =>
       url === '/api/edit/recipes' && method === 'POST' ? json({ id: 42, images: [] }, 201) : json([])
-    wrap(<AppRoutes />, '/edit/recipes/new')
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
     await chooseNewDish('湯')
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
@@ -543,7 +543,7 @@ describe('RecipeForm', () => {
   })
 
   it('refuses to save a line whose name was typed but never picked', async () => {
-    wrap(<AppRoutes />, '/edit/recipes/new')
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
     await chooseNewDish('湯')
     fireEvent.click(screen.getByRole('button', { name: /加一行材料/ }))
     fireEvent.change(screen.getByRole('combobox', { name: '材料 1' }), { target: { value: '紫蘇' } })
@@ -553,7 +553,7 @@ describe('RecipeForm', () => {
   })
 
   it('refuses to save without a dish, or with one typed but never picked', async () => {
-    wrap(<AppRoutes />, '/edit/recipes/new')
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
     fireEvent.click(await screen.findByRole('button', { name: '儲存' }))
     expect((await screen.findByRole('alert')).textContent).toMatch(/哪道料理/)
     fireEvent.change(screen.getByRole('combobox', { name: '料理' }), { target: { value: '高湯' } })
@@ -578,7 +578,7 @@ describe('RecipeForm', () => {
       if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
       return json([])
     }
-    wrap(<AppRoutes />, '/edit/recipes/new')
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
 
     // A new dish: 料理 by default, switched to 醬料.
     await chooseNewDish('柴魚高湯')
@@ -610,7 +610,7 @@ describe('RecipeForm', () => {
       if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
       return json([])
     }
-    wrap(<AppRoutes />, '/edit/recipes/new?dish=40')
+    wrap(<AppRoutes />, '/edit/recipes/new?dish=40&blank=1')
     expect(await screen.findByText('照燒雞腿排')).toBeTruthy()
     expect(screen.queryByRole('combobox', { name: '料理' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
@@ -626,7 +626,7 @@ describe('RecipeForm', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     // The fallback category's count is what a stub line moves.
     client.setQueryData(['/api/ingredient-categories', null], [])
-    wrap(<AppRoutes />, '/edit/recipes/new', client)
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1', client)
 
     await chooseNewDish('湯')
     fireEvent.click(screen.getByRole('button', { name: /加一個來源/ }))
@@ -642,7 +642,7 @@ describe('RecipeForm', () => {
       url === '/api/edit/recipes' && method === 'POST'
         ? json({ detail: 'A recipe cannot use itself, directly or through another recipe.' }, 422)
         : json([])
-    wrap(<AppRoutes />, '/edit/recipes/new')
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
     await chooseNewDish('x')
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
     expect(await screen.findByRole('alert')).toHaveProperty(
@@ -675,7 +675,7 @@ describe('RecipeForm groups', () => {
 
   it('puts steps in groups from 設定 chips and by name, moves them by keyboard, and pastes into a group', async () => {
     handler = groupData
-    wrap(<AppRoutes />, '/edit/recipes/new')
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
     await chooseNewDish('麻婆豆腐')
     const steps = area('步驟')
 
@@ -755,7 +755,7 @@ describe('RecipeForm groups', () => {
             ],
           })
         : groupData(call)
-    wrap(<AppRoutes />, '/edit/recipes/new')
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
     await chooseNewDish('麻婆豆腐')
     const steps = area('步驟')
 
@@ -804,7 +804,7 @@ describe('RecipeForm groups', () => {
 
   it('takes a typed name that is a 設定 value as that value, and removing a group keeps its rows', async () => {
     handler = groupData
-    wrap(<AppRoutes />, '/edit/recipes/new')
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
     await chooseNewDish('湯')
     const lines = area('材料')
 
@@ -902,7 +902,7 @@ describe('RecipeForm 常用食材', () => {
 
   it('appends a line for a tapped chip to the ungrouped lines, focused on its amount', async () => {
     handler = commonData(COMMON)
-    wrap(<AppRoutes />, '/edit/recipes/new')
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
     await chooseNewDish('炒青菜')
     const lines = area('材料')
 
@@ -991,7 +991,7 @@ describe('RecipeForm 常用食材', () => {
 
   it('shows no chip row at all while the list is empty', async () => {
     handler = commonData([])
-    wrap(<AppRoutes />, '/edit/recipes/new')
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
     await screen.findByRole('combobox', { name: '料理' })
     await waitFor(() => expect(calls.some((c) => c.url === '/api/common-ingredients')).toBe(true))
     // Give the read a chance to answer before asserting absence.

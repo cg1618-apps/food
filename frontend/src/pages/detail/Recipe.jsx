@@ -21,16 +21,25 @@
 // request runs, then the recipe the PATCH answers with (put straight into the
 // detail read's cache), and goes back, with the server's sentence, if it
 // fails.
+//
+// Beside 編輯, 存成範本 makes a recipe template of this recipe's structure -
+// its lines and steps in their groups, the steps' kinds, methods, equipment,
+// servings and time - under a name asked for in a dialog (the recipe's name
+// to start with), then links to the new template's form. A name another
+// template has is refused, and the dialog says so and stays open.
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { endpoints } from '../../api/endpoints'
 import { DetailActions, DetailStatus, LabelLinks, Prose, RecipeLinks } from '../../components/layout/Detail'
+import Dialog from '../../components/ui/Dialog'
 import Gallery from '../../components/ui/Gallery'
-import { Badge, Chip, LinkButton, Section, Toggle } from '../../components/ui/primitives'
+import { Badge, Button, Chip, Field, Input, LinkButton, Section, Toggle } from '../../components/ui/primitives'
 import { ErrorNote } from '../../components/ui/states'
 import { fixedLabel, useApiMutation, useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
 import { cx } from '../../lib/cx'
 import { linkHost } from '../../lib/format'
+import { blankToNull } from '../../lib/rowList'
 import { lineBlocks, stepBlocks } from '../../lib/recipeGroups'
 import { NOTE } from '../../lib/steps'
 
@@ -187,6 +196,100 @@ function Steps({ blocks, kindLabel }) {
   ))
 }
 
+// 存成範本: ask for a name, POST it to from-recipe, then say where the new
+// template is. The template list is the only read a new template moves.
+function SaveAsTemplate({ recipe }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [error, setError] = useState(null)
+  const [saved, setSaved] = useState(null)
+  const create = useApiMutation({ method: 'POST', invalidate: [endpoints.templates.list()] })
+
+  function start() {
+    setName(recipe.display_name)
+    setError(null)
+    setSaved(null)
+    setOpen(true)
+  }
+
+  async function submit() {
+    const chosen = blankToNull(name)
+    if (!chosen) {
+      setError(new Error('範本要有名稱。'))
+      return
+    }
+    setError(null)
+    try {
+      setSaved(await create.mutateAsync({ url: endpoints.templates.fromRecipe(recipe.id), body: { name: chosen } }))
+    } catch (caught) {
+      setError(caught)
+    }
+  }
+
+  const close = () => setOpen(false)
+  return (
+    <>
+      <Button onClick={start}>存成範本</Button>
+      {open ? (
+        <Dialog
+          title="存成範本"
+          onClose={close}
+          busy={create.isPending}
+          footer={
+            saved ? (
+              <>
+                <Button onClick={close}>關閉</Button>
+                <LinkButton to={`/edit/templates/${saved.id}`} kind="primary">
+                  開啟範本
+                </LinkButton>
+              </>
+            ) : (
+              <>
+                <Button onClick={close} disabled={create.isPending}>
+                  取消
+                </Button>
+                <Button kind="primary" onClick={submit} disabled={create.isPending}>
+                  {create.isPending ? '儲存中…' : '存成範本'}
+                </Button>
+              </>
+            )
+          }
+        >
+          {saved ? (
+            <p role="status">
+              已存成範本「
+              <Link to={`/edit/templates/${saved.id}`} className="text-brand hover:underline">
+                {saved.name}
+              </Link>
+              」。新增食譜時選「從範本」就能用它開始。
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-text-muted">
+                範本會帶走這份食譜的材料、步驟、做法、器材、份量和時間；料理、名稱、來源、狀態、筆記和圖片不會。
+              </p>
+              <Field label="範本名稱">
+                <Input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      submit()
+                    }
+                  }}
+                  autoFocus
+                />
+              </Field>
+              {error ? <ErrorNote error={error} /> : null}
+            </div>
+          )}
+        </Dialog>
+      ) : null}
+    </>
+  )
+}
+
 export default function Recipe() {
   const { id } = useParams()
   const query = useApiQuery(endpoints.recipes.detail(id))
@@ -284,7 +387,9 @@ export default function Recipe() {
         id={recipe.id}
         name={recipe.display_name}
         editTo={`/edit/recipes/${recipe.id}`}
-      />
+      >
+        <SaveAsTemplate recipe={recipe} />
+      </DetailActions>
     </article>
   )
 }
