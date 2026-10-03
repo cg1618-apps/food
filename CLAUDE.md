@@ -22,7 +22,9 @@ words:
 - a **dessert library** — cookies, candies, sweets — carrying health
   information;
 - a **random picker**, for when nothing suggests itself;
-- a **restaurant library**.
+- a **restaurant library**;
+- **TBD** — a page of loose notes, a name and links each, related to nothing
+  else in the app.
 
 Two shapes run through that list and are worth naming early: most of it is a
 **catalogue of entities with notes**, and a little of it — the schedule, what
@@ -32,8 +34,8 @@ reference work.
 
 ## Status
 
-**Modules 1 and 2 are built, with kitchen notes.** The schema is at revision
-`c1ommon` (the head).
+**Modules 1 and 2 are built, with kitchen notes and TBD.** The schema is at
+revision `t1bd` (the head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
   parent, rating, labels, storage as a state x method grid with day ranges, a
@@ -48,7 +50,10 @@ reference work.
   base recipes, and 常用 chips above the lines that add one in a tap.
 - **Kitchen notes** - bookmarks with a title, a kind, a link, a body, labels
   and a gallery.
-- **The notebook UI** - 食譜 · 食材 · 筆記 · 設定: the three libraries
+- **TBD** - a standalone page of entries, each an optional name and any
+  number of links, in the owner's order; read at `/tbd`, edited in place at
+  `/edit/tbd`.
+- **The notebook UI** - 食譜 · 食材 · 筆記 · TBD · 設定: the three libraries
   (search and filters in the URL, a sidebar or a phone drawer, covers or a
   table), their detail pages, their add and edit forms with the gallery
   picker, one delete dialog, ingredient merge, 設定 for every vocabulary

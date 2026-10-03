@@ -60,6 +60,15 @@ export const endpoints = {
     remove: (id) => `${WRITE}/kitchen-notes/${id}`,
     images: (id) => `${WRITE}/kitchen-notes/${id}/images`,
   },
+  // TBD: a standalone page of names and links. Read whole; written one entry
+  // at a time, and PUT {ids} saves the order of them all after a drag.
+  tbd: {
+    list: () => `${API}/tbd`,
+    create: () => `${WRITE}/tbd`,
+    update: (id) => `${WRITE}/tbd/${id}`,
+    remove: (id) => `${WRITE}/tbd/${id}`,
+    order: () => `${WRITE}/tbd/order`,
+  },
   images: {
     list: () => `${API}/images`,
     detail: (id) => `${API}/images/${id}`,

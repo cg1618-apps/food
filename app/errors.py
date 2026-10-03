@@ -106,6 +106,7 @@ CONSTRAINT_MESSAGES = {
     "uq_recipe_step_position": "Two steps cannot share one position.",
     "uq_recipe_image_position": "Two images cannot share one position.",
     "uq_recipe_image_once": "That image is already in this gallery.",
+    "ck_tbd_link_has_a_url": "A link needs a URL.",
 }
 
 GENERIC_MESSAGES = {

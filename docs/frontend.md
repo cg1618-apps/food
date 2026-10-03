@@ -6,10 +6,18 @@ is specific to food.
 
 ## Pages
 
-Navigation is 食譜 · 食材 · 筆記 · 設定: a top bar on a desktop, a bar fixed to
-the bottom of the screen on a phone (`components/layout/Layout.jsx`). The
-section a page belongs to - its edit pages included - is marked with
+Navigation is 食譜 · 食材 · 筆記 · TBD · 設定: a top bar on a desktop, a bar
+fixed to the bottom of the screen on a phone (`components/layout/Layout.jsx`).
+The section a page belongs to - its edit pages included - is marked with
 `aria-current="page"`; `lib/nav.js` holds that match.
+
+**A section is one entry in `SECTIONS` (`lib/nav.js`)** - its label, its
+link and the path prefixes it owns, edit pages included. Both bars draw from
+that list, and the phone bar gives each entry a column of its own
+(`grid-template-columns: repeat(<count>, …)`, set from the list's length), so
+adding a section touches nothing else. The labels are kept short - two
+characters, or TBD - centred and truncated within their column, which keeps
+them readable at 360px with room for more.
 
 | Page | Route | Gate |
 | --- | --- | --- |
@@ -19,11 +27,13 @@ section a page belongs to - its edit pages included - is marked with
 | Ingredient | `/ingredients/:id` | public |
 | Kitchen-note library | `/notes` | public |
 | Kitchen note | `/notes/:id` | public |
+| TBD | `/tbd` | public |
 | Add / edit a recipe | `/edit/recipes/new`, `/edit/recipes/:id` | Access |
 | Add / edit an ingredient | `/edit/ingredients/new`, `/edit/ingredients/:id` | Access |
 | Add / edit a note | `/edit/notes/new`, `/edit/notes/:id` | Access |
 | 設定 (`/settings` redirects here) | `/edit/settings` | Access |
 | Image library | `/edit/images` | Access |
+| Edit TBD | `/edit/tbd` | Access |
 
 Any other path is a "page not found" page, not a redirect.
 
@@ -483,6 +493,40 @@ carries just `attachment_count`. If the server refuses a delete because the
 picture was attached since the page loaded, the tile shows the 409's owners.
 「只看未使用」 and the page are in the URL (`?unused=1&page=2`); a page is 30,
 fetched as 31 so 下一頁 knows whether there is one.
+
+## TBD
+
+A standalone page of loose notes, related to nothing else in the app: each
+entry is an optional name and any number of links, in the owner's order.
+
+**`/tbd`** (`pages/library/Tbd.jsx`) is one list, read whole: each entry's
+name, if it has one, and its links under it. A link shows its label, or else
+its host and path without the scheme, `www.`, query or trailing slash, cut to
+40 characters (`lib/format.js` `linkText`); it opens in a new tab
+(`rel="noopener noreferrer"`). 編輯 goes to `/edit/tbd`, and the empty state
+offers the same link.
+
+**`/edit/tbd`** (`pages/edit/TbdForm.jsx`) is the same list, editable in
+place. Every entry is a card - 名稱, and its links in a `RowEditor` (網址 and
+an optional 顯示文字 per row) - with its own 儲存 and 刪除:
+
+- **儲存 sends the card as it stands**: `PATCH` with the name and every link,
+  which replace the stored ones. An empty link row is left out. A card with
+  neither a name nor a link says so in place and sends nothing; a refusal
+  shows the server's sentence on the card. A card keeps what is typed in its
+  own state, so another card's save never throws it away.
+- **刪除 asks first**, in the shared `ConfirmModal` - there is nothing to
+  count, so it is not the `DeleteDialog`.
+- **「＋ 新增」 puts an unsaved card at the end.** Its 儲存 creates the entry
+  (`POST`, which also puts it last) and its 取消 drops it without asking,
+  since nothing was stored. It has no drag handle until it is saved.
+- **Entries are reordered by their drag handle** (or Up / Down on it), saved
+  at once with `PUT /api/edit/tbd/order`: the new order shows immediately,
+  the list is frozen until the save has landed and the list has been read
+  again, and a refusal puts the stored order back with the server's
+  sentence - the rule `hooks/useSortOrderMove.js` applies on 設定.
+
+完成 goes back to `/tbd`.
 
 ## Layers
 

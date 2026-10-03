@@ -576,6 +576,53 @@ nothing.
 Deleting an ingredient takes it off the list (`CASCADE`); merging one moves
 its entry to the target (see Ingredients).
 
+## TBD
+
+| Route | |
+| --- | --- |
+| `GET /api/tbd` | every entry, in order |
+| `POST /api/edit/tbd` | creates one entry, at the end; 201 |
+| `PATCH /api/edit/tbd/{id}` | |
+| `DELETE /api/edit/tbd/{id}` | 204; the entry's links go with it |
+| `PUT /api/edit/tbd/order` | saves the order of every entry |
+
+A standalone page of loose notes: an entry is an optional name and any number
+of links, related to nothing else in the app. There is no detail route - the
+page is read whole.
+
+```json
+[{"id": 4, "name": "想試的店", "sort_order": 0,
+  "links": [{"id": 9, "url": "https://example.com/shop", "label": "甲店"},
+            {"id": 10, "url": "https://icook.tw/recipes/12", "label": null}]},
+ {"id": 2, "name": null, "sort_order": 1,
+  "links": [{"id": 7, "url": "https://youtu.be/x", "label": null}]}]
+```
+
+Entries come in `sort_order`, ties by `id`; links in the order they were sent.
+
+**The `POST` and `PATCH` bodies are `{"name": …, "links": [{"url": …,
+"label": …}]}`**, both optional and nothing else accepted. A `PATCH` applies
+only what it sends, and `links`, when sent, replaces every link the entry had
+(`[]` removes them; `null` is a 422). The answer is the entry, as the `GET`
+gives it.
+
+**An entry needs a name or at least one link** - a 422 in the usual shape,
+checked against the entry as it would be saved, so `{"links": []}` is fine on
+an entry with a name and refused on one without. A blank name or label is
+stored as null.
+
+**A link is stored as a web address.** What is typed is trimmed; with no
+scheme it is given `https://` (`example.com/x` is stored as
+`https://example.com/x`, `localhost:8000` as `https://localhost:8000`). A
+blank url, a scheme other than `http` or `https` (`javascript:`, `ftp:`), or
+no host is a 422.
+
+**The order `PUT` body is `{"ids": [4, 2, …]}`** and must hold exactly the
+current entries, each once; the entries are numbered 0, 1, 2 … in that order
+and the answer is the page. A missing, unknown or repeated id is a 422 and
+changes nothing - it means the page is out of date, and guessing would drop or
+invent a place.
+
 ## Categories
 
 | Route | |

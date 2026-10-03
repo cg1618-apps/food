@@ -299,8 +299,8 @@ so a later reader can tell a decision from an accident. These are food's.
 - **A bar fixed to the bottom of the screen on a phone**, where media's
   navigation folds below `lg` into a menu button that opens a full-screen
   drawer. media has a catalogue of sections and sub-pages to fold away;
-  food has four destinations - 食譜 · 食材 · 筆記 · 設定 - which fit in one
-  row under a thumb, and the app is opened one-handed in a shop or at the
+  food has a handful of destinations - 食譜 · 食材 · 筆記 · TBD · 設定 -
+  which fit in one row under a thumb, and the app is opened one-handed in a shop or at the
   stove, where a menu button and a drawer are two taps and a screen covered
   for every move. Pages are padded at the bottom so the bar never covers
   content.
@@ -719,6 +719,35 @@ What the branch after module 1 chose, and what it turned down.
   sort would bury the one just added among similarly-named compilations.
 - **Search reads the title and the body.** A note's body is where the
   reason it was kept is written, which is the part worth finding it by.
+
+## TBD
+
+- **Standalone, on purpose.** The owner asked for "a page with links or
+  text … pure notes", with no integration or relation to the rest of the
+  app. So an entry references no ingredient, recipe, label or image, and
+  nothing references it: it is somewhere to drop a thing before deciding what
+  it is, and the day it becomes something it is re-entered where it belongs.
+  A link to a recipe would make TBD a second kitchen-notes module, which
+  already exists for keeping things that are not recipes.
+- **Not a kitchen note.** A note is a titled bookmark with a kind, a body,
+  labels and pictures, and a library with filters. A TBD entry has an
+  optional name and several links, in an order the owner sets by hand, and is
+  read as one short page. Folding one into the other would make every field
+  of each optional for the sake of the other.
+- **Name or link, enforced by the service.** A CHECK cannot see the child
+  table, and a PATCH that sends only `links: []` is right or wrong depending
+  on the stored name, which a schema cannot see either; the service checks
+  the entry as it would be saved and answers 422 in the usual shape.
+- **A link without a scheme is given `https://`.** A link is usually typed
+  as `example.com/x`, and refusing it would be the app being pedantic about
+  something it can fix; one that names any other scheme is still refused,
+  because a `javascript:` link rendered on a public page is an XSS. A colon
+  followed by a digit is a port, not a scheme, so `localhost:8000` is a bare
+  host.
+- **Saved per entry, reordered in one call.** Each card saves on its own, so
+  an edit to one entry never rewrites another; the order is one `PUT` of
+  every id, which must be exactly the current entries - a stale tab's order
+  is refused rather than merged, as 常用食材's duplicate is.
 
 ## The starting ingredient list
 

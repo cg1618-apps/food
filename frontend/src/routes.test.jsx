@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { SECTIONS } from './lib/nav'
 import AppRoutes from './routes'
 
 // Where the router ended up, so a redirect is asserted by its destination.
@@ -44,6 +45,8 @@ describe('every page has a route', () => {
     ['/edit/notes/1', '編輯筆記'],
     ['/edit/settings', '設定'],
     ['/edit/images', '圖片'],
+    ['/tbd', 'TBD'],
+    ['/edit/tbd', '編輯 TBD'],
     ['/no/such/page', '找不到這一頁'],
   ])('%s renders its page', (path, heading) => {
     expect(renderAt(path)).toBe(path)
@@ -84,6 +87,22 @@ describe('navigation', () => {
       .map((link) => link.textContent)
     // Two navs - the desktop bar and the phone bar - both say 食譜.
     expect(current).toEqual(['食譜', '食譜'])
+  })
+
+  it('marks TBD on its edit page too', () => {
+    renderAt('/edit/tbd')
+    const current = screen.getAllByRole('link', { current: 'page' }).map((link) => link.textContent)
+    expect(current).toEqual(['TBD', 'TBD'])
+  })
+
+  it('gives the phone bar one column per section, whatever their number', () => {
+    renderAt('/recipes')
+    const [, phone] = screen.getAllByRole('navigation', { name: '主要' })
+    expect(SECTIONS.length).toBe(5)
+    expect(phone.style.gridTemplateColumns).toBe(`repeat(${SECTIONS.length}, minmax(0, 1fr))`)
+    expect(within(phone).getAllByRole('link').map((link) => link.textContent)).toEqual(
+      SECTIONS.map((section) => section.label),
+    )
   })
 
   it('links 設定 to the gated settings page', () => {

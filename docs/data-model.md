@@ -1,6 +1,6 @@
 # Data model
 
-What the database holds today: thirty-four tables, at revision `c1ommon`.
+What the database holds today: thirty-six tables, at revision `t1bd`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the eight managed
 vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
@@ -8,8 +8,9 @@ its three galleries (`image`, `ingredient_image`, `recipe_image`,
 `kitchen_note_image`), the recipe family's eleven (`recipe`, `recipe_alias`,
 `recipe_serves_as`, `recipe_label`, `recipe_method`, `recipe_equipment`,
 `recipe_source`, `recipe_line_group`, `recipe_line`, `recipe_step_group`,
-`recipe_step`), kitchen notes' two (`kitchen_note`, `kitchen_note_label`), and
-`common_ingredient`, the 常用食材 list.
+`recipe_step`), kitchen notes' two (`kitchen_note`, `kitchen_note_label`),
+`common_ingredient`, the 常用食材 list, and TBD's two (`tbd_entry`,
+`tbd_link`).
 
 ## Conventions shared by every table
 
@@ -166,6 +167,28 @@ with `ON DELETE CASCADE`, so a deleted ingredient leaves the list.
 once and numbers it 0, 1, 2 … in the order sent. A merge moves the source's
 row to the target in the same place, unless the target is listed already,
 when the source's row goes with the source.
+
+## `tbd_entry` and `tbd_link`
+
+TBD: a standalone page of loose notes. Nothing references either table and
+neither references anything else - no ingredient, recipe, label or image.
+
+`tbd_entry` has an optional `name` (blank is stored as null), a NOT NULL
+`sort_order` - the owner's order on the page, ties falling back to `id`; a new
+entry is given the end, and a reorder renumbers every entry 0, 1, 2 … - and
+`created_at` / `updated_at`.
+
+`tbd_link` is an entry's links: `entry_id` (indexed, `ON DELETE CASCADE`), a
+NOT NULL `position` (the order sent), a NOT NULL `url` and an optional
+`label`. `ck_tbd_link_has_a_url` refuses a blank url. The API stores what is
+typed as a web address: one with no scheme is given `https://`, and one with a
+scheme must be `http` or `https`. A save replaces an entry's links wholesale,
+which is why `position` has no unique constraint - one would collide with the
+rows being replaced inside the same flush.
+
+**An entry has a name or at least one link.** A CHECK cannot see the child
+table, so that rule is the service's (`app/services/tbd.py`), answered as a
+422 in the app's error shape.
 
 ## The managed vocabularies
 
@@ -442,6 +465,7 @@ Labels have two name slots, not three; a tag has no formal alternative form.
 | recipe → the lines in other recipes that name it as a base | `RESTRICT` |
 | recipe → its versions | `SET NULL` |
 | kitchen note → its label links and gallery rows | `CASCADE` |
+| TBD entry → its links | `CASCADE` |
 | course → the recipes filed in it | `RESTRICT` |
 | status → the recipes in it; source platform or author → the sources naming it | `RESTRICT` |
 | course → its serves-as links; label → any link | `CASCADE` |

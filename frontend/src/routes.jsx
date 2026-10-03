@@ -23,9 +23,11 @@ import IngredientForm from './pages/edit/IngredientForm'
 import NoteForm from './pages/edit/NoteForm'
 import RecipeForm from './pages/edit/RecipeForm'
 import Settings from './pages/edit/Settings'
+import TbdForm from './pages/edit/TbdForm'
 import IngredientLibrary from './pages/library/IngredientLibrary'
 import NoteLibrary from './pages/library/NoteLibrary'
 import RecipeLibrary from './pages/library/RecipeLibrary'
+import Tbd from './pages/library/Tbd'
 import NotFound from './pages/NotFound'
 
 export default function AppRoutes() {
@@ -41,6 +43,7 @@ export default function AppRoutes() {
         <Route path="/ingredients/:id" element={<IngredientDetail />} />
         <Route path="/notes" element={<NoteLibrary />} />
         <Route path="/notes/:id" element={<NoteDetail />} />
+        <Route path="/tbd" element={<Tbd />} />
 
         {/* Behind Cloudflare Access, by path. */}
         <Route element={<EditSignIn />}>
@@ -52,6 +55,7 @@ export default function AppRoutes() {
           <Route path="/edit/notes/:id" element={<NoteForm />} />
           <Route path="/edit/settings" element={<Settings />} />
           <Route path="/edit/images" element={<ImageLibrary />} />
+          <Route path="/edit/tbd" element={<TbdForm />} />
         </Route>
 
         {/* 設定 is a write page, so it lives under /edit; the short path is

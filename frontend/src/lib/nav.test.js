@@ -14,6 +14,8 @@ describe('activeSection', () => {
     ['/edit/notes/new', 'notes'],
     ['/edit/settings', 'settings'],
     ['/edit/images', 'settings'],
+    ['/tbd', 'tbd'],
+    ['/edit/tbd', 'tbd'],
   ])('%s is in %s', (path, key) => {
     expect(activeSection(path)).toBe(key)
   })
@@ -24,7 +26,7 @@ describe('activeSection', () => {
     expect(activeSection('/')).toBeNull()
   })
 
-  it('has the four sections, in navigation order', () => {
-    expect(SECTIONS.map((s) => s.label)).toEqual(['食譜', '食材', '筆記', '設定'])
+  it('has the five sections, in navigation order', () => {
+    expect(SECTIONS.map((s) => s.label)).toEqual(['食譜', '食材', '筆記', 'TBD', '設定'])
   })
 })

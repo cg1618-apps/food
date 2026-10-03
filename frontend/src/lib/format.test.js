@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatDays, linkHost } from './format'
+import { formatDays, linkHost, linkText } from './format'
 
 describe('formatDays', () => {
   it('shows a range, or one number when the ends agree or one is missing', () => {
@@ -25,5 +25,25 @@ describe('linkHost', () => {
   it('is null for no link and the raw text for one that does not parse', () => {
     expect(linkHost(null)).toBe(null)
     expect(linkHost('not a url')).toBe('not a url')
+  })
+})
+
+describe('linkText', () => {
+  it('shows the host and path, without the scheme, www or a trailing slash', () => {
+    expect(linkText('https://www.example.com/')).toBe('example.com')
+    expect(linkText('https://icook.tw/recipes/1')).toBe('icook.tw/recipes/1')
+    expect(linkText('http://example.com/a/?q=1')).toBe('example.com/a')
+  })
+
+  it('shortens a long path with an ellipsis', () => {
+    const text = linkText(`https://example.com/${'a'.repeat(80)}`)
+    expect(text.length).toBeLessThanOrEqual(40)
+    expect(text.startsWith('example.com/aaa')).toBe(true)
+    expect(text.endsWith('…')).toBe(true)
+  })
+
+  it('is null for no link and the raw text for one that does not parse', () => {
+    expect(linkText(null)).toBe(null)
+    expect(linkText('not a url')).toBe('not a url')
   })
 })

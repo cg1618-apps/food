@@ -10,6 +10,11 @@
 // attribute, so what a screen reader announces and what the eye sees cannot
 // disagree. See lib/nav.js for why the match is not NavLink's.
 //
+// The phone bar has one column per section, counted from lib/nav.js's
+// SECTIONS rather than written into a class, so a new section is one entry
+// there. Its labels are short (two characters, or TBD) and centred in their
+// column, which keeps them readable at 360px with room for a few more.
+//
 // The edit links are visible to everyone on purpose: the gate is Cloudflare
 // Access on the /edit path, not a hidden link. Hiding them would protect
 // nothing and would make the app look read-only to its own owner.
@@ -60,11 +65,12 @@ export default function Layout() {
 
       <nav
         aria-label="主要"
-        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+        style={{ gridTemplateColumns: `repeat(${SECTIONS.length}, minmax(0, 1fr))` }}
+        className="fixed inset-x-0 bottom-0 z-30 grid border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
       >
         <NavItems
           active={active}
-          className="relative py-3 text-center font-display text-base text-text-muted aria-[current=page]:text-brand aria-[current=page]:before:absolute aria-[current=page]:before:inset-x-6 aria-[current=page]:before:top-0 aria-[current=page]:before:h-0.5 aria-[current=page]:before:rounded-full aria-[current=page]:before:bg-brand"
+          className="relative truncate px-1 py-3 text-center font-display text-base text-text-muted aria-[current=page]:text-brand aria-[current=page]:before:absolute aria-[current=page]:before:inset-x-4 aria-[current=page]:before:top-0 aria-[current=page]:before:h-0.5 aria-[current=page]:before:rounded-full aria-[current=page]:before:bg-brand"
         />
       </nav>
     </div>
