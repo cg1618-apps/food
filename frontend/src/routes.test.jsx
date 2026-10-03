@@ -53,6 +53,8 @@ describe('every page has a route', () => {
     ['/edit/images', '圖片'],
     ['/schedule', '排程'],
     ['/edit/schedule', '編輯排程'],
+    ['/heating', '加熱'],
+    ['/edit/heating', '編輯加熱'],
     ['/tbd', 'TBD'],
     ['/edit/tbd', '編輯 TBD'],
     ['/no/such/page', '找不到這一頁'],
@@ -108,7 +110,7 @@ describe('navigation', () => {
   it('gives the phone bar one column per section, whatever their number', () => {
     renderAt('/recipes')
     const [, phone] = screen.getAllByRole('navigation', { name: '主要' })
-    expect(SECTIONS.length).toBe(7)
+    expect(SECTIONS.length).toBe(8)
     expect(phone.style.gridTemplateColumns).toBe(`repeat(${SECTIONS.length}, minmax(0, 1fr))`)
     expect(within(phone).getAllByRole('link').map((link) => link.textContent)).toEqual(
       SECTIONS.map((section) => section.label),

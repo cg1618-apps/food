@@ -305,7 +305,7 @@ so a later reader can tell a decision from an accident. These are food's.
 - **A bar fixed to the bottom of the screen on a phone**, where media's
   navigation folds below `lg` into a menu button that opens a full-screen
   drawer. media has a catalogue of sections and sub-pages to fold away;
-  food has a handful of destinations - 料理 · 食譜 · 食材 · 筆記 · 排程 · TBD · 設定 -
+  food has a handful of destinations - 料理 · 食譜 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定 -
   which fit in one row under a thumb, and the app is opened one-handed in a shop or at the
   stove, where a menu button and a drawer are two taps and a screen covered
   for every move. Pages are padded at the bottom so the bar never covers
@@ -873,6 +873,26 @@ What the branch after module 1 chose, and what it turned down.
   an edit to one entry never rewrites another; the order is one `PUT` of
   every id, which must be exactly the current entries - a stale tab's order
   is refused rather than merged, as 常用食材's duplicate is.
+
+## 加熱
+
+- **Standalone, as TBD is.** What a heating note is about is usually a bought
+  thing - 冷凍吐司, 香腸, a boxed meal - that has no place in the ingredient
+  or dish library, so the note names it in words and points at nothing.
+  An ingredient's own heating guide (`ingredient_heating`, a method and a
+  time per row) stays on the ingredient: it is structured, about one raw
+  ingredient, and read from its page.
+- **A name and free text, nothing more.** The owner asked for "just simple
+  note of how to heat/reheat food". A method, a temperature and a time as
+  fields would cover the oven and miss the 「蓋子打開一角」 that is the actual
+  point of half these notes, so the how is one text box.
+- **The name is required.** A TBD entry may be nameless because its links say
+  what it is; a heating note without a name is text nobody can find. The
+  database holds that with a CHECK, the schema with a 422.
+- **TBD's shape, copied rather than shared.** The read page, the card editor
+  and the order `PUT` follow TBD's line for line. Two instances is the second
+  repetition, not the third; a generic "ordered standalone list" component
+  waits for a third page that wants it.
 
 ## The weekly schedule
 

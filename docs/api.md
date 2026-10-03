@@ -883,6 +883,34 @@ and the answer is the page. A missing, unknown or repeated id is a 422 and
 changes nothing - it means the page is out of date, and guessing would drop or
 invent a place.
 
+## 加熱
+
+| Route | |
+| --- | --- |
+| `GET /api/heating` | every note, in order |
+| `POST /api/edit/heating` | creates one note, at the end; 201 |
+| `PATCH /api/edit/heating/{id}` | |
+| `DELETE /api/edit/heating/{id}` | 204 |
+| `PUT /api/edit/heating/order` | saves the order of every note |
+
+A standalone page of notes on how to heat or reheat a food, related to nothing
+else in the app. There is no detail route - the page is read whole.
+
+```json
+[{"id": 4, "name": "冷凍吐司", "body": "烤箱 180 度 5 分鐘", "sort_order": 0},
+ {"id": 2, "name": "香腸", "body": null, "sort_order": 1}]
+```
+
+Notes come in `sort_order`, ties by `id`.
+
+**The `POST` body is `{"name": …, "body": …}`**, nothing else accepted. `name`
+is required and a blank one is a 422; a blank `body` is stored as null. A
+`PATCH` takes the same fields, applies only what it sends, and refuses a
+blank or null `name`. The answer is the note, as the `GET` gives it.
+
+**The order `PUT` body is `{"ids": [4, 2, …]}`**, with TBD's rule: exactly the
+current notes, each once, or a 422 that changes nothing.
+
 ## Categories
 
 | Route | |

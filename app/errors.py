@@ -113,6 +113,7 @@ CONSTRAINT_MESSAGES = {
     "uq_schedule_meal_slot": "A day has one meal per slot.",
     "uq_schedule_meal_item_position": "Two items of a meal cannot share one position.",
     "ck_tbd_link_has_a_url": "A link needs a URL.",
+    "ck_heating_note_has_a_name": "A note needs a name.",
     "ck_recipe_template_has_a_name": "A template needs a name.",
 }
 

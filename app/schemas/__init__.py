@@ -5,6 +5,12 @@ from app.schemas.common_ingredient import (
     CommonIngredientsIn,
 )
 from app.schemas.dish import DishCreate, DishResponse, DishSummary, DishUpdate
+from app.schemas.heating import (
+    HeatingNoteCreate,
+    HeatingNoteResponse,
+    HeatingNoteUpdate,
+    HeatingOrderIn,
+)
 from app.schemas.image import (
     AttachedImage,
     CoverRef,
@@ -117,6 +123,10 @@ __all__ = [
     "DishResponse",
     "DishSummary",
     "DishUpdate",
+    "HeatingNoteCreate",
+    "HeatingNoteResponse",
+    "HeatingNoteUpdate",
+    "HeatingOrderIn",
     "ImageAttachmentIn",
     "ImageDetail",
     "ImageOwner",
