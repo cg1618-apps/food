@@ -59,11 +59,12 @@ export function targetFromOption(option) {
 
 // Han characters, kana and Hangul: a name typed in any of them is filed as
 // the Chinese name, anything else as the English one. A stub needs one name
-// and the user typed exactly one.
+// and the user typed exactly one. The author migration (alembic/versions/
+// a1uthors_authors.py) files existing creators by the same rule.
 const CJK = /[぀-ヿ㐀-鿿豈-﫿가-힯]/
 
-/** The `new_ingredient` body for a typed name. */
-export function newIngredientNames(text) {
+/** The `new_ingredient` or `new_author` body for a typed name. */
+export function newNames(text) {
   const name = String(text ?? '').trim()
   return CJK.test(name) ? { name_cn: name } : { name_en: name }
 }
@@ -98,7 +99,7 @@ export function linesPayload(rows) {
     }
     if (line.target.type === 'ingredient') out.push({ ...base, ingredient_id: line.target.id })
     else if (line.target.type === 'recipe') out.push({ ...base, sub_recipe_id: line.target.id })
-    else out.push({ ...base, new_ingredient: newIngredientNames(line.target.label) })
+    else out.push({ ...base, new_ingredient: newNames(line.target.label) })
   })
   return out
 }

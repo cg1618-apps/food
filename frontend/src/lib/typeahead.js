@@ -6,6 +6,9 @@
 // recipe line names an ingredient far more often than a base, each source
 // capped so a common syllable cannot bury the other; then 「新增 'xxx'」 when
 // it is allowed and nothing matches the typed text exactly.
+//
+// A short list the caller already holds - the authors - is filtered here in
+// the browser instead (localResults), with the same 「新增」 rule.
 
 /** Case- and width-insensitive comparison text: trimmed, lowercased. */
 export function normalise(text) {
@@ -84,13 +87,39 @@ export function mergeResults({
       })),
   ]
 
+  return withNew(options, query, allowNew)
+}
+
+// An exact match anywhere is what the user meant, so 「新增」 would only make
+// a duplicate the server then folds into it.
+function withNew(options, query, allowNew) {
   const typed = String(query ?? '').trim()
-  // An exact match anywhere - ingredient or recipe - is what the user meant,
-  // so 「新增」 would only make a duplicate the server then folds into it.
   if (allowNew && typed && !options.some((option) => option.exact)) {
     options.push({ key: `new-${typed}`, type: 'new', id: null, label: typed, detail: '' })
   }
   return options
+}
+
+/**
+ * The options for `query` from a list held in the browser: every row one of
+ * whose names contains the typed text, case- and width-insensitively, in the
+ * list's own order. Each option is { key, type: 'item', id, label, detail },
+ * then 「新增」 as mergeResults adds it.
+ */
+export function localResults({ items = [], query = '', allowNew = false, limit = 8 }) {
+  const wanted = normalise(query)
+  const options = (items ?? [])
+    .filter((row) => wanted !== '' && names(row).some((name) => normalise(name).includes(wanted)))
+    .slice(0, limit)
+    .map((row) => ({
+      key: `item-${row.id}`,
+      type: 'item',
+      id: row.id,
+      label: row.display_name,
+      detail: secondary(row),
+      exact: isExactMatch(row, query),
+    }))
+  return withNew(options, query, allowNew)
 }
 
 /** The next active index for an arrow key: wraps, and -1 means none. */

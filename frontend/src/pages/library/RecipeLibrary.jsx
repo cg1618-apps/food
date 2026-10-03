@@ -1,6 +1,6 @@
 // Frontend: the recipe library, /recipes - the app's front page.
 //
-// The sidebar: course, status, kind, method, equipment, creator, label, and
+// The sidebar: course, status, kind, method, equipment, author, label, and
 // written up / bookmark only. Every filter but the last is "any of" (the API
 // takes the parameter repeated); written-up is one choice of two, since both
 // at once is no filter. All of it is in the URL.
@@ -23,7 +23,7 @@ const SPEC = {
   kind: { type: 'multi', api: 'kind' },
   method: { type: 'multi', api: 'method_id', id: true },
   equipment: { type: 'multi', api: 'equipment_id', id: true },
-  creator: { type: 'multi', api: 'creator' },
+  author: { type: 'multi', api: 'author_id', id: true },
   label: { type: 'multi', api: 'label_id', id: true },
   written: { type: 'single', api: 'written_up' },
 }
@@ -52,7 +52,7 @@ export default function RecipeLibrary() {
   const statuses = useApiQuery(endpoints.statuses.list())
   const methods = useApiQuery(endpoints.methods.list())
   const equipment = useApiQuery(endpoints.equipment.list())
-  const creators = useApiQuery(endpoints.recipes.creators())
+  const authors = useApiQuery(endpoints.authors.list())
   const labels = useApiQuery(endpoints.labels.list())
   const fixed = useFixedVocabularies()
 
@@ -60,7 +60,7 @@ export default function RecipeLibrary() {
     cover: row.cover,
     title: row.display_name,
     subtitle: row.name_en && row.name_en !== row.display_name ? row.name_en : null,
-    meta: [row.course?.display_name, row.time, row.creators[0]].filter(Boolean).join(' · '),
+    meta: [row.course?.display_name, row.time, row.authors[0]?.display_name].filter(Boolean).join(' · '),
     badges: row.written_up ? null : <Badge kind="bookmark" />,
   })
 
@@ -68,11 +68,7 @@ export default function RecipeLibrary() {
     { key: 'course', header: '類別', render: (row) => row.course?.display_name ?? null },
     { key: 'methods', header: '做法', render: (row) => joinNames(row.methods) },
     { key: 'time', header: '時間', className: 'whitespace-nowrap', render: (row) => row.time || null },
-    {
-      key: 'creator',
-      header: '作者',
-      render: (row) => (row.creators.length ? row.creators.join('、') : null),
-    },
+    { key: 'authors', header: '作者', render: (row) => joinNames(row.authors) },
     {
       key: 'status',
       header: '狀態',
@@ -127,9 +123,9 @@ export default function RecipeLibrary() {
       </FilterGroup>
       <FilterGroup title="作者">
         <FilterOptions
-          options={(creators.data ?? []).map((name) => ({ value: name, label: name }))}
-          selected={values.creator}
-          onToggle={(value) => toggle('creator', value)}
+          options={asOptions(authors.data)}
+          selected={values.author}
+          onToggle={(value) => toggle('author', value)}
         />
       </FilterGroup>
       <FilterGroup title="標籤">

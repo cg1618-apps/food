@@ -51,46 +51,9 @@ def _normalise(value):
     return _blank_to_none(value) if value is None or isinstance(value, str) else value
 
 
-class SourceIn(BaseModel):
-    """No `sort_order`: a source's order is its position in the list."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    # Required, and checked against source_platform by the service.
-    platform_id: int
-    creator: str | None = None
-    url: str | None = None
-    title: str | None = None
-
-    @field_validator("creator", "url", "title", mode="before")
-    @classmethod
-    def blank_is_absent(cls, value):
-        return _normalise(value)
-
-    @field_validator("url")
-    @classmethod
-    def url_is_http(cls, value: str | None) -> str | None:
-        return None if value is None else _check_url(value)
-
-    @model_validator(mode="after")
-    def says_something(self):
-        # Mirrors ck_recipe_source_has_content.
-        if not any((self.creator, self.url, self.title)):
-            raise ValueError("A source needs a creator, a link or a title")
-        return self
-
-
-class SourceResponse(BaseModel):
-    id: int
-    platform: VocabRef
-    creator: str | None = None
-    url: str | None = None
-    title: str | None = None
-    sort_order: int
-
-
-class NewIngredientIn(BaseModel):
-    """A name typed into a line that is not in the library yet."""
+class NewNameIn(BaseModel):
+    """A name typed into the form that is not in the library yet - a line's
+    ingredient, a source's author. Filed in whichever slot the form chose."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -105,8 +68,55 @@ class NewIngredientIn(BaseModel):
     @model_validator(mode="after")
     def at_least_one_name(self):
         if not any((self.name_cn, self.name_en)):
-            raise ValueError("A new ingredient needs at least one name")
+            raise ValueError("A new name needs at least one of name_cn or name_en")
         return self
+
+
+class SourceIn(BaseModel):
+    """No `sort_order`: a source's order is its position in the list.
+
+    The author is `author_id` or `new_author` - a name the save reuses an
+    existing author for, or creates - or neither: a source may have none.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Required, and checked against source_platform by the service.
+    platform_id: int
+    author_id: int | None = None
+    new_author: NewNameIn | None = None
+    url: str | None = None
+    title: str | None = None
+
+    @field_validator("url", "title", mode="before")
+    @classmethod
+    def blank_is_absent(cls, value):
+        return _normalise(value)
+
+    @field_validator("url")
+    @classmethod
+    def url_is_http(cls, value: str | None) -> str | None:
+        return None if value is None else _check_url(value)
+
+    @model_validator(mode="after")
+    def says_something(self):
+        if self.author_id is not None and self.new_author is not None:
+            raise ValueError("A source names author_id or new_author, not both")
+        # Mirrors ck_recipe_source_has_content, with new_author counted as an
+        # author that does not exist yet.
+        author = self.author_id is not None or self.new_author is not None
+        if not (author or self.url or self.title):
+            raise ValueError("A source needs an author, a link or a title")
+        return self
+
+
+class SourceResponse(BaseModel):
+    id: int
+    platform: VocabRef
+    author: VocabRef | None = None
+    url: str | None = None
+    title: str | None = None
+    sort_order: int
 
 
 class LineIn(BaseModel):
@@ -115,7 +125,7 @@ class LineIn(BaseModel):
     section: str | None = None
     ingredient_id: int | None = None
     sub_recipe_id: int | None = None
-    new_ingredient: NewIngredientIn | None = None
+    new_ingredient: NewNameIn | None = None
     amount: str | None = None
     note: str | None = None
     is_optional: bool = False
@@ -302,8 +312,8 @@ class RecipeUpdate(BaseModel):
 class RecipeSummary(BaseModel):
     """What a library row needs - the cover view and the table view both.
 
-    `creators` is the distinct non-null creators of the recipe's sources, in
-    source order. `written_up` is derived, as on the full recipe.
+    `authors` is the distinct authors of the recipe's sources, in source
+    order. `written_up` is derived, as on the full recipe.
     """
 
     id: int
@@ -315,7 +325,7 @@ class RecipeSummary(BaseModel):
     status: VocabRef
     course: VocabRef | None = None
     methods: list[VocabRef] = []
-    creators: list[str] = []
+    authors: list[VocabRef] = []
     time: str | None = None
     written_up: bool
     cover: CoverRef | None = None

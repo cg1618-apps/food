@@ -1,4 +1,4 @@
-"""One factory, five vocabularies. Reads are public; writes sit behind Access.
+"""One factory, six vocabularies. Reads are public; writes sit behind Access.
 
 A delete of a value still in use is refused here with a 409 that carries the
 count, before the database is asked. The RESTRICT foreign keys are the
@@ -13,7 +13,14 @@ from app import schemas
 from app.constants import FIXED_VOCABULARIES
 from app.database import get_db
 from app.errors import AppError
-from app.models import CookingMethod, Equipment, RecipeCourse, RecipeStatus, SourcePlatform
+from app.models import (
+    Author,
+    CookingMethod,
+    Equipment,
+    RecipeCourse,
+    RecipeStatus,
+    SourcePlatform,
+)
 from app.routing import read_router, write_router
 from app.services import vocabularies
 
@@ -94,6 +101,9 @@ method_router, method_edit = build(
     CookingMethod, "cooking-methods", "Cooking methods", "cooking method"
 )
 equipment_router, equipment_edit = build(Equipment, "equipment", "Equipment", "piece of equipment")
+# Listed by name: every author has sort_order 0 (app/models/vocabulary.py), so
+# the (sort_order, name) order above needs nothing of its own.
+author_router, author_edit = build(Author, "authors", "Authors", "author")
 
 fixed_router = read_router("vocabularies", "Vocabularies")
 
@@ -115,5 +125,7 @@ ROUTERS = [
     method_edit,
     equipment_router,
     equipment_edit,
+    author_router,
+    author_edit,
     fixed_router,
 ]

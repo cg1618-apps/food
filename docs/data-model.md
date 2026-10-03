@@ -1,8 +1,8 @@
 # Data model
 
-What the database holds today: twenty-eight tables, at revision `v2ocabulary`.
+What the database holds today: twenty-nine tables, at revision `a1uthors`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
-`ingredient_preservation`, `label`, `ingredient_label`), the five managed
+`ingredient_preservation`, `label`, `ingredient_label`), the six managed
 vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
 its three galleries (`image`, `ingredient_image`, `recipe_image`,
 `kitchen_note_image`), the recipe family's nine (`recipe`, `recipe_alias`,
@@ -157,8 +157,8 @@ is script execution. `title` is optional; rows are ordered by `sort_order`.
 
 ## The managed vocabularies
 
-`recipe_course`, `recipe_status`, `source_platform`, `cooking_method` and
-`equipment` share one shape, declared once
+`recipe_course`, `recipe_status`, `source_platform`, `cooking_method`,
+`equipment` and `author` share one shape, declared once
 in `VocabularyMixin` (`app/models/vocabulary.py`): `name_cn`, `name_en`,
 `sort_order`, at least one name (`ck_<table>_has_a_name`) and a case-insensitive
 unique index per name slot with default null handling, as on `ingredient`.
@@ -167,6 +167,15 @@ They are tables rather than lists in `app/constants.py` because the owner edits
 them: renaming 煮 to 水煮 is one row, not a deploy. The closed lists in
 constants are the ones the app's own logic branches on (storage state, rating);
 these are the ones it only displays and filters by.
+
+**`author` is listed by name, not by hand.** Every author has `sort_order` 0,
+so the shared (sort_order, name) order is name order. It grows from the recipe
+form as well as from 設定: a name typed into a source that no author answers
+to is created by the save (`docs/api.md`). It is not seeded; `a1uthors` filled
+it from the free-text `recipe_source.creator` it replaced — one author per
+distinct creator, trimmed and compared case-insensitively, the spelling of the
+first source saved kept, and a name containing Han characters, kana or Hangul
+filed as `name_cn`, anything else as `name_en`.
 
 **The migration seeds them, and the ingredient categories and labels with
 them:**
@@ -217,6 +226,7 @@ things that would stop it being deleted:
 | `source_platform` | sources naming it (`recipe_source.platform_id`) — two sources from one book count twice |
 | `cooking_method` | `ingredient_heating` rows plus `recipe_method` links |
 | `equipment` | `recipe_equipment` links |
+| `author` | sources naming them (`recipe_source.author_id`) — counted as a platform's are |
 
 ## `image` and its galleries
 
@@ -303,9 +313,10 @@ A serves-as link may repeat the recipe's own course.
 ## `recipe_source`
 
 Where the recipe came from. `platform_id` is required (→ `source_platform`,
-`RESTRICT`); `creator`, `url` and `title`
-are each optional — a book has no URL — but at least one must be set
-(`ck_recipe_source_has_content`). Ordered by `sort_order`.
+`RESTRICT`); `author_id` (→ `author`, `RESTRICT`, indexed), `url` and `title`
+are each optional — a book has no URL, a page may have no author worth
+naming — but at least one must be set (`ck_recipe_source_has_content`).
+Ordered by `sort_order`.
 
 ## `recipe_line`
 
@@ -379,7 +390,7 @@ Labels have two name slots, not three; a tag has no formal alternative form.
 | recipe → its versions | `SET NULL` |
 | kitchen note → its label links and gallery rows | `CASCADE` |
 | course → the recipes filed in it | `RESTRICT` |
-| status → the recipes in it; source platform → the sources naming it | `RESTRICT` |
+| status → the recipes in it; source platform or author → the sources naming it | `RESTRICT` |
 | course → its serves-as links; label → any link | `CASCADE` |
 | cooking method → the heating rows and recipe links that use it | `RESTRICT` |
 | equipment → the recipe links that use it | `RESTRICT` |
@@ -411,7 +422,7 @@ pages.
 
 | Reference | Column / feature | Lands in |
 | --- | --- | --- |
-| Recipe doc | title, `(YT 詹姆士)` suffix | `recipe.name_cn`; source platform + creator |
+| Recipe doc | title, `(YT 詹姆士)` suffix | `recipe.name_cn`; source platform + author |
 | Recipe doc | `Link:` (sometimes two) | `recipe_source` rows |
 | Recipe doc | `人數` | `recipe.servings` |
 | Recipe doc | ingredient list, amounts | `recipe_line` (ingredient link + `amount`) |
@@ -427,7 +438,7 @@ pages.
 | Recipe sheets | first column (飯 / 麵 / 肉 / 麵包 …) | recipe labels |
 | Recipe sheets | 烹調方式 | `recipe_method` → `cooking_method` |
 | Recipe sheets | 器具 | `recipe_equipment` → `equipment` |
-| Recipe sheets | 來源 (YT / shorts / website / book), creator, URL | `recipe_source` → `source_platform` |
+| Recipe sheets | 來源 (YT / shorts / website / book), creator, URL | `recipe_source` → `source_platform`, `author` |
 | Recipe sheets | 可當主食 / 可當配菜 / 可當點心 | `recipe_serves_as` → `recipe_course` |
 | Recipe sheets | Recipe O / X | derived: has lines or steps ("written up" vs 書籤) |
 | Recipe sheets | 備註, `冷藏: 1 week`, `包含醬` | `recipe.notes` / `recipe.storage_notes` / a nested base |

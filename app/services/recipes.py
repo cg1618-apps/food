@@ -1,9 +1,9 @@
 """Reading and writing recipes. The router does HTTP; this does the work.
 
 Every write validates everything it can BEFORE it changes anything: names,
-the course, the status, every source's platform, the version rule, every id
-in the vocabulary lists, every line
-target and the cycle guard. Only then are stubs created and the row touched.
+the course, the status, every source's platform and author, the version rule,
+every id in the vocabulary lists, every line target and the cycle guard. Only
+then are stubs and new authors created and the row touched.
 One request is one transaction, and the ordering is what makes a refused save
 leave nothing behind even in a session that is never rolled back - the test
 session is one such, and an autoflush is all it takes to half-write a row.
@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.errors import AppError
 from app.models import (
+    Author,
     CookingMethod,
     Equipment,
     Ingredient,
@@ -60,6 +61,7 @@ def _loaded(query):
         selectinload(Recipe.variants),
         selectinload(Recipe.aliases),
         selectinload(Recipe.sources).selectinload(RecipeSource.platform),
+        selectinload(Recipe.sources).selectinload(RecipeSource.author),
         selectinload(Recipe.lines).selectinload(RecipeLine.ingredient),
         selectinload(Recipe.lines).selectinload(RecipeLine.sub_recipe),
         selectinload(Recipe.steps),
@@ -81,7 +83,7 @@ def _summary_loaded(query):
         selectinload(Recipe.course),
         selectinload(Recipe.status),
         selectinload(Recipe.methods),
-        selectinload(Recipe.sources),
+        selectinload(Recipe.sources).selectinload(RecipeSource.author),
         selectinload(Recipe.images).selectinload(RecipeImage.image),
         selectinload(Recipe.lines),
         selectinload(Recipe.steps),
@@ -131,17 +133,10 @@ def used_in(db: Session, recipe_id: int) -> list[Recipe]:
     return sorted(rows, key=lambda r: r.display_name.casefold())
 
 
-def creators(recipe: Recipe) -> list[str]:
-    """The distinct non-null creators of a recipe's sources, in source order."""
-    return list(dict.fromkeys(s.creator for s in recipe.sources if s.creator))
-
-
-def all_creators(db: Session) -> list[str]:
-    """Every distinct creator any source names, sorted in Python as names are."""
-    rows = db.execute(
-        select(RecipeSource.creator).where(RecipeSource.creator.isnot(None)).distinct()
-    )
-    return sorted((creator for (creator,) in rows), key=str.casefold)
+def authors(recipe: Recipe) -> list[Author]:
+    """The distinct authors of a recipe's sources, in source order."""
+    by_id = {s.author.id: s.author for s in recipe.sources if s.author is not None}
+    return list(by_id.values())
 
 
 def _below(ingredient_ids: list[int]):
@@ -235,7 +230,7 @@ def search(
     label_id: list[int] | None = None,
     method_id: list[int] | None = None,
     equipment_id: list[int] | None = None,
-    creator: list[str] | None = None,
+    author_id: list[int] | None = None,
     ingredient_id: list[int] | None = None,
     written_up: bool | None = None,
 ) -> list[Recipe]:
@@ -276,8 +271,8 @@ def search(
         query = query.filter(_any_of(RecipeMethod, RecipeMethod.method_id, method_id))
     if equipment_id:
         query = query.filter(_any_of(RecipeEquipment, RecipeEquipment.equipment_id, equipment_id))
-    if creator:
-        query = query.filter(_any_of(RecipeSource, RecipeSource.creator, creator))
+    if author_id:
+        query = query.filter(_any_of(RecipeSource, RecipeSource.author_id, author_id))
     if ingredient_id:
         query = query.filter(Recipe.id.in_(recipe_ids_using_ingredients(ingredient_id)))
     if written_up is not None:
@@ -315,8 +310,11 @@ def _first_status(db: Session) -> int:
     return first[0]
 
 
-def _check_platforms(db: Session, entries) -> None:
+def _check_sources(db: Session, entries) -> None:
+    """Every platform and every `author_id` a source names exists."""
     fetch_all(db, SourcePlatform, [e.platform_id for e in entries], "source platform")
+    author_ids = [e.author_id for e in entries if e.author_id is not None]
+    fetch_all(db, Author, author_ids, "author")
 
 
 def _check_version(db: Session, recipe_id: int | None, variant_of_id: int | None) -> None:
@@ -453,6 +451,45 @@ def _resolve_new_ingredients(db: Session, entries) -> dict[int, int]:
     return resolved
 
 
+def _resolve_new_authors(db: Session, entries) -> dict[int, int]:
+    """Source index -> author id, for every `new_author` source.
+
+    A typed name reuses the author answering to it in either slot, exactly
+    and case-insensitively; otherwise it is created, with sort_order 0 like
+    every author. Names resolved earlier in the same save are remembered, so
+    one new name on two sources is one author rather than a unique violation
+    on the second.
+    """
+    resolved: dict[int, int] = {}
+    seen: dict[str, Author] = {}
+    for index, entry in enumerate(entries):
+        new = entry.new_author
+        if new is None:
+            continue
+        lowered = [n.lower() for n in (new.name_cn, new.name_en) if n]
+        row = next((seen[n] for n in lowered if n in seen), None)
+        if row is None:
+            row = (
+                db.query(Author)
+                .filter(
+                    or_(
+                        func.lower(Author.name_cn).in_(lowered),
+                        func.lower(Author.name_en).in_(lowered),
+                    )
+                )
+                .order_by(Author.id)
+                .first()
+            )
+        if row is None:
+            row = Author(name_cn=new.name_cn, name_en=new.name_en)
+            db.add(row)
+            db.flush()
+        for name in lowered:
+            seen.setdefault(name, row)
+        resolved[index] = row.id
+    return resolved
+
+
 # --- applying ----------------------------------------------------------------
 
 
@@ -464,10 +501,15 @@ def _apply_aliases(recipe: Recipe, values: list[str]) -> None:
     recipe.aliases.extend(RecipeAlias(value=v) for v in wanted if v not in kept)
 
 
-def _apply_sources(recipe: Recipe, entries) -> None:
+def _apply_sources(recipe: Recipe, entries, author_ids: dict[int, int]) -> None:
+    """Replace the sources; a `new_author` source takes its resolved id."""
     recipe.sources = [
         RecipeSource(
-            platform_id=e.platform_id, creator=e.creator, url=e.url, title=e.title, sort_order=i
+            platform_id=e.platform_id,
+            author_id=author_ids.get(i, e.author_id),
+            url=e.url,
+            title=e.title,
+            sort_order=i,
         )
         for i, e in enumerate(entries)
     ]
@@ -512,22 +554,31 @@ def _check_and_fetch(db: Session, recipe_id: int | None, lists: dict) -> dict:
         if lists.get(field) is not None:
             fetched[field] = fetch_all(db, model, lists[field], what)
     if lists.get("sources") is not None:
-        _check_platforms(db, lists["sources"])
+        _check_sources(db, lists["sources"])
     if lists.get("lines") is not None:
         _check_line_targets(db, recipe_id, lists["lines"])
     return fetched
 
 
+def _resolve_new(db: Session, lists: dict) -> dict[str, dict[int, int]]:
+    """The first write of a save: stubs for new ingredients, rows for new
+    authors. Runs only after every check has passed."""
+    return {
+        "lines": _resolve_new_ingredients(db, lists.get("lines") or []),
+        "sources": _resolve_new_authors(db, lists.get("sources") or []),
+    }
+
+
 def _apply_lists(
-    db: Session, recipe: Recipe, lists: dict, fetched: dict, new_ids: dict[int, int]
+    db: Session, recipe: Recipe, lists: dict, fetched: dict, new_ids: dict[str, dict[int, int]]
 ) -> None:
     lines = lists.get("lines")
     if lists.get("aliases") is not None:
         _apply_aliases(recipe, lists["aliases"])
     if lists.get("sources") is not None:
-        _apply_sources(recipe, lists["sources"])
+        _apply_sources(recipe, lists["sources"], new_ids["sources"])
     if lines is not None:
-        _apply_lines(db, recipe, lines, new_ids)
+        _apply_lines(db, recipe, lines, new_ids["lines"])
     if lists.get("steps") is not None:
         _apply_steps(db, recipe, lists["steps"])
     for field, rows in fetched.items():
@@ -544,7 +595,7 @@ def create(db: Session, payload) -> Recipe:
         _check_status(db, status_id)
     _check_version(db, None, payload.variant_of_id)
     fetched = _check_and_fetch(db, None, lists)
-    new_ids = _resolve_new_ingredients(db, lists["lines"])  # the first write
+    new_ids = _resolve_new(db, lists)  # the first write
 
     scalars = payload.model_dump(exclude=set(LIST_FIELDS))
     scalars["status_id"] = status_id
@@ -576,7 +627,7 @@ def update(db: Session, recipe_id: int, payload) -> Recipe:
     if "variant_of_id" in scalars:
         _check_version(db, recipe.id, scalars["variant_of_id"])
     fetched = _check_and_fetch(db, recipe.id, lists)
-    new_ids = _resolve_new_ingredients(db, lists.get("lines") or [])  # the first write
+    new_ids = _resolve_new(db, lists)  # the first write
 
     for field, value in scalars.items():
         setattr(recipe, field, value)

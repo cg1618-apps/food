@@ -7,7 +7,15 @@ Every refusal test sets up the thing it refuses, and has a mirror that commits.
 
 import pytest
 
-from app.models import CookingMethod, Equipment, Label, Recipe, RecipeCourse, RecipeStatus
+from app.models import (
+    Author,
+    CookingMethod,
+    Equipment,
+    Label,
+    Recipe,
+    RecipeCourse,
+    RecipeStatus,
+)
 
 # Every recipe needs a status, and a source a platform; the migration seeds
 # both and create_all does not.
@@ -23,6 +31,7 @@ def vocab(db):
         "label": Label(name_cn="下飯"),
         "method": CookingMethod(name_cn="炒"),
         "equipment": Equipment(name_cn="炒鍋"),
+        "author": Author(name_cn="阿基師"),
     }
     db.add_all(rows.values())
     db.flush()
@@ -59,7 +68,9 @@ def test_a_recipe_round_trips_through_create_read_update_delete(
         storage_notes="當天吃完",
         notes="蛋先炒",
         aliases=["西紅柿炒雞蛋"],
-        sources=[{"platform_id": youtube.id, "creator": "阿基師", "url": "https://example.com/v"}],
+        sources=[
+            {"platform_id": youtube.id, "author_id": vocab["author"].id, "url": "https://example.com/v"}
+        ],
         lines=[{"ingredient_id": ingredient.id, "amount": "1 小塊", "section": "爆香"}],
         steps=[{"body": "蛋打散"}, {"section": "炒", "body": "下番茄"}],
         serves_as_ids=[vocab["side"].id],
@@ -72,7 +83,7 @@ def test_a_recipe_round_trips_through_create_read_update_delete(
     assert read["status"] == {"id": can_cook.id, "display_name": "可煮"}
     assert read["course"]["display_name"] == "主菜"
     assert read["aliases"] == ["西紅柿炒雞蛋"]
-    assert read["sources"][0]["creator"] == "阿基師"
+    assert read["sources"][0]["author"] == {"id": vocab["author"].id, "display_name": "阿基師"}
     assert read["sources"][0]["platform"] == {"id": youtube.id, "display_name": "YouTube"}
     assert read["sources"][0]["sort_order"] == 0
     assert read["lines"][0]["ingredient"]["display_name"] == "生薑"
@@ -243,18 +254,25 @@ def test_clearing_the_only_name_is_refused_but_clearing_one_of_two_is_not(client
 @pytest.mark.parametrize(
     "source",
     [
-        {"platform_id": "YouTube"},  # none of creator, url, title
-        {"platform_id": "YouTube", "creator": "  "},  # blank is absent
-        {"platform_id": 999999, "creator": "x"},  # a platform that does not exist
-        {"platform_id": None, "creator": "x"},  # a source needs a platform
-        {"creator": "x"},
+        {"platform_id": "YouTube"},  # none of author, url, title
+        {"platform_id": "YouTube", "title": "  "},  # blank is absent
+        {"platform_id": "YouTube", "new_author": {"name_cn": " "}},  # a new author needs a name
+        {"platform_id": "YouTube", "new_author": {}},
+        {"platform_id": 999999, "title": "x"},  # a platform that does not exist
+        {"platform_id": None, "title": "x"},  # a source needs a platform
+        {"title": "x"},
+        {"platform_id": "YouTube", "author_id": 999999},  # an author that does not exist
+        {"platform_id": "YouTube", "creator": "x"},  # the old free-text field is gone
         {"platform_id": "網站", "url": "javascript:alert(1)"},
         {"platform_id": "書", "title": "x", "sort_order": 3},  # order is the list's
     ],
 )
-def test_a_bad_source_is_refused(client, source_platforms, source):
+def test_a_bad_source_is_refused(client, db, source_platforms, source):
     """A platform is written by name here and swapped for its id, so the
-    platforms table is non-empty and 999999 is refused for naming nothing."""
+    platforms table is non-empty and 999999 is refused for naming nothing. An
+    author exists for the same reason."""
+    db.add(Author(name_cn="阿基師"))
+    db.flush()
     source = dict(source)
     if isinstance(source.get("platform_id"), str):
         source["platform_id"] = source_platforms[source["platform_id"]].id
@@ -262,16 +280,109 @@ def test_a_bad_source_is_refused(client, source_platforms, source):
     assert response.status_code == 422
 
 
-def test_a_source_with_only_a_creator_is_accepted(client, source_platforms):
+def test_a_source_may_not_name_an_author_and_a_new_one(client, db, source_platforms):
+    author = Author(name_cn="阿基師")
+    db.add(author)
+    db.flush()
+    youtube = source_platforms["YouTube"].id
+    both = {"platform_id": youtube, "author_id": author.id, "new_author": {"name_cn": "詹姆士"}}
+    response = client.post("/api/edit/recipes", json={"name_cn": "x", "sources": [both]})
+    assert response.status_code == 422
+    # The mirror: either one alone is fine.
+    create(client, sources=[{"platform_id": youtube, "author_id": author.id}])
+    create(client, sources=[{"platform_id": youtube, "new_author": {"name_cn": "詹姆士"}}])
+
+
+def test_a_source_with_only_an_author_is_accepted(client, db, source_platforms):
+    author = Author(name_cn="阿基師")
+    db.add(author)
+    db.flush()
     shorts, book = source_platforms["Shorts"].id, source_platforms["書"].id
     created = create(
         client,
-        sources=[{"platform_id": shorts, "creator": "x"}, {"platform_id": book, "title": "y"}],
+        sources=[{"platform_id": shorts, "author_id": author.id}, {"platform_id": book, "title": "y"}],
     )
-    assert [(s["platform"]["display_name"], s["sort_order"]) for s in created["sources"]] == [
-        ("Shorts", 0),
-        ("書", 1),
+    assert [
+        (s["platform"]["display_name"], s["author"], s["sort_order"]) for s in created["sources"]
+    ] == [
+        ("Shorts", {"id": author.id, "display_name": "阿基師"}, 0),
+        ("書", None, 1),
     ]
+
+
+# --- new_author: typed in the source row, made by the save ---------------------
+
+
+def authors(db):
+    return {(a.name_cn, a.name_en) for a in db.query(Author).all()}
+
+
+def test_a_new_author_is_created_by_the_save(client, db, source_platforms):
+    youtube = source_platforms["YouTube"].id
+    created = create(
+        client,
+        sources=[
+            {"platform_id": youtube, "new_author": {"name_cn": "阿基師"}},
+            {"platform_id": youtube, "new_author": {"name_en": "Babish"}, "url": "https://b.example"},
+        ],
+    )
+    assert authors(db) == {(None, "Babish"), ("阿基師", None)}
+    made = {a.display_name: a.id for a in db.query(Author).all()}
+    assert [s["author"] for s in created["sources"]] == [
+        {"id": made["阿基師"], "display_name": "阿基師"},
+        {"id": made["Babish"], "display_name": "Babish"},
+    ]
+
+
+def test_a_new_author_whose_name_exists_reuses_that_author(client, db, source_platforms):
+    """The existing author is the fixture: with none, every new_author creates
+    and a reuse that never happened would pass. Matched case-insensitively and
+    in either slot - a name typed as Chinese can match an English name."""
+    james = Author(name_cn="詹姆士", name_en="James")
+    db.add(james)
+    db.flush()
+    youtube = source_platforms["YouTube"].id
+    created = create(
+        client,
+        sources=[
+            {"platform_id": youtube, "new_author": {"name_en": "JAMES"}},
+            {"platform_id": youtube, "new_author": {"name_cn": "詹姆士"}},
+        ],
+    )
+    assert [s["author"]["id"] for s in created["sources"]] == [james.id, james.id]
+    assert authors(db) == {("詹姆士", "James")}
+
+
+def test_one_new_author_named_by_two_sources_is_one_author(client, db, source_platforms):
+    youtube, shorts = source_platforms["YouTube"].id, source_platforms["Shorts"].id
+    created = create(
+        client,
+        sources=[
+            {"platform_id": youtube, "new_author": {"name_en": "Babish"}},
+            {"platform_id": shorts, "new_author": {"name_en": "babish"}},
+        ],
+    )
+    assert authors(db) == {(None, "Babish")}
+    assert created["sources"][0]["author"] == created["sources"][1]["author"]
+
+
+def test_a_refused_save_creates_no_author(client, db, source_platforms):
+    """Validation runs before the first write: a source naming a platform
+    that does not exist refuses the save, and the new author on the other
+    source must not be left behind."""
+    youtube = source_platforms["YouTube"].id
+    response = client.post(
+        "/api/edit/recipes",
+        json={
+            "name_cn": "x",
+            "sources": [
+                {"platform_id": youtube, "new_author": {"name_cn": "阿基師"}},
+                {"platform_id": 999999, "title": "y"},
+            ],
+        },
+    )
+    assert response.status_code == 422
+    assert authors(db) == set()
 
 
 def test_a_blank_step_is_refused(client):

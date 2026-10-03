@@ -108,6 +108,12 @@ const TREE = [
   },
 ]
 
+// As the server sends them: every author at sort_order 0, so in name order.
+const AUTHORS = [
+  { id: 4, display_name: 'Babish', name_cn: null, name_en: 'Babish', sort_order: 0, usage_count: 0 },
+  { id: 3, display_name: '阿基師', name_cn: '阿基師', name_en: null, sort_order: 0, usage_count: 2 },
+]
+
 const LABELS = [
   {
     id: 7,
@@ -126,6 +132,7 @@ function settingsData({ url, method }) {
   if (url === '/api/recipe-courses') return json(COURSES)
   if (url === '/api/recipe-statuses') return json(STATUSES)
   if (url === '/api/source-platforms') return json(PLATFORMS)
+  if (url === '/api/authors') return json(AUTHORS)
   if (url === '/api/ingredient-categories') return json(TREE)
   if (url === '/api/labels') return json(LABELS)
   return null
@@ -147,6 +154,7 @@ describe('設定', () => {
       '類別',
       '狀態',
       '來源',
+      '作者',
       '做法',
       '器材',
     ])
@@ -292,6 +300,29 @@ describe('設定', () => {
       expect.arrayContaining([
         { url: '/api/edit/ingredient-categories/2', method: 'PATCH', body: { sort_order: 0 } },
         { url: '/api/edit/ingredient-categories/1', method: 'PATCH', body: { sort_order: 1 } },
+      ]),
+    )
+  })
+
+  it('lists authors by name, with no order to move by, and adds one without a sort_order', async () => {
+    handler = (call) => (call.method === 'POST' ? json({}, 201) : settingsData(call))
+    renderAt('/edit/settings?tab=authors')
+    const authors = await screen.findByRole('list', { name: '作者' })
+    expect(within(authors).getAllByRole('listitem').map((row) => row.getAttribute('aria-label'))).toEqual([
+      'Babish',
+      '阿基師',
+    ])
+    expect(within(authors).getByRole('listitem', { name: '阿基師' }).textContent).toContain('用在 2 個地方')
+    expect(within(authors).queryByRole('button', { name: /^排序/ })).toBeNull()
+
+    const add = screen.getByRole('form', { name: '新增作者' })
+    fireEvent.change(within(add).getByRole('textbox', { name: '新增作者：中文名' }), {
+      target: { value: '詹姆士' },
+    })
+    fireEvent.click(within(add).getByRole('button', { name: '＋ 新增作者' }))
+    await waitFor(() =>
+      expect(writes()).toEqual([
+        { url: '/api/edit/authors', method: 'POST', body: { name_cn: '詹姆士', name_en: null } },
       ]),
     )
   })

@@ -64,6 +64,9 @@ CONSTRAINT_MESSAGES = {
     "ck_cooking_method_has_a_name": "A cooking method needs at least one name.",
     "uq_cooking_method_name_cn": "Another cooking method already has that Chinese name.",
     "uq_cooking_method_name_en": "Another cooking method already has that English name.",
+    "ck_author_has_a_name": "An author needs at least one name.",
+    "uq_author_name_cn": "Another author already has that Chinese name.",
+    "uq_author_name_en": "Another author already has that English name.",
     "ck_equipment_has_a_name": "A piece of equipment needs at least one name.",
     "uq_equipment_name_cn": "Another piece of equipment already has that Chinese name.",
     "uq_equipment_name_en": "Another piece of equipment already has that English name.",
@@ -94,7 +97,7 @@ CONSTRAINT_MESSAGES = {
     "ck_recipe_has_a_name": "A recipe needs at least one name.",
     "ck_recipe_not_its_own_version": "A recipe cannot be a version of itself.",
     "uq_recipe_alias": "That recipe already carries that alias.",
-    "ck_recipe_source_has_content": "A source needs a creator, a link or a title.",
+    "ck_recipe_source_has_content": "A source needs an author, a link or a title.",
     "uq_recipe_line_position": "Two ingredient lines cannot share one position.",
     "ck_recipe_line_one_target": (
         "An ingredient line names exactly one ingredient or one recipe."

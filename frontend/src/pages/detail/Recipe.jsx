@@ -64,22 +64,31 @@ function StatusControl({ recipe }) {
   )
 }
 
+// Each source: its platform, its author (a link to the library filtered by
+// them, as the course is), and its title - the link out when there is a URL,
+// the URL's host standing in for a missing title.
 function Sources({ sources }) {
   if (!sources.length) return null
   return (
     <ul className="space-y-1 text-sm">
       {sources.map((source) => {
-        const words = [source.creator, source.title].filter(Boolean).join(' · ')
+        const words = source.title || (source.url ? linkHost(source.url) : null)
         return (
           <li key={source.id} className="flex flex-wrap items-baseline gap-2">
             <Chip>{source.platform.display_name}</Chip>
+            {source.author ? (
+              <Link to={`/recipes?author=${source.author.id}`} className="hover:text-brand hover:underline">
+                {source.author.display_name}
+              </Link>
+            ) : null}
+            {source.author && words ? <span className="text-text-faint">·</span> : null}
             {source.url ? (
               <a href={source.url} target="_blank" rel="noreferrer" className="text-brand hover:underline">
-                {words || linkHost(source.url)} ↗
+                {words} ↗
               </a>
-            ) : (
+            ) : words ? (
               <span>{words}</span>
-            )}
+            ) : null}
           </li>
         )
       })}

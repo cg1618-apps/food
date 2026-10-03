@@ -22,7 +22,7 @@ export const DELETE_TARGETS = {
     blockers: [['used_in', (n) => `有 ${n} 道食譜把它當材料用，要先從那些食譜拿掉才能刪除。`]],
     invalidate: [
       endpoints.recipes.list(),
-      endpoints.recipes.creators(),
+      endpoints.authors.list(),
       endpoints.ingredients.list(),
       endpoints.labels.list(),
       endpoints.courses.list(),

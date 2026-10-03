@@ -1,4 +1,4 @@
-"""The recipe library: the list, its search and filters, and the creators list.
+"""The recipe library: the list, its search and filters.
 
 Every multi-valued filter is tested with two values against three rows, each
 row distinct on that filter, so an implementation that ANDs the values or
@@ -9,7 +9,7 @@ right one.
 import pytest
 from sqlalchemy import event
 
-from app.models import CookingMethod, Equipment, Ingredient, Label, RecipeCourse
+from app.models import Author, CookingMethod, Equipment, Ingredient, Label, RecipeCourse
 
 # Every recipe needs a status, and a source a platform; the migration seeds
 # both and create_all does not.
@@ -34,11 +34,18 @@ def three(client, db, fallback_category, recipe_statuses, source_platforms):
     """Three recipes, each with its own value on every filter dimension.
 
     Recipe i is filed under course i, carries label i, method i, equipment i,
-    a source by creator i and a line naming ingredient i, and has status i.
+    a source by author i and a line naming ingredient i, and has status i.
     """
     statuses = [row.id for row in recipe_statuses.values()]
     youtube = source_platforms["YouTube"].id
-    made = {"course": [], "label": [], "method": [], "equipment": [], "ingredient": []}
+    made = {
+        "course": [],
+        "label": [],
+        "method": [],
+        "equipment": [],
+        "ingredient": [],
+        "author": [],
+    }
     for i in range(3):
         rows = {
             "course": RecipeCourse(name_cn=f"課{i}"),
@@ -46,6 +53,7 @@ def three(client, db, fallback_category, recipe_statuses, source_platforms):
             "method": CookingMethod(name_cn=f"法{i}"),
             "equipment": Equipment(name_cn=f"具{i}"),
             "ingredient": Ingredient(name_cn=f"料{i}", category_id=fallback_category.id),
+            "author": Author(name_cn=f"作者{i}"),
         }
         db.add_all(rows.values())
         db.flush()
@@ -61,11 +69,10 @@ def three(client, db, fallback_category, recipe_statuses, source_platforms):
             label_ids=[made["label"][i]],
             method_ids=[made["method"][i]],
             equipment_ids=[made["equipment"][i]],
-            sources=[{"platform_id": youtube, "creator": f"作者{i}"}],
+            sources=[{"platform_id": youtube, "author_id": made["author"][i]}],
             lines=[{"ingredient_id": made["ingredient"][i]}],
         )
     made["status"] = statuses
-    made["creator"] = ["作者0", "作者1", "作者2"]
     return made
 
 
@@ -74,7 +81,8 @@ def test_a_list_row_is_a_summary_of_the_recipe(client, db, recipe_statuses, sour
     platform = {name: row.id for name, row in source_platforms.items()}
     course = RecipeCourse(name_cn="主菜")
     fry, steam = CookingMethod(name_cn="炒"), CookingMethod(name_cn="蒸")
-    db.add_all([course, fry, steam])
+    chef, james = Author(name_cn="阿基師"), Author(name_cn="詹姆士")
+    db.add_all([course, fry, steam, chef, james])
     db.flush()
     created = create(
         client,
@@ -85,9 +93,9 @@ def test_a_list_row_is_a_summary_of_the_recipe(client, db, recipe_statuses, sour
         time="15m",
         method_ids=[fry.id, steam.id],
         sources=[
-            {"platform_id": platform["YouTube"], "creator": "阿基師"},
-            {"platform_id": platform["網站"], "creator": "詹姆士"},
-            {"platform_id": platform["Shorts"], "creator": "阿基師"},
+            {"platform_id": platform["YouTube"], "author_id": chef.id},
+            {"platform_id": platform["網站"], "author_id": james.id},
+            {"platform_id": platform["Shorts"], "author_id": chef.id},
             {"platform_id": platform["書"], "title": "家常菜"},
         ],
         steps=[{"body": "蛋打散"}],
@@ -106,8 +114,11 @@ def test_a_list_row_is_a_summary_of_the_recipe(client, db, recipe_statuses, sour
             {"id": fry.id, "display_name": "炒"},
             {"id": steam.id, "display_name": "蒸"},
         ],
-        # distinct, in source order, and a source with no creator adds nothing
-        "creators": ["阿基師", "詹姆士"],
+        # distinct, in source order, and a source with no author adds nothing
+        "authors": [
+            {"id": chef.id, "display_name": "阿基師"},
+            {"id": james.id, "display_name": "詹姆士"},
+        ],
         "time": "15m",
         "written_up": True,
         "cover": None,
@@ -151,7 +162,7 @@ def test_search_treats_like_wildcards_as_literal_characters(client):
         ("label_id", "label"),
         ("method_id", "method"),
         ("equipment_id", "equipment"),
-        ("creator", "creator"),
+        ("author_id", "author"),
         ("ingredient_id", "ingredient"),
     ],
 )
@@ -171,11 +182,6 @@ def test_different_filters_narrow_each_other(client, three):
     can_cook = three["status"][1]
     assert names(client, course_id=three["course"][0], status_id=can_cook) == []
     assert names(client, course_id=three["course"][1], status_id=can_cook) == ["菜1"]
-
-
-def test_creator_matches_exactly(client, three):
-    assert names(client, creator="作者") == []
-    assert names(client, creator="作者1") == ["菜1"]
 
 
 def test_the_written_up_filter(client):
@@ -208,24 +214,8 @@ def test_the_list_issues_the_same_number_of_queries_for_one_recipe_or_many(
     assert one == many
 
 
-def test_recipe_creators_are_distinct_sorted_and_skip_missing(client, source_platforms):
-    youtube, shorts, book = (source_platforms[n].id for n in ("YouTube", "Shorts", "書"))
-    create(
-        client,
-        name_cn="甲",
-        sources=[
-            {"platform_id": youtube, "creator": "詹姆士"},
-            {"platform_id": book, "title": "無作者"},
-        ],
-    )
-    create(
-        client,
-        name_cn="乙",
-        sources=[
-            {"platform_id": youtube, "creator": "阿基師"},
-            {"platform_id": shorts, "creator": "詹姆士"},
-        ],
-    )
-    response = client.get("/api/recipe-creators")
-    assert response.status_code == 200
-    assert response.json() == sorted(["詹姆士", "阿基師"])
+def test_the_creator_filter_and_list_are_gone(client, three):
+    """Authors are a vocabulary now: the library filters by `author_id` and
+    lists authors at /api/authors."""
+    assert client.get("/api/recipe-creators").status_code == 404
+    assert names(client, creator="作者1") == ["菜0", "菜1", "菜2"]  # an unknown parameter is ignored

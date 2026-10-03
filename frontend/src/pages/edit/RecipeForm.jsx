@@ -10,6 +10,9 @@
 // line name an ingredient that does not exist yet: it is shown with 待補 until
 // the save, which creates it as a stub in the same transaction (the server
 // folds a name it already knows into that row rather than duplicating it).
+// A source's author is picked the same way from the authors list, which is
+// small enough to fetch once and filter in the browser; 「新增」 there makes
+// the author on save, and a name the server already knows is reused.
 // Steps take a pasted block too: 「貼上多行」 splits it into one step per line
 // and strips the numbering (lib/steps.js).
 //
@@ -32,16 +35,17 @@ import { useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
 import { useOwnerSave } from '../../hooks/useOwnerSave'
 import { galleryChanged, galleryFromImages } from '../../lib/gallery'
 import { emptyLine, isStub, lineFromResponse, linesPayload, sectionsOf, targetFromOption } from '../../lib/recipeLines'
+import { authorFromOption, sourceRow, sourcesPayload } from '../../lib/recipeSources'
 import { blankToNull, keyed, splitAliases } from '../../lib/rowList'
 import { splitSteps } from '../../lib/steps'
 
-// A recipe save moves its own reads, the creators list, the ingredient
+// A recipe save moves its own reads, the authors list, the ingredient
 // library (a 新增 line makes a stub; used-in counts move), the category tree
 // (the stub is filed in the fallback category, whose count moves), and the
 // usage counts of every vocabulary and picture it names.
 const INVALIDATE = [
   endpoints.recipes.list(),
-  endpoints.recipes.creators(),
+  endpoints.authors.list(),
   endpoints.ingredients.list(),
   endpoints.categories.tree(),
   endpoints.labels.list(),
@@ -78,24 +82,9 @@ const EMPTY = {
   gallery: [],
 }
 
-// A new row's platform is '' until chosen, and shown and sent as the first
-// platform in its place - so a row added before the platforms load still
-// lands on the first one.
-const sourceRow = (entry = {}) =>
-  keyed({
-    platform_id: entry.platform ? String(entry.platform.id) : '',
-    creator: entry.creator ?? '',
-    url: entry.url ?? '',
-    title: entry.title ?? '',
-  })
-
 const stepRow = (entry = {}) => keyed({ section: entry.section ?? '', body: entry.body ?? '' })
 
 const ids = (refs) => (refs ?? []).map((ref) => ref.id)
-
-// A source row with nothing typed - the platform always has a value - is an
-// "add" pressed once too often, as a blank line or step is.
-const isBlankSource = (row) => !blankToNull(row.creator) && !blankToNull(row.url) && !blankToNull(row.title)
 
 function fromRecipe(row) {
   return {
@@ -128,7 +117,6 @@ export default function RecipeForm() {
   const isNew = id === undefined
   const navigate = useNavigate()
   const sectionListId = useId()
-  const creatorListId = useId()
 
   const existing = useApiQuery(endpoints.recipes.detail(id), null, { enabled: !isNew })
   const courses = useApiQuery(endpoints.courses.list())
@@ -137,7 +125,7 @@ export default function RecipeForm() {
   const methods = useApiQuery(endpoints.methods.list())
   const equipment = useApiQuery(endpoints.equipment.list())
   const labels = useApiQuery(endpoints.labels.list())
-  const creators = useApiQuery(endpoints.recipes.creators())
+  const authors = useApiQuery(endpoints.authors.list())
   const fixed = useFixedVocabularies()
   const { save, saving } = useOwnerSave({ group: endpoints.recipes, invalidate: INVALIDATE })
 
@@ -168,6 +156,12 @@ export default function RecipeForm() {
       ...previous,
       lines: previous.lines.map((line) => (line._key === key ? { ...line, pending } : line)),
     }))
+  // The same for a source's author box.
+  const setSourcePending = (key, pendingAuthor) =>
+    setForm((previous) => ({
+      ...previous,
+      sources: previous.sources.map((row) => (row._key === key ? { ...row, pendingAuthor } : row)),
+    }))
   const sections = sectionsOf(form.lines, form.steps)
   const firstId = (query) => (query.data?.length ? String(query.data[0].id) : '')
   const statusId = form.status_id || firstId(statuses)
@@ -188,12 +182,7 @@ export default function RecipeForm() {
       servings: blankToNull(form.servings),
       time: blankToNull(form.time),
       variant_of_id: form.variant_of?.id ?? null,
-      sources: form.sources.filter((row) => !isBlankSource(row)).map((row) => ({
-        platform_id: Number(platformOf(row)),
-        creator: blankToNull(row.creator),
-        url: blankToNull(row.url),
-        title: blankToNull(row.title),
-      })),
+      sources: sourcesPayload(form.sources, platformOf),
       lines: linesPayload(form.lines),
       // A step left blank is an "add" pressed once too often, not a step.
       steps: form.steps
@@ -219,6 +208,8 @@ export default function RecipeForm() {
       return
     }
     try {
+      // Inside the try: payload() refuses a line or an author typed and
+      // never picked, and that sentence is shown like the server's.
       const saved = await save({
         id,
         body: payload(),
@@ -258,15 +249,10 @@ export default function RecipeForm() {
       {!isNew && existing.error ? <ErrorNote error={existing.error} /> : null}
 
       {/* Shared suggestions: a section typed once is offered on every line
-          and step, and a creator typed on any recipe is offered here. */}
+          and step. */}
       <datalist id={sectionListId}>
         {sections.map((section) => (
           <option key={section} value={section} />
-        ))}
-      </datalist>
-      <datalist id={creatorListId}>
-        {(creators.data ?? []).map((creator) => (
-          <option key={creator} value={creator} />
         ))}
       </datalist>
 
@@ -352,7 +338,7 @@ export default function RecipeForm() {
               addLabel="加一個來源"
               itemLabel="來源"
             >
-              {(row, { update }) => (
+              {(row, { update, index }) => (
                 <div className="grid gap-2 sm:grid-cols-4">
                   <Select
                     aria-label="平台"
@@ -361,13 +347,23 @@ export default function RecipeForm() {
                   >
                     {vocabularyOptions(platforms.data)}
                   </Select>
-                  <Input
-                    aria-label="作者"
-                    placeholder="作者"
-                    list={creatorListId}
-                    value={row.creator}
-                    onChange={(event) => update({ creator: event.target.value })}
-                  />
+                  {row.author ? (
+                    <Picked
+                      label={row.author.label}
+                      tag={row.author.type === 'new' ? '新作者' : null}
+                      onClear={() => update({ author: null, pendingAuthor: '' })}
+                    />
+                  ) : (
+                    <Typeahead
+                      items={authors.data ?? []}
+                      allowNew
+                      newHint="（存檔時建立作者）"
+                      label={`作者 ${index + 1}`}
+                      placeholder="作者（可留空）"
+                      onSelect={(option) => update({ author: authorFromOption(option) })}
+                      onQueryChange={(text) => setSourcePending(row._key, text)}
+                    />
+                  )}
                   <Input
                     aria-label="來源標題"
                     placeholder="標題"

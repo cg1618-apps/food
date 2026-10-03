@@ -11,6 +11,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.models import (
+    Author,
     CookingMethod,
     Equipment,
     Image,
@@ -198,11 +199,29 @@ def test_a_source_with_nothing_but_a_platform_is_refused(db, platform):
     assert "ck_recipe_source_has_content" in str(excinfo.value)
 
 
-def test_a_source_with_only_a_creator_is_allowed(db, platform):
+def test_a_source_with_only_an_author_is_allowed(db, platform):
     """The mirror: a book has no URL, and a remembered channel no title."""
-    recipe = make(db)
-    db.add(RecipeSource(recipe_id=recipe.id, platform_id=platform.id, creator="阿基師"))
+    author = Author(name_cn="阿基師")
+    db.add(author)
     db.flush()
+    recipe = make(db)
+    db.add(RecipeSource(recipe_id=recipe.id, platform_id=platform.id, author_id=author.id))
+    db.flush()
+
+
+def test_an_author_a_source_names_cannot_be_deleted(db, platform):
+    """The source is the fixture that makes this bite; an unused author
+    deletes, as the vocabulary tests show over HTTP."""
+    author = Author(name_cn="阿基師")
+    db.add(author)
+    db.flush()
+    recipe = make(db)
+    db.add(RecipeSource(recipe_id=recipe.id, platform_id=platform.id, author_id=author.id))
+    db.flush()
+    db.delete(author)
+    with pytest.raises(IntegrityError) as excinfo:
+        db.flush()
+    assert "recipe_source_author_id_fkey" in str(excinfo.value)
 
 
 def test_a_line_naming_nothing_is_refused(db):

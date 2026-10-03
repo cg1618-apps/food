@@ -7,8 +7,8 @@ shape with each other more than with their owners.
 
 Three directions of deletion meet here and they differ on purpose (the table is
 in `docs/data-model.md`): what a recipe OWNS cascades with it; what it NAMES -
-an ingredient, a sub-recipe, a course, a status, a source platform, a
-method, a piece of equipment - is RESTRICT, so nothing in use disappears from under a recipe; and its versions
+an ingredient, a sub-recipe, a course, a status, a source platform, an
+author, a method, a piece of equipment - is RESTRICT, so nothing in use disappears from under a recipe; and its versions
 are SET NULL, because a version is a complete recipe in its own right.
 """
 
@@ -213,9 +213,9 @@ class RecipeEquipment(Base):
 class RecipeSource(Base):
     """Where the recipe came from: a video, a page, a book.
 
-    `url` is optional because a book has none; `creator` is free text, and its
-    distinct values are what suggestions and the filter are built from. A row
-    that is only a platform says nothing, hence the CHECK.
+    `url` is optional because a book has none, and the author is optional
+    because a page may have none worth naming. A row that is only a platform
+    says nothing, hence the CHECK: an author, a link or a title.
     """
 
     __tablename__ = "recipe_source"
@@ -230,17 +230,20 @@ class RecipeSource(Base):
         nullable=False,
         index=True,
     )
-    creator = Column(String, nullable=True)
+    author_id = Column(
+        Integer, ForeignKey("author.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     url = Column(String, nullable=True)
     title = Column(String, nullable=True)
     sort_order = Column(Integer, nullable=False, server_default=text("0"))
 
     recipe = relationship("Recipe", back_populates="sources")
     platform = relationship("SourcePlatform")
+    author = relationship("Author")
 
     __table_args__ = (
         CheckConstraint(
-            "num_nonnulls(creator, url, title) >= 1", name="ck_recipe_source_has_content"
+            "num_nonnulls(author_id, url, title) >= 1", name="ck_recipe_source_has_content"
         ),
     )
 

@@ -133,6 +133,30 @@ describe('Typeahead', () => {
     expect(onQueryChange).toHaveBeenLastCalledWith('')
   })
 
+  it('filters a list it was handed, in the browser, and offers 新增 with its own words', async () => {
+    const AUTHORS = [
+      { id: 3, display_name: '阿基師', name_cn: '阿基師', name_en: null },
+      { id: 4, display_name: 'Babish', name_cn: null, name_en: 'Babish' },
+    ]
+    const onSelect = vi.fn()
+    wrap(<Typeahead label="作者" items={AUTHORS} onSelect={onSelect} allowNew newHint="（存檔時建立作者）" />)
+    const box = screen.getByRole('combobox', { name: '作者' })
+
+    // Case-insensitive, any name slot, and an exact match offers no 新增.
+    fireEvent.change(box, { target: { value: 'babish' } })
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Babish'])
+
+    fireEvent.change(box, { target: { value: '阿基' } })
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      '阿基師',
+      '新增「阿基」（存檔時建立作者）',
+    ])
+    fireEvent.click(screen.getByRole('option', { name: '阿基師' }))
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ type: 'item', id: 3, label: '阿基師' }))
+    // Nothing was asked of the server.
+    expect(calls).toEqual([])
+  })
+
   it('does not submit the form around it on Enter', async () => {
     const onSubmit = vi.fn((event) => event.preventDefault())
     wrap(
@@ -429,13 +453,53 @@ describe('RecipeForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /加一個來源/ }))
     await screen.findByRole('option', { name: '書' })
     expect(screen.getByLabelText('平台').value).toBe('12')
-    fireEvent.change(screen.getByLabelText('作者'), { target: { value: '阿基師' } })
+    fireEvent.change(screen.getByLabelText('來源標題'), { target: { value: '家常菜' } })
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
 
     const body = calls.find((c) => c.method === 'POST').body
     expect(body.status_id).toBe(8)
-    expect(body.sources).toEqual([{ platform_id: 12, creator: '阿基師', url: null, title: null }])
+    expect(body.sources).toEqual([{ platform_id: 12, author_id: null, url: null, title: '家常菜' }])
+  })
+
+  const AUTHORS = [{ id: 3, display_name: '阿基師', name_cn: '阿基師', name_en: null, sort_order: 0, usage_count: 1 }]
+  const withAuthors = ({ url, method }) => {
+    if (url === '/api/authors') return json(AUTHORS)
+    if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
+    return json([])
+  }
+
+  it("picks a source's author from the authors list, or makes a new one on save", async () => {
+    handler = withAuthors
+    wrap(<AppRoutes />, '/edit/recipes/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /加一個來源/ }))
+    fireEvent.change(screen.getByRole('combobox', { name: '作者 1' }), { target: { value: '阿基' } })
+    fireEvent.click(await screen.findByRole('option', { name: '阿基師' }))
+
+    fireEvent.click(screen.getByRole('button', { name: /加一個來源/ }))
+    fireEvent.change(screen.getByRole('combobox', { name: '作者 2' }), { target: { value: 'Babish' } })
+    fireEvent.click(await screen.findByRole('option', { name: /新增.*Babish/ }))
+    expect(screen.getByText('Babish')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+    expect(calls.find((c) => c.method === 'POST').body.sources).toEqual([
+      { platform_id: expect.any(Number), author_id: 3, url: null, title: null },
+      { platform_id: expect.any(Number), new_author: { name_en: 'Babish' }, url: null, title: null },
+    ])
+  })
+
+  it('refuses to save an author that was typed but never picked', async () => {
+    handler = withAuthors
+    wrap(<AppRoutes />, '/edit/recipes/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    fireEvent.click(screen.getByRole('button', { name: /加一個來源/ }))
+    fireEvent.change(screen.getByRole('combobox', { name: '作者 1' }), { target: { value: '詹姆士' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/第 1 個來源.*詹姆士.*還沒選/)
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
   })
 
   it('leaves the status to the server when there are no statuses to choose from', async () => {
