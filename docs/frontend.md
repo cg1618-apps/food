@@ -24,13 +24,13 @@ them readable at 360px with room for more.
 | --- | --- | --- |
 | Dish library | `/dishes` | public |
 | Dish | `/dishes/:id` | public |
-| Recipe library (the front page; `/` redirects here) | `/recipes` | public |
+| Recipe library | `/recipes` | public |
 | Recipe | `/recipes/:id` | public |
 | Ingredient library | `/ingredients` | public |
 | Ingredient | `/ingredients/:id` | public |
 | Kitchen-note library | `/notes` | public |
 | Kitchen note | `/notes/:id` | public |
-| 排程, the weekly schedule (`?week=` the first Saturday shown) | `/schedule` | public |
+| 排程, the weekly schedule (the front page; `/` redirects here; `?week=` the first Saturday shown) | `/schedule` | public |
 | TBD | `/tbd` | public |
 | Add / edit a dish | `/edit/dishes/new`, `/edit/dishes/:id` | Access |
 | Add / edit a recipe (a new one first asks how to start; `?dish=<id>` presets the dish) | `/edit/recipes/new`, `/edit/recipes/:id` | Access |
