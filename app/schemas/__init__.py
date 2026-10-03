@@ -81,6 +81,8 @@ from app.schemas.recipe_template import (
 )
 from app.schemas.schedule import (
     MealIn,
+    MealItemIn,
+    MealItemResponse,
     MealResponse,
     ScheduleDayIn,
     ScheduleDayResponse,
@@ -144,6 +146,8 @@ __all__ = [
     "LinkIn",
     "LinkResponse",
     "MealIn",
+    "MealItemIn",
+    "MealItemResponse",
     "MealResponse",
     "MergeIn",
     "MergePreview",

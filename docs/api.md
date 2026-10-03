@@ -300,13 +300,14 @@ fields are refused.
 
 **`GET .../cascade` answers `{aliases, recipes, used_in, meals}`.** `aliases`
 is what the delete removes and is echoed back; `recipes` (the dish's own),
-`used_in` (recipes whose lines name it) and `meals` (meals on the schedule
-naming it) block the delete.
+`used_in` (recipes whose lines name it) and `meals` (meal items on the
+schedule naming it, one per item) block the delete.
 
 **`DELETE` takes `aliases` as a required query parameter.** A dish with
-recipes, one a recipe's line names, or one a meal on the schedule names is
-refused with 409 first, before the database is asked. `meals` is the dates of
-those meals, earliest first, each once:
+recipes, one a recipe's line names, or one a meal item on the schedule names
+is refused with 409 first, before the database is asked. `meals` is the dates
+of those items, earliest first, each date once however many items name the
+dish on it:
 
 ```json
 {"detail": "This dish still has recipes, recipes use it, or the schedule names it, so it cannot be removed.",
@@ -766,14 +767,15 @@ its entry to the target (see Ingredients).
 | `GET /api/schedule` | every date in a range, stored or not |
 | `PUT /api/edit/schedule/{date}` | replaces one whole day |
 
-The weekly schedule (排程): per calendar date, what to buy, what to take out of
-the freezer to thaw in the morning, at noon and in the evening, the fruit, a
-note, and four meals. **A week runs Saturday to Friday**, as the owner's sheet
-does.
+The weekly schedule (排程): per calendar date, four meals, the fruit, four
+true-or-false marks - something to buy, something to take out of the freezer
+to thaw in the morning, at noon, in the evening - and a note. **A week runs
+Saturday to Friday**, as the owner's sheet does.
 
 **`GET /api/schedule?start=YYYY-MM-DD&days=N`** answers a bare array with one
 entry per date from `start`, in order, **whether or not anything is stored
-for it** - an unplanned date has every field null and every meal null. `days`
+for it** - an unplanned date has every mark false and every text and meal
+null. `days`
 is 1 to 62 (default 14, this week and next); outside that is a 422. Without
 `start` the range begins on the Saturday on or before today, where today is
 the date in Asia/Taipei - the box and the one person using it are in that
@@ -782,42 +784,57 @@ the default only serves a bare request.
 
 ```json
 [{"date": "2026-10-05", "weekday": 0,
-  "to_buy": "雞腿", "thaw_morning": "雞腿", "thaw_noon": null,
-  "thaw_evening": null, "fruit": "芭樂", "note": null,
-  "meals": {"breakfast": {"text": "吐司", "dish": null, "recipe": null},
+  "to_buy": true, "thaw_morning": true, "thaw_noon": false,
+  "thaw_evening": false, "fruit": "芭樂", "note": null,
+  "meals": {"breakfast": {"text": "吐司", "items": []},
             "lunch": null, "afternoon": null,
             "dinner": {"text": "配白飯",
-                       "dish": {"id": 4, "display_name": "咖哩", "kind": "dish"},
-                       "recipe": {"id": 9, "display_name": "日式咖哩",
-                                  "dish": {"id": 4, "display_name": "咖哩", "kind": "dish"}}}}}]
+                       "items": [
+                         {"dish": {"id": 4, "display_name": "咖哩", "kind": "dish"},
+                          "recipe": {"id": 9, "display_name": "日式咖哩",
+                                     "dish": {"id": 4, "display_name": "咖哩", "kind": "dish"}}},
+                         {"dish": {"id": 7, "display_name": "味噌湯", "kind": "dish"},
+                          "recipe": null}]}}}]
 ```
 
-`weekday` is Monday 0 … Sunday 6. `meals` always carries the four slots, in
-that order; a meal is `{text, dish, recipe}` with `dish` a dish ref and
-`recipe` a recipe ref, or null when nothing is planned.
+`weekday` is Monday 0 … Sunday 6. `to_buy`, `thaw_morning`, `thaw_noon` and
+`thaw_evening` are booleans; `fruit` and `note` are text. `meals` always
+carries the four slots, in that order; a meal is `{text, items}`, or null when
+nothing is planned. `items` is in the meal's order, each `{dish, recipe}` with
+`dish` a dish ref and `recipe` a recipe ref of that dish or null; a meal of
+text alone has `items: []`.
 
 **`PUT /api/edit/schedule/{date}` replaces the day with its body**:
 
 ```json
-{"to_buy": "雞腿", "thaw_morning": null, "thaw_noon": null,
- "thaw_evening": null, "fruit": null, "note": null,
+{"to_buy": true, "thaw_morning": false, "thaw_noon": false,
+ "thaw_evening": false, "fruit": null, "note": null,
  "meals": {"breakfast": {"text": "吐司"},
-           "dinner": {"text": "配白飯", "dish_id": 4, "recipe_id": 9}}}
+           "dinner": {"text": "配白飯",
+                      "items": [{"dish_id": 4, "recipe_id": 9}, {"dish_id": 7}]}}}
 ```
 
-Every field is optional, and **what the body leaves out is cleared** - a slot
-left out of `meals`, or sent as null, is an empty meal. A blank string is
-null. A meal with no text, dish or recipe is not stored, and a day left with
-no field and no meal is deleted rather than stored empty. The answer is the
-day, as the `GET` gives it.
+Every field is optional, and **what the body leaves out is cleared** - a mark
+left out is false, a text left out is null, and a slot left out of `meals`, or
+sent as null, is an empty meal. A mark is a JSON boolean; anything else,
+null included, is a 422. A blank string is null. A meal is `{text?, items?}`,
+each item `{dish_id?, recipe_id?}`, and the items' order is kept. A meal with
+no text and no items is not stored, and a day with every mark false, no text
+and no meal is deleted rather than stored empty. The answer is the day, as the
+`GET` gives it.
 
-**A recipe sent without a dish takes the recipe's dish; a recipe of a
-different dish than the one sent is a 422.** A `dish_id` or `recipe_id` that
-names nothing is a 422 naming it; an unknown slot, an unknown field or a
-`{date}` that is not a date is a 422. A refused `PUT` changes nothing.
+**An item's recipe is one of its dish's.** A recipe sent without a dish takes
+the recipe's dish; a recipe of a different dish than the one sent is a 422,
+and so is an item naming neither. **One meal cannot hold the same dish and
+recipe twice** (two items with the same dish and no recipe count as the same)
+- a 422; the same dish with two different recipes is two items, and the same
+dish in two meals is fine. A `dish_id` or `recipe_id` that names nothing is a
+422 naming it; an unknown slot, an unknown field (a meal's old `dish_id`
+included) or a `{date}` that is not a date is a 422. A refused `PUT` changes
+nothing.
 
-A dish a meal names cannot be deleted (above, under Dishes). Deleting a
-recipe a meal names leaves the meal its dish and nulls only the recipe.
+A dish a meal item names cannot be deleted (above, under Dishes). Deleting a
+recipe an item names leaves the item its dish and nulls only the recipe.
 
 ## TBD
 

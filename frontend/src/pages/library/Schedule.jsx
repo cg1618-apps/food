@@ -5,24 +5,26 @@
 // first (lib/schedule.js shownWeek); 上週 / 本週 / 下週 move it. Today's row
 // is marked.
 //
-// On a desktop each week is a table with the sheet's columns in the sheet's
-// order; on a phone each day is a card listing only what is filled in, since
-// eleven columns do not fit a phone and most cells are empty. Both are in the
-// page, shown by width. A meal shows its text, its dish and its recipe, each
-// linked.
+// On a desktop each week is a table - 星期幾, the four meals, 水果, the four
+// marks, 備註, an order the owner chose over the sheet's (lib/schedule.js
+// DAY_FIELDS); on a phone each day is a card listing only what is filled in,
+// in the same order, since eleven columns do not fit a phone and most cells
+// are empty. Both are in the page, shown by width. A mark shows only when
+// true: a ✓ in its cell, a chip on the card. A meal shows its text, then each
+// item on a line of its own - the dish, and its recipe when one is chosen -
+// each linked.
 import { Link } from 'react-router-dom'
 
 import { endpoints } from '../../api/endpoints'
 import WeekNav from '../../components/layout/WeekNav'
-import { LinkButton, Section } from '../../components/ui/primitives'
+import { Chip, LinkButton, Section } from '../../components/ui/primitives'
 import { ErrorNote, Loading } from '../../components/ui/states'
 import { useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
 import { useShownWeeks } from '../../hooks/useShownWeeks'
 import { cx } from '../../lib/cx'
 import {
   addDays,
-  AFTER_MEALS,
-  BEFORE_MEALS,
+  DAY_FIELDS,
   filledFields,
   rangeLabel,
   SHOWN_DAYS,
@@ -39,22 +41,32 @@ function MealCell({ meal }) {
   return (
     <div className="space-y-0.5">
       {meal.text ? <p>{meal.text}</p> : null}
-      {meal.dish ? (
-        <p>
-          <Link to={`/dishes/${meal.dish.id}`} className="text-brand hover:underline">
-            {meal.dish.display_name}
+      {meal.items.map((item, index) => (
+        <p key={index}>
+          <Link to={`/dishes/${item.dish.id}`} className="text-brand hover:underline">
+            {item.dish.display_name}
           </Link>
+          {item.recipe ? (
+            <>
+              {' · '}
+              <Link
+                to={`/recipes/${item.recipe.id}`}
+                className="text-xs text-text-muted hover:text-brand hover:underline"
+              >
+                {item.recipe.display_name}
+              </Link>
+            </>
+          ) : null}
         </p>
-      ) : null}
-      {meal.recipe ? (
-        <p className="text-xs">
-          <Link to={`/recipes/${meal.recipe.id}`} className="text-text-muted hover:text-brand hover:underline">
-            食譜：{meal.recipe.display_name}
-          </Link>
-        </p>
-      ) : null}
+      ))}
     </div>
   )
+}
+
+// A text field as it is; a mark as ✓ when true and nothing when false.
+function FieldCell({ field, day }) {
+  if (field.kind === 'mark') return day[field.key] ? '✓' : null
+  return day[field.key]
 }
 
 function dayHeading(day) {
@@ -71,17 +83,12 @@ function WeekTable({ label, days, slots, today }) {
             <th scope="col" className={cx(cell, 'font-medium')}>
               星期幾
             </th>
-            {BEFORE_MEALS.map((field) => (
-              <th key={field.key} scope="col" className={cx(cell, 'font-medium')}>
-                {field.label}
-              </th>
-            ))}
             {slots.map((slot) => (
               <th key={slot.value} scope="col" className={cx(cell, 'font-medium')}>
                 {slot.label}
               </th>
             ))}
-            {AFTER_MEALS.map((field) => (
+            {DAY_FIELDS.map((field) => (
               <th key={field.key} scope="col" className={cx(cell, 'font-medium')}>
                 {field.label}
               </th>
@@ -100,19 +107,14 @@ function WeekTable({ label, days, slots, today }) {
                 <th scope="row" className={cx(cell, 'whitespace-nowrap text-left font-medium')}>
                   {dayHeading(day)}
                 </th>
-                {BEFORE_MEALS.map((field) => (
-                  <td key={field.key} className={cell}>
-                    {day[field.key]}
-                  </td>
-                ))}
                 {slots.map((slot) => (
                   <td key={slot.value} className={cell}>
                     <MealCell meal={day.meals[slot.value]} />
                   </td>
                 ))}
-                {AFTER_MEALS.map((field) => (
-                  <td key={field.key} className={cell}>
-                    {day[field.key]}
+                {DAY_FIELDS.map((field) => (
+                  <td key={field.key} className={cx(cell, field.kind === 'mark' && 'text-center')}>
+                    <FieldCell field={field} day={day} />
                   </td>
                 ))}
               </tr>
@@ -146,14 +148,24 @@ function DayCards({ label, days, slots, today }) {
             </p>
             {fields.length ? (
               <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
-                {fields.map((field) => (
-                  <div key={field.key} className="contents">
-                    <dt className="text-text-muted">{field.label}</dt>
-                    <dd className="text-text">
-                      {field.meal ? <MealCell meal={field.meal} /> : field.value}
-                    </dd>
-                  </div>
-                ))}
+                {fields.map((field) =>
+                  field.marks ? (
+                    <ul key={field.key} aria-label="標記" className="col-span-2 flex flex-wrap gap-1">
+                      {field.marks.map((mark) => (
+                        <li key={mark}>
+                          <Chip>{mark}</Chip>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div key={field.key} className="contents">
+                      <dt className="text-text-muted">{field.label}</dt>
+                      <dd className="text-text">
+                        {field.meal ? <MealCell meal={field.meal} /> : field.value}
+                      </dd>
+                    </div>
+                  ),
+                )}
               </dl>
             ) : (
               <p className="text-sm text-text-faint">－</p>

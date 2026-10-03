@@ -510,7 +510,7 @@ describe('the dish page', () => {
     // Said up front, from the counts.
     expect(await within(dialog).findByText(/底下還有 2 份食譜/)).toBeTruthy()
     expect(within(dialog).getByText(/有 1 份食譜把它當材料用/)).toBeTruthy()
-    expect(within(dialog).getByText(/排程裡有 2 餐排了它/)).toBeTruthy()
+    expect(within(dialog).getByText(/排程裡排了它 2 次/)).toBeTruthy()
     fireEvent.click(within(dialog).getByRole('button', { name: '刪除' }))
     await waitFor(() =>
       expect(calls.find((c) => c.method === 'DELETE').url).toBe('/api/edit/dishes/40?aliases=0'),

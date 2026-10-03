@@ -881,22 +881,45 @@ What the branch after module 1 chose, and what it turned down.
   different thing - per day, what to buy, what to take out of the freezer in
   the morning, at noon and in the evening, four meals (早, 中, 下午, 晚), the
   fruit and a note - and the sheet is what is actually used, so the tables
-  are its columns. A meal is not always a recipe ("外食", "吐司"), so each
-  meal is free text first, with a dish and a recipe optional.
+  hold its columns. A meal is not always a recipe ("外食", "吐司"), so each
+  meal is free text first, with dishes and recipes optional.
+- **The four marks are booleans, shown only when true.** In the sheet 要買?
+  and the three 退冰? columns held whatever was typed, but what they answer
+  is yes or no - is there something to buy, is something to come out of the
+  freezer - and what to buy or thaw belongs in 備註 or the meal. So they are
+  Boolean NOT NULL, false by default. A false mark carries no information
+  worth a glyph, so the read page draws a ✓ for true and nothing for false,
+  and the phone card a chip per true mark; a column of 「否」 would bury the
+  few days that need doing. `s4chedule` turned every non-blank text true.
+- **The columns run 星期幾, 早, 中, 下午, 晚, 水果, 要買?, 早退冰?, 中退冰?,
+  晚退冰?, 備註 - deliberately not the sheet's order.** The sheet put 要買? and
+  the morning and noon marks before the meals and 晚退冰? after them, a
+  layout that grew in the sheet rather than one anybody chose. The owner
+  asked for the meals first - they are what the page is read for - then the
+  fruit, the marks together, and the note last. The edit card and the phone
+  card follow the same order, so a field is found in one place on all three.
+- **A meal is free text and any number of items, each a dish and optionally
+  one of its recipes.** A dinner is often more than one dish (咖哩 and a
+  soup), and text alone ("外食", "配白飯") still has to stand without naming
+  anything, so the text stays on the meal and the dishes moved to
+  `schedule_meal_item`, ordered by `position`. A dish can be chosen without a
+  recipe, or with one; the same dish may appear twice only with two different
+  recipes - the same dish and recipe twice in one meal says nothing the first
+  did not, and is refused rather than silently merged.
 - **Weeks run Saturday to Friday**, because the sheet's do, and a page shows
   two of them - this week and next - as the sheet does. `?week=` is the
   Saturday, so a week is a link.
-- **One row per meal slot, not four column groups on the day.** Four meals ×
-  text, dish and recipe would be twelve columns on `schedule_day` and four
-  copies of every rule about them; `schedule_meal` keyed by `(date, slot)`
-  states them once, and a fifth slot would be a constant, not a migration.
+- **One row per meal slot, not four column groups on the day.** Four meals
+  as columns would be four copies of every rule about them on
+  `schedule_day`; `schedule_meal` keyed by `(date, slot)` states them once,
+  and a fifth slot would be a constant, not a migration.
   The slot is a fixed list (`MEAL_SLOTS`) rather than a 設定 vocabulary: it
   is a column of the schedule, not something the owner files things in.
 - **The date is the key**, not a surrogate id: there is one day per date by
   definition, and the PUT addresses a day by it. A date with nothing planned
   has no row, and a save that empties a day deletes it - so the sheet's `-`
   is no row, and the table never fills with blank days.
-- **A recipe implies its dish.** A meal names a dish ("咖哩") and, when it
+- **A recipe implies its dish.** An item names a dish ("咖哩") and, when it
   matters, which way of making it; a recipe sent alone takes its dish, and a
   recipe of another dish is a 422. The rule spans two tables, so the service
   enforces it. The edit page picks the dish by search and the recipe from a
@@ -905,8 +928,9 @@ What the branch after module 1 chose, and what it turned down.
   and a way to show the two disagreeing.
 - **The dish is RESTRICT, the recipe SET NULL.** A plan naming a dish should
   not lose it silently, so deleting a scheduled dish is refused with the
-  dates, as a dish with recipes is refused with them. A recipe is one way of
-  making the dish; deleting it leaves the meal its dish.
+  dates, as a dish with recipes is refused with them; the count is of items,
+  the dates each listed once. A recipe is one way of making the dish;
+  deleting it leaves the item its dish.
 - **A day is written whole.** One PUT per day replaces it, the TBD card's
   shape: a day is small, and replace semantics make "clear this field" and
   "clear this meal" the same as leaving them out.

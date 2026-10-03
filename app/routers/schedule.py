@@ -31,13 +31,18 @@ def _day(day: date, row: ScheduleDay | None) -> schemas.ScheduleDayResponse:
         meals[slot] = (
             schemas.MealResponse(
                 text=meal.text,
-                dish=dish_ref(meal.dish) if meal.dish else None,
-                recipe=recipe_ref(meal.recipe) if meal.recipe else None,
+                items=[
+                    schemas.MealItemResponse(
+                        dish=dish_ref(item.dish),
+                        recipe=recipe_ref(item.recipe) if item.recipe else None,
+                    )
+                    for item in meal.items
+                ],
             )
             if meal
             else None
         )
-    fields = {field: getattr(row, field) if row else None for field in DAY_FIELDS}
+    fields = {field: getattr(row, field) for field in DAY_FIELDS} if row else {}
     return schemas.ScheduleDayResponse(date=day, weekday=day.weekday(), meals=meals, **fields)
 
 

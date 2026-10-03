@@ -149,12 +149,22 @@ is load-bearing and says so. Some examples worth knowing about:
   able to fail; and the lines are what give the delete refusal something to
   refuse.
 - The schedule's refusals (`tests/api/test_schedule.py`) each make the thing
-  they refuse. The dish-delete refusal puts the dish on **two real meals** on
-  two dates - so both the count and the dates list can fail - and clears them
-  as its mirror; `test_an_unscheduled_dish_deletes` has a scheduled dish
-  beside the free one, so "nothing is scheduled at all" cannot pass it. The
-  recipe/dish mismatch has **two dishes**, the recipe belonging to the other
-  one, and its mirror sends the matching dish.
+  they refuse. The dish-delete refusal puts the dish in **three real meal
+  items** on two dates, two of them on one date and one beside another dish -
+  so the count (items), the dates list (each once) and the join can each
+  fail - and clears them as its mirror; `test_an_unscheduled_dish_deletes`
+  has a scheduled dish beside the free one, so "nothing is scheduled at all"
+  cannot pass it. The recipe/dish mismatch has **two dishes**, the recipe
+  belonging to the other one, and its mirror sends the matching dish. The
+  duplicate-item refusal sends the same dish twice, and the same recipe once
+  with its dish and once alone; its mirrors are the same dish with two
+  different recipes and the same dish in two meals.
+- **`tests/test_schedule_migration.py` seeds rows at `s3chedule` before
+  running `s4chedule`** - a non-blank mark, a whitespace one, a NULL one, a
+  meal with a dish and recipe, one with text alone - because on an empty
+  schedule every conversion succeeds whatever it does. The downgrade test
+  inserts a meal's items out of position order, so "first" has to mean the
+  position.
 - **A dish's delete refusals each have a referencing row and a mirror**
   (`tests/api/test_dish_crud.py`). `test_a_dish_with_recipes_cannot_be_deleted`
   makes a recipe of the dish, asserts the 409 lists it under `recipes`, then
@@ -249,7 +259,8 @@ the entire failure.
 | `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, ordering after the target's rows, the fingerprint and its 409, refusals |
 | `tests/api/test_common_ingredients.py` | 常用食材: the whole-list `PUT` and its order, the unknown-id and duplicate 422s that change nothing, the write only under the gated prefix, CASCADE on an ingredient's delete, and a merge moving or dropping the source's entry |
 | `tests/api/test_tbd.py` | TBD: the blank-url CHECK and CASCADE to links, the round trip, the name-or-link 422 on create and on a `PATCH` that would leave neither (with the mirror that keeps a name), a new entry last, `https://` given to a link without a scheme and the 422 for a blank or non-web one, links replaced wholesale or left alone, the delete, the order `PUT` and each of its 422s against three real entries, the writes only under the gated prefix |
-| `tests/api/test_schedule.py` | the schedule: the Saturday a week starts on, the default range from a pinned today, every date answered stored or not, the `days` bounds, the day round trip with its meals, `PUT` replacing the whole day, blanks as null and empty meals and days not stored, unknown slots and fields, a recipe implying its dish and a recipe of another dish refused, unknown ids, a refused `PUT` changing nothing, a dish delete refused while meals name it (with the dates) and its mirrors, a recipe delete leaving the meal its dish, `meal_slots` in the fixed vocabularies |
+| `tests/api/test_schedule.py` | the schedule: the Saturday a week starts on, the default range from a pinned today, every date answered stored or not, the `days` bounds, the day round trip with its meals, marks defaulting to false and refusing text, `PUT` replacing the whole day, blanks as null and empty meals and days not stored, unknown slots and fields, a meal of text only, of items only and of both, several items kept in order, a recipe implying its dish, a recipe of another dish, an item naming nothing and a duplicate item refused, unknown ids, a refused `PUT` changing nothing, a dish delete refused while meal items name it (with the dates) and its mirrors, a recipe delete leaving the item its dish, `meal_slots` in the fixed vocabularies |
+| `tests/test_schedule_migration.py` | `s4chedule` on a scratch database: marks turned into booleans from the stored text, each meal's dish and recipe moved into one item, and the downgrade writing ✓ and keeping the first item |
 | `tests/api/test_recipe_templates.py` | recipe templates: the round trip with every reference resolved, the empty template, a group name stored as its 設定 value, the list's order and counts, the `new_*` 422 that creates nothing (with its mirror), unknown ids, the case-insensitive unique name and blank name, fields a template does not carry, `PATCH` semantics and a refused `PATCH` changing nothing, delete, the order `PUT` and its 422s, stale references dropped and counted (a dropped group's lines kept as ungrouped), a template from a recipe's structure, and an ingredient merge rewriting template lines |
 | `tests/test_seed_migration.py` | the seeds, the storage migration's copy and lossy downgrade, `v2ocabulary`'s string-to-row mapping, `a1uthors`'s creator-to-author mapping, `g1roups`' sections-to-groups move, `s1tepkinds`' default for existing steps and `d1ishes`' grouping of recipes into dishes, each with its downgrade, on a scratch database |
 | `tests/test_ingredient_import.py` | `i3import`: the committed CSV passes validation, each validation refusal with a good mirror, and the load on a scratch database — stubs, aliases, parents, categories, the skip rule, the cycle guard, a second run, the no-op downgrade |
@@ -321,15 +332,20 @@ options).
 
 The schedule is covered in: `pages/library/schedule.test.jsx`, with today
 pinned to a Wednesday by faking `Date` alone (the read page asking for two
-weeks from the Saturday, the tables' columns in the sheet's order, a meal's
-dish and recipe links, today marked, the phone card listing only filled
-fields, `?week=` read as its Saturday and the week links; the edit page
-filled from what is stored with the dish's recipes in the select, one `PUT`
-of the whole day with the exact body, the week buttons disabled while a day
-is unsaved, a dish picked from the search, a typed-but-unpicked dish refused
-with nothing sent, and the server's refusal shown on the card with the
-typing kept), `lib/schedule.test.js` (Saturday weeks across months, years and
-a leap day, `?week=` parsing, ranges, the phone card's fields, the payload),
+weeks from the Saturday, the tables' columns in the page's order, a ✓ for
+a true mark and nothing for a false one, a meal's text and then each item on
+its own line with its dish and recipe links, today marked, the phone card
+listing only filled fields with a chip per true mark, `?week=` read as its
+Saturday and the week links; the edit page laid out in the columns' order,
+filled from what is stored with marks as checkboxes and each item's dish's
+recipes in its select, one `PUT` of the whole day with the exact body, the
+week buttons disabled while a day is unsaved, an item removed and dishes
+appended one after another, a dish picked for an empty meal, 更換 replacing
+an item's dish in place, a typed-but-unpicked dish refused with nothing
+sent, and the server's refusal shown on the card with the typing kept),
+`lib/schedule.test.js` (Saturday weeks across months, years and a leap day,
+`?week=` parsing, ranges, the phone card's fields and marks, item keys, the
+payload),
 `pages/detail/details.test.jsx` (a dish delete refused with `meals`, each
 date linked to its week), `lib/nav.test.js` and `routes.test.jsx`.
 
