@@ -7,8 +7,8 @@ shape with each other more than with their owners.
 
 Three directions of deletion meet here and they differ on purpose (the table is
 in `docs/data-model.md`): what a recipe OWNS cascades with it; what it NAMES -
-an ingredient, a sub-recipe, a course, a method, a piece of equipment - is
-RESTRICT, so nothing in use disappears from under a recipe; and its versions
+an ingredient, a sub-recipe, a course, a status, a source platform, a
+method, a piece of equipment - is RESTRICT, so nothing in use disappears from under a recipe; and its versions
 are SET NULL, because a version is a complete recipe in its own right.
 """
 
@@ -51,7 +51,7 @@ class Recipe(Base, NameFallbackMixin):
     name_en = Column(String, nullable=True)
     name_alt = Column(String, nullable=True)
 
-    # Validated against RECIPE_KINDS / RECIPE_STATUSES in the schema layer.
+    # Validated against RECIPE_KINDS in the schema layer.
     kind = Column(String, nullable=False, server_default=text("'dish'"))
     course_id = Column(
         Integer, ForeignKey("recipe_course.id", ondelete="RESTRICT"), nullable=True, index=True
@@ -62,7 +62,11 @@ class Recipe(Base, NameFallbackMixin):
     variant_of_id = Column(
         Integer, ForeignKey("recipe.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    status = Column(String, nullable=False, server_default=text("'want_to_try'"))
+    # No server default: which status comes first is the owner's data, so
+    # `recipes.create` picks it, and the column only refuses a missing one.
+    status_id = Column(
+        Integer, ForeignKey("recipe_status.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
 
     # Free text: "2-3 人", "1hr", "30m". Nothing computes with either.
     servings = Column(String, nullable=True)
@@ -76,6 +80,7 @@ class Recipe(Base, NameFallbackMixin):
     updated_at = Column(DateTime, default=get_taipei_now, onupdate=get_taipei_now)
 
     course = relationship("RecipeCourse")
+    status = relationship("RecipeStatus")
     variant_of = relationship("Recipe", remote_side=[id], back_populates="variants")
     # passive_deletes=True so deleting the original leaves the database to
     # apply SET NULL to versions the session never loaded, rather than the ORM
@@ -219,14 +224,19 @@ class RecipeSource(Base):
     recipe_id = Column(
         Integer, ForeignKey("recipe.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    # Validated against SOURCE_PLATFORMS in the schema layer.
-    platform = Column(String, nullable=False)
+    platform_id = Column(
+        Integer,
+        ForeignKey("source_platform.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
     creator = Column(String, nullable=True)
     url = Column(String, nullable=True)
     title = Column(String, nullable=True)
     sort_order = Column(Integer, nullable=False, server_default=text("0"))
 
     recipe = relationship("Recipe", back_populates="sources")
+    platform = relationship("SourcePlatform")
 
     __table_args__ = (
         CheckConstraint(

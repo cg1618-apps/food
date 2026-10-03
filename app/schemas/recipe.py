@@ -14,7 +14,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-from app.constants import RECIPE_KINDS, RECIPE_STATUSES, SOURCE_PLATFORMS
+from app.constants import RECIPE_KINDS
 from app.schemas.image import AttachedImage, CoverRef
 from app.schemas.ingredient import _blank_to_none, _check_url, _clean_aliases
 from app.schemas.vocabulary import VocabRef
@@ -32,10 +32,18 @@ LIST_FIELDS = (
 
 
 def _check_choice(value: str | None, choices: dict, what: str) -> str:
-    # None is refused too: kind and status are NOT NULL, so an explicit null
-    # on a PATCH is a bad value rather than "clear it".
+    # None is refused too: kind is NOT NULL, so an explicit null on a PATCH is
+    # a bad value rather than "clear it".
     if value not in choices:
         raise ValueError(f"A {what} is one of {', '.join(choices)}")
+    return value
+
+
+def _not_null(value, what: str):
+    """For a NOT NULL id that may be left out: absent is never validated, so
+    only an explicit null reaches this and is refused."""
+    if value is None:
+        raise ValueError(f"A recipe's {what} cannot be cleared; choose another")
     return value
 
 
@@ -48,15 +56,11 @@ class SourceIn(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    platform: str
+    # Required, and checked against source_platform by the service.
+    platform_id: int
     creator: str | None = None
     url: str | None = None
     title: str | None = None
-
-    @field_validator("platform")
-    @classmethod
-    def platform_is_known(cls, value: str) -> str:
-        return _check_choice(value, SOURCE_PLATFORMS, "source platform")
 
     @field_validator("creator", "url", "title", mode="before")
     @classmethod
@@ -77,10 +81,8 @@ class SourceIn(BaseModel):
 
 
 class SourceResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: int
-    platform: str
+    platform: VocabRef
     creator: str | None = None
     url: str | None = None
     title: str | None = None
@@ -200,7 +202,8 @@ class RecipeCreate(BaseModel):
     kind: str = "dish"
     course_id: int | None = None
     variant_of_id: int | None = None
-    status: str = "want_to_try"
+    # Left out, the first status in sort order (`recipes.create`).
+    status_id: int | None = None
     servings: str | None = None
     time: str | None = None
     description: str | None = None
@@ -225,10 +228,10 @@ class RecipeCreate(BaseModel):
     def kind_is_known(cls, value):
         return _check_choice(value, RECIPE_KINDS, "kind")
 
-    @field_validator("status")
+    @field_validator("status_id")
     @classmethod
-    def status_is_known(cls, value):
-        return _check_choice(value, RECIPE_STATUSES, "status")
+    def status_is_not_null(cls, value):
+        return _not_null(value, "status")
 
     @field_validator("aliases")
     @classmethod
@@ -258,7 +261,7 @@ class RecipeUpdate(BaseModel):
     kind: str | None = None
     course_id: int | None = None
     variant_of_id: int | None = None
-    status: str | None = None
+    status_id: int | None = None
     servings: str | None = None
     time: str | None = None
     description: str | None = None
@@ -285,10 +288,10 @@ class RecipeUpdate(BaseModel):
     def kind_is_known(cls, value):
         return _check_choice(value, RECIPE_KINDS, "kind")
 
-    @field_validator("status")
+    @field_validator("status_id")
     @classmethod
-    def status_is_known(cls, value):
-        return _check_choice(value, RECIPE_STATUSES, "status")
+    def status_is_not_null(cls, value):
+        return _not_null(value, "status")
 
     @field_validator("aliases")
     @classmethod
@@ -309,7 +312,7 @@ class RecipeSummary(BaseModel):
     name_en: str | None = None
     name_alt: str | None = None
     kind: str
-    status: str
+    status: VocabRef
     course: VocabRef | None = None
     methods: list[VocabRef] = []
     creators: list[str] = []
@@ -325,7 +328,7 @@ class RecipeResponse(BaseModel):
     name_en: str | None = None
     name_alt: str | None = None
     kind: str
-    status: str
+    status: VocabRef
     course: VocabRef | None = None
     servings: str | None = None
     time: str | None = None

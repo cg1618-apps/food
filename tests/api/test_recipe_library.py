@@ -11,6 +11,10 @@ from sqlalchemy import event
 
 from app.models import CookingMethod, Equipment, Ingredient, Label, RecipeCourse
 
+# Every recipe needs a status, and a source a platform; the migration seeds
+# both and create_all does not.
+pytestmark = pytest.mark.usefixtures("recipe_statuses", "source_platforms")
+
 
 def create(client, **body):
     body.setdefault("name_cn", "番茄炒蛋")
@@ -26,13 +30,14 @@ def names(client, **params):
 
 
 @pytest.fixture
-def three(client, db, fallback_category):
+def three(client, db, fallback_category, recipe_statuses, source_platforms):
     """Three recipes, each with its own value on every filter dimension.
 
     Recipe i is filed under course i, carries label i, method i, equipment i,
     a source by creator i and a line naming ingredient i, and has status i.
     """
-    statuses = ["want_to_try", "can_cook", "regular"]
+    statuses = [row.id for row in recipe_statuses.values()]
+    youtube = source_platforms["YouTube"].id
     made = {"course": [], "label": [], "method": [], "equipment": [], "ingredient": []}
     for i in range(3):
         rows = {
@@ -50,13 +55,13 @@ def three(client, db, fallback_category):
         create(
             client,
             name_cn=f"菜{i}",
-            status=statuses[i],
+            status_id=statuses[i],
             kind="base" if i == 1 else "dish",
             course_id=made["course"][i],
             label_ids=[made["label"][i]],
             method_ids=[made["method"][i]],
             equipment_ids=[made["equipment"][i]],
-            sources=[{"platform": "youtube", "creator": f"作者{i}"}],
+            sources=[{"platform_id": youtube, "creator": f"作者{i}"}],
             lines=[{"ingredient_id": made["ingredient"][i]}],
         )
     made["status"] = statuses
@@ -64,7 +69,9 @@ def three(client, db, fallback_category):
     return made
 
 
-def test_a_list_row_is_a_summary_of_the_recipe(client, db):
+def test_a_list_row_is_a_summary_of_the_recipe(client, db, recipe_statuses, source_platforms):
+    can_cook = recipe_statuses["可煮"]
+    platform = {name: row.id for name, row in source_platforms.items()}
     course = RecipeCourse(name_cn="主菜")
     fry, steam = CookingMethod(name_cn="炒"), CookingMethod(name_cn="蒸")
     db.add_all([course, fry, steam])
@@ -73,15 +80,15 @@ def test_a_list_row_is_a_summary_of_the_recipe(client, db):
         client,
         name_cn="番茄炒蛋",
         name_en="tomato and egg",
-        status="can_cook",
+        status_id=can_cook.id,
         course_id=course.id,
         time="15m",
         method_ids=[fry.id, steam.id],
         sources=[
-            {"platform": "youtube", "creator": "阿基師"},
-            {"platform": "website", "creator": "詹姆士"},
-            {"platform": "shorts", "creator": "阿基師"},
-            {"platform": "book", "title": "家常菜"},
+            {"platform_id": platform["YouTube"], "creator": "阿基師"},
+            {"platform_id": platform["網站"], "creator": "詹姆士"},
+            {"platform_id": platform["Shorts"], "creator": "阿基師"},
+            {"platform_id": platform["書"], "title": "家常菜"},
         ],
         steps=[{"body": "蛋打散"}],
     )
@@ -93,7 +100,7 @@ def test_a_list_row_is_a_summary_of_the_recipe(client, db):
         "name_en": "tomato and egg",
         "name_alt": None,
         "kind": "dish",
-        "status": "can_cook",
+        "status": {"id": can_cook.id, "display_name": "可煮"},
         "course": {"id": course.id, "display_name": "主菜"},
         "methods": [
             {"id": fry.id, "display_name": "炒"},
@@ -140,7 +147,7 @@ def test_search_treats_like_wildcards_as_literal_characters(client):
     "param, key",
     [
         ("course_id", "course"),
-        ("status", "status"),
+        ("status_id", "status"),
         ("label_id", "label"),
         ("method_id", "method"),
         ("equipment_id", "equipment"),
@@ -161,8 +168,9 @@ def test_the_kind_filter_means_any_of(client, three):
 
 
 def test_different_filters_narrow_each_other(client, three):
-    assert names(client, course_id=three["course"][0], status="can_cook") == []
-    assert names(client, course_id=three["course"][1], status="can_cook") == ["菜1"]
+    can_cook = three["status"][1]
+    assert names(client, course_id=three["course"][0], status_id=can_cook) == []
+    assert names(client, course_id=three["course"][1], status_id=can_cook) == ["菜1"]
 
 
 def test_creator_matches_exactly(client, three):
@@ -200,21 +208,22 @@ def test_the_list_issues_the_same_number_of_queries_for_one_recipe_or_many(
     assert one == many
 
 
-def test_recipe_creators_are_distinct_sorted_and_skip_missing(client):
+def test_recipe_creators_are_distinct_sorted_and_skip_missing(client, source_platforms):
+    youtube, shorts, book = (source_platforms[n].id for n in ("YouTube", "Shorts", "書"))
     create(
         client,
         name_cn="甲",
         sources=[
-            {"platform": "youtube", "creator": "詹姆士"},
-            {"platform": "book", "title": "無作者"},
+            {"platform_id": youtube, "creator": "詹姆士"},
+            {"platform_id": book, "title": "無作者"},
         ],
     )
     create(
         client,
         name_cn="乙",
         sources=[
-            {"platform": "youtube", "creator": "阿基師"},
-            {"platform": "shorts", "creator": "詹姆士"},
+            {"platform_id": youtube, "creator": "阿基師"},
+            {"platform_id": shorts, "creator": "詹姆士"},
         ],
     )
     response = client.get("/api/recipe-creators")

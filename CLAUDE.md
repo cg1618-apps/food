@@ -33,7 +33,7 @@ reference work.
 ## Status
 
 **Modules 1 and 2 are built, with kitchen notes.** The schema is at revision
-`i3import` (the head).
+`v2ocabulary` (the head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
   parent, rating, labels, storage as a state x method grid with day ranges, a
@@ -49,8 +49,8 @@ reference work.
   (search and filters in the URL, a sidebar or a phone drawer, covers or a
   table), their detail pages, their add and edit forms with the gallery
   picker, one delete dialog, ingredient merge, 設定 for every vocabulary
-  (categories, labels, courses, cooking methods, equipment) and 圖片, the
-  image library.
+  (categories, labels, courses, recipe statuses, source platforms, cooking
+  methods, equipment) and 圖片, the image library.
 
 **The starting ingredient list is loaded by `i3import`**: 194 names from the
 recipe document's ingredient lists, approved by the owner, read from

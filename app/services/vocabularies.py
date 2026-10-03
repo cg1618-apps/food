@@ -21,6 +21,9 @@ from app.models import (
     RecipeCourse,
     RecipeEquipment,
     RecipeMethod,
+    RecipeSource,
+    RecipeStatus,
+    SourcePlatform,
 )
 
 
@@ -34,6 +37,16 @@ def _course_usage(db: Session) -> dict[int, int]:
     return dict(counts)
 
 
+def _status_usage(db: Session) -> dict[int, int]:
+    return dict(_count(db, Recipe.status_id))
+
+
+def _platform_usage(db: Session) -> dict[int, int]:
+    """Sources, not recipes: two sources from one book are two rows that would
+    each stop the delete."""
+    return dict(_count(db, RecipeSource.platform_id))
+
+
 def _cooking_method_usage(db: Session) -> dict[int, int]:
     return dict(_count(db, IngredientHeating.method_id) + _count(db, RecipeMethod.method_id))
 
@@ -44,6 +57,8 @@ def _equipment_usage(db: Session) -> dict[int, int]:
 
 USAGE: dict[type, Callable[[Session], dict[int, int]]] = {
     RecipeCourse: _course_usage,
+    RecipeStatus: _status_usage,
+    SourcePlatform: _platform_usage,
     CookingMethod: _cooking_method_usage,
     Equipment: _equipment_usage,
 }

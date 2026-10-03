@@ -9,8 +9,9 @@
 //
 // The status is the one thing changed in place: 想試 -> 可煮 -> 常煮 is what
 // happens after cooking, standing at the stove with the page open, and a
-// round trip through the form for it would be the form's whole job. It is a
-// PATCH of `status` alone; the control shows the chosen value while the
+// round trip through the form for it would be the form's whole job. The
+// choices are the statuses 設定 manages, in their order. It is a PATCH of
+// `status_id` alone; the control shows the chosen value while the
 // request runs, then the recipe the PATCH answers with (put straight into the
 // detail read's cache), and goes back, with the server's sentence, if it
 // fails.
@@ -29,10 +30,11 @@ import { otherVersions } from '../../lib/versions'
 const names = (refs) => (refs?.length ? refs.map((ref) => ref.display_name).join('、') : null)
 
 // A status change moves this recipe's reads and the library's status filter
-// and column - all under the recipes prefix.
-const STATUS_INVALIDATE = [endpoints.recipes.list()]
+// and column - all under the recipes prefix - and the statuses' usage counts.
+const STATUS_INVALIDATE = [endpoints.recipes.list(), endpoints.statuses.list()]
 
-function StatusControl({ recipe, statuses }) {
+function StatusControl({ recipe }) {
+  const statuses = useApiQuery(endpoints.statuses.list())
   const mutation = useApiMutation({
     method: 'PATCH',
     invalidate: STATUS_INVALIDATE,
@@ -41,17 +43,18 @@ function StatusControl({ recipe, statuses }) {
     onSaved: (saved, _variables, queryClient) =>
       queryClient.setQueryData([endpoints.recipes.detail(recipe.id), null], saved),
   })
-  const shown = mutation.isPending ? mutation.variables.body.status : recipe.status
+  const shown = mutation.isPending ? mutation.variables.body.status_id : recipe.status.id
+  const options = (statuses.data ?? []).map((status) => ({ value: status.id, label: status.display_name }))
 
   return (
     <div className="space-y-2">
       <Toggle
         label="狀態"
-        options={statuses ?? []}
+        options={options}
         value={shown}
-        onChange={(status) => {
+        onChange={(statusId) => {
           if (mutation.isPending) return
-          mutation.mutate({ url: endpoints.recipes.update(recipe.id), body: { status } })
+          mutation.mutate({ url: endpoints.recipes.update(recipe.id), body: { status_id: statusId } })
         }}
       />
       {mutation.error ? (
@@ -61,7 +64,7 @@ function StatusControl({ recipe, statuses }) {
   )
 }
 
-function Sources({ sources, platforms }) {
+function Sources({ sources }) {
   if (!sources.length) return null
   return (
     <ul className="space-y-1 text-sm">
@@ -69,7 +72,7 @@ function Sources({ sources, platforms }) {
         const words = [source.creator, source.title].filter(Boolean).join(' · ')
         return (
           <li key={source.id} className="flex flex-wrap items-baseline gap-2">
-            <Chip>{fixedLabel(platforms, source.platform)}</Chip>
+            <Chip>{source.platform.display_name}</Chip>
             {source.url ? (
               <a href={source.url} target="_blank" rel="noreferrer" className="text-brand hover:underline">
                 {words || linkHost(source.url)} ↗
@@ -198,7 +201,7 @@ export default function Recipe() {
         <h1 className="text-3xl font-bold leading-tight">{recipe.display_name}</h1>
         {otherNames.length ? <p className="text-text-muted">{otherNames.join(' · ')}</p> : null}
         {meta.length ? <p className="text-sm text-text-muted">{meta.join(' · ')}</p> : null}
-        <StatusControl recipe={recipe} statuses={fixed.data?.recipe_statuses} />
+        <StatusControl recipe={recipe} />
         <LabelLinks labels={recipe.labels} to={(label) => `/recipes?label=${label.id}`} />
       </header>
 
@@ -206,7 +209,7 @@ export default function Recipe() {
 
       {recipe.sources.length ? (
         <Section title="來源">
-          <Sources sources={recipe.sources} platforms={fixed.data?.source_platforms} />
+          <Sources sources={recipe.sources} />
         </Section>
       ) : null}
 

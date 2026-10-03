@@ -20,14 +20,14 @@ const FIXED = {
     { value: 'dish', label: '料理' },
     { value: 'base', label: '基底' },
   ],
-  recipe_statuses: [
-    { value: 'want_to_try', label: '想試' },
-    { value: 'can_cook', label: '可煮' },
-    { value: 'regular', label: '常煮' },
-  ],
-  source_platforms: [{ value: 'youtube', label: 'YouTube' }],
   kitchen_note_kinds: [{ value: 'technique', label: '技巧' }],
 }
+
+const STATUSES = [
+  { id: 1, display_name: '想試', name_cn: '想試', name_en: null, sort_order: 10, usage_count: 1 },
+  { id: 2, display_name: '可煮', name_cn: '可煮', name_en: null, sort_order: 20, usage_count: 0 },
+  { id: 3, display_name: '常煮', name_cn: '常煮', name_en: null, sort_order: 30, usage_count: 0 },
+]
 
 const RECIPE = {
   id: 5,
@@ -35,7 +35,7 @@ const RECIPE = {
   name_cn: '麻婆豆腐',
   name_en: 'Mapo tofu',
   kind: 'dish',
-  status: 'want_to_try',
+  status: { id: 1, display_name: '想試' },
   course: { id: 1, display_name: '主菜' },
   servings: '2 人',
   time: '20 分鐘',
@@ -152,6 +152,7 @@ beforeEach(() => {
       }
       calls.push(call)
       if (call.url === '/api/vocabularies/fixed') return json(FIXED)
+      if (call.url === '/api/recipe-statuses') return json(STATUSES)
       return handler(call) ?? json([])
     }),
   )
@@ -194,6 +195,29 @@ describe('the recipe page', () => {
     expect(screen.queryByRole('heading', { name: '用在' })).toBeNull()
   })
 
+  it('names each source by its platform', async () => {
+    handler = ({ url, method }) =>
+      method === 'GET' && url === '/api/recipes/5'
+        ? json({
+            ...RECIPE,
+            sources: [
+              {
+                id: 1,
+                platform: { id: 4, display_name: '書' },
+                creator: '阿基師',
+                url: null,
+                title: '家常菜',
+                sort_order: 0,
+              },
+            ],
+          })
+        : null
+    renderAt('/recipes/5')
+    const sources = (await screen.findByRole('heading', { name: '來源' })).closest('section')
+    expect(within(sources).getByText('書')).toBeTruthy()
+    expect(within(sources).getByText('阿基師 · 家常菜')).toBeTruthy()
+  })
+
   it('changes the status in place with a PATCH of status alone', async () => {
     renderAt('/recipes/5')
     const group = await screen.findByRole('group', { name: '狀態' })
@@ -202,7 +226,7 @@ describe('the recipe page', () => {
       expect(calls.find((c) => c.method === 'PATCH')).toEqual({
         url: '/api/edit/recipes/5',
         method: 'PATCH',
-        body: { status: 'regular' },
+        body: { status_id: 3 },
       }),
     )
   })
@@ -212,7 +236,7 @@ describe('the recipe page', () => {
   it('shows the saved status even when the refetch after it fails', async () => {
     let reads = 0
     handler = ({ url, method }) => {
-      if (method === 'PATCH') return json({ ...RECIPE, status: 'regular' })
+      if (method === 'PATCH') return json({ ...RECIPE, status: { id: 3, display_name: '常煮' } })
       if (url === '/api/recipes/5') {
         reads += 1
         return reads === 1 ? json(RECIPE) : json({ detail: 'down' }, 500)

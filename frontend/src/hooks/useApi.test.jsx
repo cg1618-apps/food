@@ -20,10 +20,10 @@ describe('isUnderResource', () => {
 })
 
 describe('fixedLabel', () => {
-  const statuses = [{ value: 'can_cook', label: '可煮' }]
+  const kinds = [{ value: 'base', label: '基底' }]
   it('finds the label, or falls back to the value', () => {
-    expect(fixedLabel(statuses, 'can_cook')).toBe('可煮')
-    expect(fixedLabel(statuses, 'other')).toBe('other')
+    expect(fixedLabel(kinds, 'base')).toBe('基底')
+    expect(fixedLabel(kinds, 'other')).toBe('other')
     expect(fixedLabel(undefined, 'x')).toBe('x')
   })
 })

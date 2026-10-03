@@ -348,8 +348,6 @@ describe('RecipeForm', () => {
       if (url === '/api/vocabularies/fixed') {
         return json({
           recipe_kinds: [{ value: 'dish', label: '料理' }],
-          recipe_statuses: [{ value: 'want_to_try', label: '想試' }],
-          source_platforms: [{ value: 'youtube', label: 'YouTube' }],
         })
       }
       if (url.startsWith('/api/ingredients?')) return json([GINGER])
@@ -404,6 +402,50 @@ describe('RecipeForm', () => {
       { section: null, body: '煎香' },
     ])
     expect(writes[1].body).toEqual([{ image_id: 31, focus: null }])
+  })
+
+  it('starts on the first status, and a new source on the first platform', async () => {
+    handler = ({ url, method }) => {
+      if (url === '/api/recipe-statuses') {
+        return json([
+          { id: 8, display_name: '想試', sort_order: 10, usage_count: 0 },
+          { id: 3, display_name: '可煮', sort_order: 20, usage_count: 0 },
+        ])
+      }
+      if (url === '/api/source-platforms') {
+        return json([
+          { id: 12, display_name: 'YouTube', sort_order: 10, usage_count: 0 },
+          { id: 11, display_name: '書', sort_order: 20, usage_count: 0 },
+        ])
+      }
+      if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
+      return json([])
+    }
+    wrap(<AppRoutes />, '/edit/recipes/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    await screen.findByRole('option', { name: '可煮' })
+    expect(screen.getByLabelText('狀態').value).toBe('8')
+
+    fireEvent.click(screen.getByRole('button', { name: /加一個來源/ }))
+    await screen.findByRole('option', { name: '書' })
+    expect(screen.getByLabelText('平台').value).toBe('12')
+    fireEvent.change(screen.getByLabelText('作者'), { target: { value: '阿基師' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+
+    const body = calls.find((c) => c.method === 'POST').body
+    expect(body.status_id).toBe(8)
+    expect(body.sources).toEqual([{ platform_id: 12, creator: '阿基師', url: null, title: null }])
+  })
+
+  it('leaves the status to the server when there are no statuses to choose from', async () => {
+    handler = ({ url, method }) =>
+      url === '/api/edit/recipes' && method === 'POST' ? json({ id: 42, images: [] }, 201) : json([])
+    wrap(<AppRoutes />, '/edit/recipes/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '湯' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+    expect('status_id' in calls.find((c) => c.method === 'POST').body).toBe(false)
   })
 
   it('refuses to save a line whose name was typed but never picked', async () => {

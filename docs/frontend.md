@@ -42,7 +42,7 @@ phone in a shop, signed out: selection notes, the preservation methods with
 their durations, where to get the thing. Everything else is a list or a form.
 
 **Every vocabulary shares one page**, 設定, a tab each. They are the
-same kind of work — maintaining a short list — and a page each would be five
+same kind of work — maintaining a short list — and a page each would be seven
 screens with a handful of rows on them.
 
 **There is no route guard, and there must not be one.** The gate is Cloudflare
@@ -112,7 +112,7 @@ words and its filters:
 
 | Library | URL keys | Table columns | Badges |
 | --- | --- | --- | --- |
-| 食譜 `/recipes` | `course`, `status`, `kind`, `method`, `equipment`, `creator`, `label` (all "any of"); `written` = `true` / `false` | 類別, 做法, 時間, 作者, 狀態 | 書籤 when not written up |
+| 食譜 `/recipes` | `course`, `status` (ids, sent as `status_id`), `kind`, `method`, `equipment`, `creator`, `label` (all "any of"); `written` = `true` / `false` | 類別, 做法, 時間, 作者, 狀態 | 書籤 when not written up |
 | 食材 `/ingredients` | `category`, `label`, `rating` (one each); `stub`, `variety` (switches) | 分類 / 品種, 冷藏, 用於, 評等 | 待補, rating |
 | 筆記 `/notes` | `kind`, `label` (both "any of") | 種類, 連結 (host only) | - |
 
@@ -173,13 +173,14 @@ empties.
   (the recipes naming a base directly). A line links to its ingredient or
   sub-recipe; an optional line is drawn faint with （可省略）; a stub
   ingredient carries 待補.
-- **The status change** is `PATCH /api/edit/recipes/{id}` with `{status}`
-  alone. The 想試 / 可煮 / 常煮 toggle shows the chosen value while the
+- **The status change** is `PATCH /api/edit/recipes/{id}` with `{status_id}`
+  alone. The toggle offers the statuses 設定 manages, in their order
+  (`GET /api/recipe-statuses`); it shows the chosen value while the
   request runs and the stored one again, with the server's sentence, if it
   fails. On success the recipe the PATCH answers with goes straight into the
   detail read's cache (`useApiMutation`'s `onSaved`), so the new status
   stays on screen even if the refetch after it fails, and every recipe read
-  is invalidated.
+  and the statuses' counts are invalidated.
 - **Ingredient**: category (`/ingredients?category=<id>`) and, for a
   variety, its parent; names, rating, 待補; aliases; how many recipes use it
   and how many varieties it has; labels. A stub adds a 待補 note linking to
@@ -231,8 +232,8 @@ if the categories fail to load.
 - **Each save invalidates every read its write can move**, not only its own:
   a recipe save also marks the ingredient library and the category tree
   stale (a 新增 line files a stub in the fallback category, whose count
-  moves), the label, course, method and equipment counts and the image
-  library; an ingredient save, its delete and a merge move the category
+  moves), the label, course, status, source platform, method and equipment
+  counts and the image library; an ingredient save, its delete and a merge move the category
   tree, labels, methods (heating rows), recipes (line names, used-in) and
   images; a note moves labels and images.
 - **Every list is `components/forms/RowEditor.jsx`**: controlled `rows` /
@@ -283,7 +284,15 @@ the save creates the stub. An entirely blank line is dropped; one with an
 amount, a note or typed-but-unpicked text (the row's `pending`, never sent)
 and nothing chosen is refused by number - 「第 n 行材料…還沒選食材或食譜」.
 A source row with no creator, title or URL is dropped the same way, as is a
-blank step. Sections are free text with
+blank step.
+
+**The recipe's 狀態 and a source's 平台** are selects over the managed
+vocabularies (`GET /api/recipe-statuses`, `GET /api/source-platforms`). A new
+recipe starts on the first status and a new source row on the first platform:
+the form holds '' until one is chosen and shows, and sends, the first in its
+place, so a row added before the list has loaded still lands on the first.
+With no status at all the form leaves `status_id` out and the server's 422
+says why. Sections are free text with
 the recipe's own sections offered (a `datalist` shared by lines and steps); a
 new line or step starts in the section of the one above it.
 
@@ -313,11 +322,13 @@ cover and a thumbnail) and 移除.
 ## 設定 and 圖片
 
 `/edit/settings` is `pages/edit/Settings.jsx`: a tab each for 食材分類, 標籤,
-類別, 做法 and 器材, with 圖片庫 - the way into `/edit/images` - beside the
-heading.
+類別, 狀態, 來源, 做法 and 器材, with 圖片庫 - the way into `/edit/images` -
+beside the heading. 狀態 is the recipe statuses (想試, 可煮, 常煮 …; the first
+is what a new recipe starts on) and 來源 the source platforms (YouTube, 網站,
+書 …); renaming either marks every recipe read stale, as a course does.
 
 - **The tab is in the URL**, `?tab=` with `categories`, `labels`, `courses`,
-  `methods` or `equipment` (`hooks/useUrlTab.js`), so a tab can be linked to
+  `statuses`, `platforms`, `methods` or `equipment` (`hooks/useUrlTab.js`), so a tab can be linked to
   and survives a reload. A missing or unknown tab is the first, 食材分類, and
   the URL is left as it is. Choosing a tab **replaces** the history entry
   rather than pushing one: Back leaves 設定 instead of walking back through
@@ -357,8 +368,8 @@ Each value is a `components/settings/NameRow.jsx`:
   siblings, and carries its children with it; moving it under another parent
   is 改名's 上層.
 - **刪除** asks in `ConfirmModal`, saying the count it knows. A refusal is
-  explained **in the row**: for a course, method or piece of equipment with
-  the 409's `usage_count` (the server's number, newer than the page's); for a
+  explained **in the row**: for a course, status, source platform, method or
+  piece of equipment with the 409's `usage_count` (the server's number, newer than the page's); for a
   category with what is under it - its ingredients and child categories, both
   `RESTRICT`. The button stays even when the page already knows the delete
   will be refused: the refusal is the server's. The fallback category (預設)

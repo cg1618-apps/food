@@ -143,3 +143,115 @@ def test_the_storage_migration_copies_the_old_duration_and_downgrades_lossily(sc
     # minimum-only row keeps its minimum; a row with both ends keeps the
     # maximum (1..2 downgrades to 2, not 1).
     assert rows == [("冷藏", 5), ("冷凍", 30), ("常溫", 2)]
+
+
+def test_the_status_and_platform_migration_maps_every_string_to_a_row_and_back(scratch):
+    """Recipes and sources already holding each kind of value are the fixture:
+    on empty tables the mapping and the downgrade's reverse mapping touch
+    nothing, and a migration that dropped the columns unfilled would pass.
+
+    The owner's own status and platform - created after the upgrade, so with
+    no old key to return to - downgrade to the old defaults."""
+    _alembic("upgrade", "i3import")
+    with scratch.begin() as conn:
+        recipes = {
+            status: conn.execute(
+                text("INSERT INTO recipe (name_cn, status) VALUES (:n, :s) RETURNING id"),
+                {"n": f"菜-{status}", "s": status},
+            ).scalar()
+            for status in ("want_to_try", "can_cook", "regular")
+        }
+        for i, platform in enumerate(("youtube", "shorts", "website", "book", "other")):
+            conn.execute(
+                text(
+                    "INSERT INTO recipe_source (recipe_id, platform, title, sort_order) "
+                    "VALUES (:r, :p, :t, :i)"
+                ),
+                {"r": recipes["can_cook"], "p": platform, "t": f"來源-{platform}", "i": i},
+            )
+
+    _alembic("upgrade", "v2ocabulary")
+    with scratch.begin() as conn:
+        statuses = conn.execute(
+            text("SELECT name_cn FROM recipe_status ORDER BY sort_order")
+        ).scalars().all()
+        platforms = conn.execute(
+            text("SELECT name_cn FROM source_platform ORDER BY sort_order")
+        ).scalars().all()
+        filed = dict(
+            conn.execute(
+                text(
+                    "SELECT r.name_cn, s.name_cn FROM recipe r "
+                    "JOIN recipe_status s ON s.id = r.status_id"
+                )
+            ).all()
+        )
+        named = dict(
+            conn.execute(
+                text(
+                    "SELECT rs.title, p.name_cn FROM recipe_source rs "
+                    "JOIN source_platform p ON p.id = rs.platform_id"
+                )
+            ).all()
+        )
+        columns = {
+            (table, column)
+            for table, column in conn.execute(
+                text(
+                    "SELECT table_name, column_name FROM information_schema.columns "
+                    "WHERE table_name IN ('recipe', 'recipe_source')"
+                )
+            ).all()
+        }
+        mine_status = conn.execute(
+            text("INSERT INTO recipe_status (name_cn, sort_order) VALUES ('冷凍好', 40) RETURNING id")
+        ).scalar()
+        mine_platform = conn.execute(
+            text("INSERT INTO source_platform (name_cn, sort_order) VALUES ('IG', 60) RETURNING id")
+        ).scalar()
+        conn.execute(
+            text("UPDATE recipe SET status_id = :s WHERE id = :r"),
+            {"s": mine_status, "r": recipes["regular"]},
+        )
+        conn.execute(
+            text("UPDATE recipe_source SET platform_id = :p WHERE title = '來源-youtube'"),
+            {"p": mine_platform},
+        )
+
+    assert statuses == ["想試", "可煮", "常煮"]
+    assert platforms == ["YouTube", "Shorts", "網站", "書", "其他"]
+    assert filed == {"菜-want_to_try": "想試", "菜-can_cook": "可煮", "菜-regular": "常煮"}
+    assert named == {
+        "來源-youtube": "YouTube",
+        "來源-shorts": "Shorts",
+        "來源-website": "網站",
+        "來源-book": "書",
+        "來源-other": "其他",
+    }
+    assert ("recipe", "status") not in columns and ("recipe", "status_id") in columns
+    assert ("recipe_source", "platform") not in columns
+    assert ("recipe_source", "platform_id") in columns
+
+    _alembic("downgrade", "i3import")
+    with scratch.connect() as conn:
+        restored = dict(conn.execute(text("SELECT name_cn, status FROM recipe")).all())
+        sources = dict(conn.execute(text("SELECT title, platform FROM recipe_source")).all())
+        tables = conn.execute(
+            text(
+                "SELECT count(*) FROM information_schema.tables "
+                "WHERE table_name IN ('recipe_status', 'source_platform')"
+            )
+        ).scalar()
+    assert restored == {
+        "菜-want_to_try": "want_to_try",
+        "菜-can_cook": "can_cook",
+        "菜-regular": "want_to_try",  # was on 冷凍好, which has no old key
+    }
+    assert sources == {
+        "來源-youtube": "other",  # was on IG, which has no old key
+        "來源-shorts": "shorts",
+        "來源-website": "website",
+        "來源-book": "book",
+        "來源-other": "other",
+    }
+    assert tables == 0

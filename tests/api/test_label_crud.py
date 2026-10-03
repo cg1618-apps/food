@@ -1,7 +1,9 @@
 """Labels can be added, renamed and deleted; deleting one detaches it."""
 
 
-def test_a_label_round_trips_and_deleting_it_detaches_it(client, fallback_category):
+def test_a_label_round_trips_and_deleting_it_detaches_it(
+    client, fallback_category, recipe_statuses
+):
     label = client.post("/api/edit/labels", json={"name_cn": "辣"}).json()
     ingredient = client.post(
         "/api/edit/ingredients",
@@ -16,7 +18,7 @@ def test_a_label_round_trips_and_deleting_it_detaches_it(client, fallback_catego
     assert client.get(f"/api/ingredients/{ingredient['id']}").json()["labels"] == []
 
 
-def test_a_label_counts_every_owner_that_carries_it(client, fallback_category):
+def test_a_label_counts_every_owner_that_carries_it(client, fallback_category, recipe_statuses):
     """Ingredients, recipes and kitchen notes all carry labels; the count is
     all three. The unused label is the mirror: without it, a count that never
     looked at the link tables at all would also pass."""

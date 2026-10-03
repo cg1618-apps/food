@@ -1,7 +1,8 @@
 """Reading and writing recipes. The router does HTTP; this does the work.
 
 Every write validates everything it can BEFORE it changes anything: names,
-the course, the version rule, every id in the vocabulary lists, every line
+the course, the status, every source's platform, the version rule, every id
+in the vocabulary lists, every line
 target and the cycle guard. Only then are stubs created and the row touched.
 One request is one transaction, and the ordering is what makes a refused save
 leave nothing behind even in a session that is never rolled back - the test
@@ -31,7 +32,9 @@ from app.models import (
     RecipeLine,
     RecipeMethod,
     RecipeSource,
+    RecipeStatus,
     RecipeStep,
+    SourcePlatform,
 )
 from app.schemas.recipe import LIST_FIELDS
 from app.services.hierarchy import MAX_DEPTH
@@ -52,10 +55,11 @@ def _loaded(query):
     """Every relationship the response needs, in one round trip each."""
     return query.options(
         selectinload(Recipe.course),
+        selectinload(Recipe.status),
         selectinload(Recipe.variant_of).selectinload(Recipe.variants),
         selectinload(Recipe.variants),
         selectinload(Recipe.aliases),
-        selectinload(Recipe.sources),
+        selectinload(Recipe.sources).selectinload(RecipeSource.platform),
         selectinload(Recipe.lines).selectinload(RecipeLine.ingredient),
         selectinload(Recipe.lines).selectinload(RecipeLine.sub_recipe),
         selectinload(Recipe.steps),
@@ -75,6 +79,7 @@ def _summary_loaded(query):
     """
     return query.options(
         selectinload(Recipe.course),
+        selectinload(Recipe.status),
         selectinload(Recipe.methods),
         selectinload(Recipe.sources),
         selectinload(Recipe.images).selectinload(RecipeImage.image),
@@ -225,7 +230,7 @@ def search(
     db: Session,
     q: str | None = None,
     course_id: list[int] | None = None,
-    status: list[str] | None = None,
+    status_id: list[int] | None = None,
     kind: list[str] | None = None,
     label_id: list[int] | None = None,
     method_id: list[int] | None = None,
@@ -261,8 +266,8 @@ def search(
 
     if course_id:
         query = query.filter(Recipe.course_id.in_(course_id))
-    if status:
-        query = query.filter(Recipe.status.in_(status))
+    if status_id:
+        query = query.filter(Recipe.status_id.in_(status_id))
     if kind:
         query = query.filter(Recipe.kind.in_(kind))
     if label_id:
@@ -293,6 +298,25 @@ def search(
 def _check_course(db: Session, course_id: int | None) -> None:
     if course_id is not None:
         fetch_all(db, RecipeCourse, [course_id], "course")
+
+
+def _check_status(db: Session, status_id: int) -> None:
+    fetch_all(db, RecipeStatus, [status_id], "status")
+
+
+def _first_status(db: Session) -> int:
+    """The status a recipe saved without one is given: the first in sort
+    order, the oldest among equals - the order 設定 lists them in."""
+    first = db.query(RecipeStatus.id).order_by(RecipeStatus.sort_order, RecipeStatus.id).first()
+    if first is None:
+        raise AppError(
+            422, "There is no recipe status (狀態) to give this recipe; add one in 設定 first."
+        )
+    return first[0]
+
+
+def _check_platforms(db: Session, entries) -> None:
+    fetch_all(db, SourcePlatform, [e.platform_id for e in entries], "source platform")
 
 
 def _check_version(db: Session, recipe_id: int | None, variant_of_id: int | None) -> None:
@@ -443,7 +467,7 @@ def _apply_aliases(recipe: Recipe, values: list[str]) -> None:
 def _apply_sources(recipe: Recipe, entries) -> None:
     recipe.sources = [
         RecipeSource(
-            platform=e.platform, creator=e.creator, url=e.url, title=e.title, sort_order=i
+            platform_id=e.platform_id, creator=e.creator, url=e.url, title=e.title, sort_order=i
         )
         for i, e in enumerate(entries)
     ]
@@ -487,6 +511,8 @@ def _check_and_fetch(db: Session, recipe_id: int | None, lists: dict) -> dict:
     for field, (_, model, what) in _LINKED.items():
         if lists.get(field) is not None:
             fetched[field] = fetch_all(db, model, lists[field], what)
+    if lists.get("sources") is not None:
+        _check_platforms(db, lists["sources"])
     if lists.get("lines") is not None:
         _check_line_targets(db, recipe_id, lists["lines"])
     return fetched
@@ -511,13 +537,19 @@ def _apply_lists(
 def create(db: Session, payload) -> Recipe:
     lists = {field: getattr(payload, field) for field in LIST_FIELDS}
     _check_course(db, payload.course_id)
+    if payload.status_id is None:
+        status_id = _first_status(db)
+    else:
+        status_id = payload.status_id
+        _check_status(db, status_id)
     _check_version(db, None, payload.variant_of_id)
     fetched = _check_and_fetch(db, None, lists)
     new_ids = _resolve_new_ingredients(db, lists["lines"])  # the first write
 
     scalars = payload.model_dump(exclude=set(LIST_FIELDS))
-    # kind and status are set from the payload (whose defaults are the server
-    # defaults) so the response needs no refresh to know them.
+    scalars["status_id"] = status_id
+    # kind is set from the payload (whose default is the server default) so
+    # the response needs no refresh to know it.
     recipe = Recipe(**scalars)
     db.add(recipe)
     db.flush()
@@ -539,6 +571,8 @@ def update(db: Session, recipe_id: int, payload) -> Recipe:
         raise AppError(422, "A recipe needs at least one name.")
     if "course_id" in scalars:
         _check_course(db, scalars["course_id"])
+    if "status_id" in scalars:
+        _check_status(db, scalars["status_id"])
     if "variant_of_id" in scalars:
         _check_version(db, recipe.id, scalars["variant_of_id"])
     fetched = _check_and_fetch(db, recipe.id, lists)

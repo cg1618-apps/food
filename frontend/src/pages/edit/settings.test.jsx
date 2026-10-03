@@ -65,6 +65,15 @@ const COURSES = [
   { id: 3, display_name: '甜點', name_cn: '甜點', name_en: null, sort_order: 3, usage_count: 0 },
 ]
 
+const STATUSES = [
+  { id: 4, display_name: '想試', name_cn: '想試', name_en: null, sort_order: 10, usage_count: 2 },
+  { id: 5, display_name: '常煮', name_cn: '常煮', name_en: null, sort_order: 20, usage_count: 0 },
+]
+
+const PLATFORMS = [
+  { id: 6, display_name: 'YouTube', name_cn: 'YouTube', name_en: null, sort_order: 10, usage_count: 4 },
+]
+
 const TREE = [
   {
     id: 1,
@@ -115,6 +124,8 @@ const LABELS = [
 function settingsData({ url, method }) {
   if (method !== 'GET') return null
   if (url === '/api/recipe-courses') return json(COURSES)
+  if (url === '/api/recipe-statuses') return json(STATUSES)
+  if (url === '/api/source-platforms') return json(PLATFORMS)
   if (url === '/api/ingredient-categories') return json(TREE)
   if (url === '/api/labels') return json(LABELS)
   return null
@@ -130,7 +141,15 @@ describe('設定', () => {
   it('opens on the first tab, and shows only its panel', async () => {
     renderAt('/edit/settings')
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['食材分類', '標籤', '類別', '做法', '器材'])
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      '食材分類',
+      '標籤',
+      '類別',
+      '狀態',
+      '來源',
+      '做法',
+      '器材',
+    ])
     expect(tabs[0].getAttribute('aria-selected')).toBe('true')
     const panel = screen.getByRole('tabpanel')
     expect(panel.getAttribute('aria-labelledby')).toBe(tabs[0].id)
@@ -344,6 +363,51 @@ describe('設定', () => {
         },
       ]),
     )
+  })
+
+  it('edits the statuses in their own tab, and marks the recipes stale', async () => {
+    handler = (call) => (call.method === 'POST' ? json({}, 201) : settingsData(call))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(['/api/recipes', null], [])
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/edit/settings?tab=statuses']}>
+          <AppRoutes />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    const statuses = await screen.findByRole('list', { name: '狀態' })
+    expect(within(statuses).getByRole('listitem', { name: '想試' }).textContent).toContain('用在 2 個地方')
+    const add = screen.getByRole('form', { name: '新增狀態' })
+    fireEvent.change(within(add).getByRole('textbox', { name: '新增狀態：中文名' }), {
+      target: { value: '冷凍好' },
+    })
+    fireEvent.click(within(add).getByRole('button', { name: '＋ 新增狀態' }))
+    await waitFor(() =>
+      expect(writes()).toEqual([
+        {
+          url: '/api/edit/recipe-statuses',
+          method: 'POST',
+          body: { name_cn: '冷凍好', name_en: null, sort_order: 21 },
+        },
+      ]),
+    )
+    await waitFor(() => expect(client.getQueryState(['/api/recipes', null]).isInvalidated).toBe(true))
+  })
+
+  it("explains a refused platform delete with the server's count", async () => {
+    handler = (call) =>
+      call.method === 'DELETE'
+        ? json({ detail: 'still used', usage_count: 4 }, 409)
+        : settingsData(call)
+    renderAt('/edit/settings?tab=platforms')
+    fireEvent.click(await screen.findByRole('button', { name: '刪除「YouTube」' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '刪除' }))
+    const row = section('來源').querySelector('[aria-label="YouTube"]')
+    await waitFor(() =>
+      expect(within(row).getByRole('alert').textContent).toBe('「YouTube」還用在 4 個地方，先改掉那些再刪。'),
+    )
+    expect(writes()).toEqual([{ url: '/api/edit/source-platforms/6', method: 'DELETE', body: undefined }])
   })
 
   it('shows an error state in its own tab, leaving the others', async () => {

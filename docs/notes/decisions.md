@@ -532,6 +532,29 @@ What the branch after module 1 chose, and what it turned down.
   `services/lookup.fetch_all`.** It began private to the recipe service; kitchen
   notes needed the same rule for `label_ids`, and a second copy is how two
   owners come to word or order the refusal differently.
+- **A recipe's status and a source's platform are managed vocabularies, not
+  constants.** They began as closed lists in `app/constants.py` - 想試 / 可煮
+  / 常煮 and YouTube / Shorts / 網站 / 書 / 其他 - and the owner wants to edit
+  them in 設定 as courses are edited: add 冷凍好 or IG, rename one, reorder.
+  Nothing in the app branched on either value, which is the line between a
+  closed list (the code's logic depends on it: storage state, recipe kind)
+  and a vocabulary (only displayed and filtered by). So they became
+  `recipe_status` and `source_platform`, factory vocabularies like
+  `recipe_course`, and `recipe.status_id` / `recipe_source.platform_id`
+  foreign keys, `RESTRICT`, so a value in use refuses its delete with the
+  usual 409 and count. `v2ocabulary` seeds both from the old lists in order
+  and maps every stored string to its row.
+- **A recipe created without a status gets the first in sort order**, the
+  oldest among equals, and with no status at all the create is a 422 saying
+  so. There is no server default because the first status is the owner's
+  data: a column default would name an id that 設定 can reorder or delete.
+  Rejected: making the status optional, which would leave every list and the
+  status toggle a "none" case for a recipe that has simply not been touched;
+  and a fixed "first status" flag, a second ordering beside `sort_order` for
+  the owner to keep in step.
+- **A platform's usage count is sources, not recipes.** The count is the rows
+  that would stop the delete, as everywhere in the factory, so one recipe
+  with two sources from one book counts twice.
 
 ## Kitchen notes
 

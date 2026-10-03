@@ -35,7 +35,7 @@ const RECIPE = {
   id: 5,
   display_name: '炒高麗菜',
   kind: 'dish',
-  status: 'want',
+  status: { id: 2, display_name: '想試' },
   course: { id: 1, display_name: '配菜' },
   methods: [{ id: 3, display_name: '炒' }],
   creators: ['阿基師'],
@@ -163,6 +163,26 @@ describe('the recipe library', () => {
         '/api/recipes?course_id=1&course_id=4&written_up=false',
       ),
     )
+  })
+
+  it('filters by status id, with the statuses as the options', async () => {
+    responses['/api/recipe-statuses'] = [
+      { id: 2, display_name: '想試', sort_order: 10, usage_count: 1 },
+      { id: 3, display_name: '可煮', sort_order: 20, usage_count: 0 },
+    ]
+    renderAt('/recipes')
+    const sidebar = screen.getByRole('complementary', { name: '篩選' })
+    fireEvent.click(await within(sidebar).findByRole('button', { name: /可煮/ }))
+    expect(location()).toBe('/recipes?status=3')
+    await waitFor(() => expect(listRequests('/api/recipes')).toContain('/api/recipes?status_id=3'))
+  })
+
+  it('shows the status by name in the table', async () => {
+    responses['/api/recipes'] = [RECIPE]
+    localStorage.setItem('cg1618:food:recipes-view', 'list')
+    renderAt('/recipes')
+    const table = await screen.findByRole('table')
+    expect(within(table).getByText('想試')).toBeTruthy()
   })
 
   it('marks a recipe that is only a bookmark, and applies the cover focus', async () => {

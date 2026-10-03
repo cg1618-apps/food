@@ -14,7 +14,7 @@
 const API = '/api'
 const WRITE = '/api/edit'
 
-// The three vocabularies the backend builds from one factory
+// The five vocabularies the backend builds from one factory
 // (app/routers/vocabulary.py) share one URL shape.
 function vocabulary(resource) {
   return {
@@ -33,7 +33,7 @@ export const endpoints = {
     // Distinct creator names already used in sources, for suggestions.
     creators: () => `${API}/recipe-creators`,
     create: () => `${WRITE}/recipes`,
-    // PATCH; a body of only {status} is the in-place status change.
+    // PATCH; a body of only {status_id} is the in-place status change.
     update: (id) => `${WRITE}/recipes/${id}`,
     remove: (id) => `${WRITE}/recipes/${id}`,
     // PUT [{image_id, focus}] in order: replaces the gallery.
@@ -83,11 +83,13 @@ export const endpoints = {
     remove: (id) => `${WRITE}/labels/${id}`,
   },
   courses: vocabulary('recipe-courses'),
+  statuses: vocabulary('recipe-statuses'),
+  platforms: vocabulary('source-platforms'),
   methods: vocabulary('cooking-methods'),
   equipment: vocabulary('equipment'),
   vocabularies: {
     // Every closed list with its display label: preservation methods and
-    // states, ratings, recipe kinds and statuses, source platforms, note kinds.
+    // states, ratings, recipe kinds, note kinds.
     fixed: () => `${API}/vocabularies/fixed`,
   },
   // GET under the gated prefix: 204 when Access let the request through, and

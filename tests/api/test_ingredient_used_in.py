@@ -14,6 +14,9 @@ from sqlalchemy import event
 
 from app.models import Ingredient
 
+# Every recipe needs a status; the migration seeds them and create_all does not.
+pytestmark = pytest.mark.usefixtures("recipe_statuses")
+
 ZERO = {"aliases": 0, "preservation": 0, "heating": 0, "links": 0}
 
 

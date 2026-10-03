@@ -1,8 +1,8 @@
 # Data model
 
-What the database holds today: twenty-six tables, at revision `i3import`.
+What the database holds today: twenty-eight tables, at revision `v2ocabulary`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
-`ingredient_preservation`, `label`, `ingredient_label`), the three managed
+`ingredient_preservation`, `label`, `ingredient_label`), the five managed
 vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
 its three galleries (`image`, `ingredient_image`, `recipe_image`,
 `kitchen_note_image`), the recipe family's nine (`recipe`, `recipe_alias`,
@@ -157,7 +157,8 @@ is script execution. `title` is optional; rows are ordered by `sort_order`.
 
 ## The managed vocabularies
 
-`recipe_course`, `cooking_method` and `equipment` share one shape, declared once
+`recipe_course`, `recipe_status`, `source_platform`, `cooking_method` and
+`equipment` share one shape, declared once
 in `VocabularyMixin` (`app/models/vocabulary.py`): `name_cn`, `name_en`,
 `sort_order`, at least one name (`ck_<table>_has_a_name`) and a case-insensitive
 unique index per name slot with default null handling, as on `ingredient`.
@@ -173,6 +174,8 @@ them:**
 | Table | Seeded rows |
 | --- | --- |
 | `recipe_course` | 主食, 配菜, 湯, 小吃點心, 甜點, 飲料, 醬料 |
+| `recipe_status` | 想試, 可煮, 常煮 (`v2ocabulary`) |
+| `source_platform` | YouTube, Shorts, 網站, 書, 其他 (`v2ocabulary`) |
 | `cooking_method` | 煮, 壓力鍋煮, 煎, 炒, 炸, 氣炸, 烤, 蒸, 川燙, 涼拌, 微波, 混合 |
 | `equipment` | 鍋子, 壓力鍋, 平底鍋, 氣炸鍋, 烤箱, 油鍋, 果汁機, 電鍋, 微波爐, 保鮮盒, 碗 |
 | `ingredient_category` | 肉類, 海鮮, 蔬菜, 菇類, 水果, 蛋豆製品, 主食穀物, 調味料, 乳製品, 乾貨 (top level) |
@@ -210,6 +213,8 @@ things that would stop it being deleted:
 | Vocabulary | Counted |
 | --- | --- |
 | `recipe_course` | recipes filed in it (`recipe.course_id`); serves-as links `CASCADE` and do not count |
+| `recipe_status` | recipes in it (`recipe.status_id`) |
+| `source_platform` | sources naming it (`recipe_source.platform_id`) — two sources from one book count twice |
 | `cooking_method` | `ingredient_heating` rows plus `recipe_method` links |
 | `equipment` | `recipe_equipment` links |
 
@@ -254,7 +259,7 @@ inside other recipes.
 | `kind` | `dish` or `base` (`RECIPE_KINDS`), default `dish` |
 | `course_id` | optional, → `recipe_course`, `RESTRICT` |
 | `variant_of_id` | optional, → `recipe`, `SET NULL` |
-| `status` | `want_to_try` / `can_cook` / `regular` (`RECIPE_STATUSES`), shown 想試 / 可煮 / 常煮, default `want_to_try` |
+| `status_id` | **required**, → `recipe_status`, `RESTRICT`. No server default: a recipe created without one is given the first status in sort order by the write path |
 | `servings`, `time` | free text — `2-3 人`, `1hr` |
 | `description`, `storage_notes`, `notes` | |
 | `created_at`, `updated_at` | |
@@ -297,8 +302,8 @@ A serves-as link may repeat the recipe's own course.
 
 ## `recipe_source`
 
-Where the recipe came from. `platform` is required (`SOURCE_PLATFORMS`:
-`youtube`, `shorts`, `website`, `book`, `other`); `creator`, `url` and `title`
+Where the recipe came from. `platform_id` is required (→ `source_platform`,
+`RESTRICT`); `creator`, `url` and `title`
 are each optional — a book has no URL — but at least one must be set
 (`ck_recipe_source_has_content`). Ordered by `sort_order`.
 
@@ -374,6 +379,7 @@ Labels have two name slots, not three; a tag has no formal alternative form.
 | recipe → its versions | `SET NULL` |
 | kitchen note → its label links and gallery rows | `CASCADE` |
 | course → the recipes filed in it | `RESTRICT` |
+| status → the recipes in it; source platform → the sources naming it | `RESTRICT` |
 | course → its serves-as links; label → any link | `CASCADE` |
 | cooking method → the heating rows and recipe links that use it | `RESTRICT` |
 | equipment → the recipe links that use it | `RESTRICT` |
@@ -421,13 +427,13 @@ pages.
 | Recipe sheets | first column (飯 / 麵 / 肉 / 麵包 …) | recipe labels |
 | Recipe sheets | 烹調方式 | `recipe_method` → `cooking_method` |
 | Recipe sheets | 器具 | `recipe_equipment` → `equipment` |
-| Recipe sheets | 來源 (YT / shorts / website / book), creator, URL | `recipe_source` |
+| Recipe sheets | 來源 (YT / shorts / website / book), creator, URL | `recipe_source` → `source_platform` |
 | Recipe sheets | 可當主食 / 可當配菜 / 可當點心 | `recipe_serves_as` → `recipe_course` |
 | Recipe sheets | Recipe O / X | derived: has lines or steps ("written up" vs 書籤) |
 | Recipe sheets | 備註, `冷藏: 1 week`, `包含醬` | `recipe.notes` / `recipe.storage_notes` / a nested base |
 | Recipe sheets | 語言 | not modelled — empty in every row |
 | 合輯, Tips sheets | title, creator, URL | `kitchen_note` (kind 合輯 / 技巧 / 參考) |
-| 可煮 sheet | dish, time | `recipe.status = can_cook`, `recipe.time` |
+| 可煮 sheet | dish, time | `recipe.status_id` → 可煮, `recipe.time` |
 | 保存期限 sheet | Unused / Opened × 常溫 / Fridge / Freeze, how-to, source | `ingredient_preservation` (state, method, range, notes) + `ingredient_link` |
 | 保存期限 sheet | 熟肉 rows | `ingredient_preservation.state = cooked` |
 | 挑選 sheet | criteria columns, source | `ingredient.selection_notes` + `ingredient_link` |

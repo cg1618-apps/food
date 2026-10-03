@@ -259,7 +259,7 @@ full ingredient.
 
 **`GET /api/recipes`** is the library: a bare array of summaries sorted by
 display name. A summary is the name slots and `display_name`, `kind`,
-`status`, `course` (`{id, display_name}` or null), `methods`
+`status` (`{id, display_name}`), `course` (`{id, display_name}` or null), `methods`
 (`{id, display_name}` list), `creators` (the distinct creators of its sources,
 in source order, skipping sources with none), `time`, `written_up` and `cover`
 (the first gallery image's `thumb_url` and `focus`, or null).
@@ -269,9 +269,9 @@ Query parameters:
 - `q` — any name slot or any alias, case-insensitively, as a substring, with
   `%`, `_` and `\` matched literally as on the ingredient list. The alias arm is a subquery, so a recipe matching two of its aliases comes back
   once;
-- `course_id`, `status`, `kind`, `label_id`, `method_id`, `equipment_id`,
+- `course_id`, `status_id`, `kind`, `label_id`, `method_id`, `equipment_id`,
   `creator`, `ingredient_id` — each may repeat, and a repeated parameter means
-  **any of** its values (`?status=can_cook&status=regular`). Different
+  **any of** its values (`?status_id=2&status_id=3`). Different
   parameters narrow each other. `course_id` is the course a recipe is filed
   under, not one it serves as; `creator` matches a source's creator exactly;
   `ingredient_id` matches recipes using that ingredient as "used in" defines
@@ -287,12 +287,13 @@ for the `creator` filter.
 ingredient's does, and answers the full recipe.
 
 **The full recipe** is the name slots and `display_name`, `kind` (`dish` or
-`base`), `status` (`want_to_try`, `can_cook`, `regular`), `course`
+`base`), `status` (`{id, display_name}`), `course`
 (`{id, display_name}` or null), `servings`, `time`, `description`,
 `storage_notes`, `notes`, and:
 
 - `aliases` — sorted strings;
-- `sources` — `{id, platform, creator, url, title, sort_order}`;
+- `sources` — `{id, platform, creator, url, title, sort_order}`, `platform`
+  being `{id, display_name}`;
 - `lines` — `{id, position, section, ingredient, sub_recipe, amount, note,
   is_optional}`, where exactly one of `ingredient`
   (`{id, display_name, needs_detail}`) and `sub_recipe`
@@ -309,17 +310,20 @@ ingredient's does, and answers the full recipe.
 - `written_up` — true when it has at least one line or step. Derived, never
   sent.
 
-**`POST` takes the whole recipe; `PATCH` takes any subset.** Defaults on create
-are `kind: dish` and `status: want_to_try`. The lists are `aliases`, `sources`,
+**`POST` takes the whole recipe; `PATCH` takes any subset.** A recipe is
+filed under a course by `course_id` and a status by `status_id`. Defaults on
+create are `kind: dish` and, when `status_id` is left out, the first status in
+sort order (the oldest among equals); with no status at all to give, the create
+is a 422 saying so. The lists are `aliases`, `sources`,
 `lines`, `steps`, `serves_as_ids`, `label_ids`, `method_ids` and
 `equipment_ids`: on `PATCH` each one sent replaces the stored list and each one
 absent is left alone. Sources, lines and steps take their order from the list —
 a request naming `sort_order` or `position` is a 422 — and re-sending the same
-lines and steps succeeds. A `PATCH` carrying only `status` is the status
+lines and steps succeeds. A `PATCH` carrying only `status_id` is the status
 change; nothing else is needed for it.
 
-A source is `{platform, creator, url, title}` with at least one of the last
-three; `url` must be `http` or `https`. A step is `{section, body}` with a
+A source is `{platform_id, creator, url, title}` with at least one of the last
+three, and `platform_id` required; `url` must be `http` or `https`. A step is `{section, body}` with a
 non-blank `body`.
 
 **A line names exactly one of `ingredient_id`, `sub_recipe_id` or
@@ -336,11 +340,12 @@ typeahead (`GET /api/ingredients?q=`) is where a near match is offered.
 Refused with 422, and a refused save writes nothing — not even a stub an
 earlier line asked for:
 
-- a `kind`, `status` or `platform` outside its list, including an explicit
-  null for `kind` or `status`;
+- a `kind` outside its list, and an explicit null for `kind`, `status_id` or a
+  source's `platform_id`;
+- creating a recipe without `status_id` when there is no status at all;
 - no name left on the merged row;
-- **an id inside the body that names nothing** — `course_id`, `variant_of_id`,
-  any of the four id lists, `ingredient_id` or `sub_recipe_id` in a line. The
+- **an id inside the body that names nothing** — `course_id`, `status_id`,
+  `variant_of_id`, a source's `platform_id`, any of the four id lists, `ingredient_id` or `sub_recipe_id` in a line. The
   detail names the id. The URL's own recipe missing is 404;
 - a line whose recipe is reachable from its `sub_recipe_id` through sub-recipe
   lines, at any depth — itself included;
@@ -409,11 +414,13 @@ answers the full note.
 
 ## Vocabularies
 
-Three managed vocabularies share one shape, so one description covers them:
+Five managed vocabularies share one shape, so one description covers them:
 
 | Route | |
 | --- | --- |
 | `GET /api/recipe-courses` | |
+| `GET /api/recipe-statuses` | |
+| `GET /api/source-platforms` | |
 | `GET /api/cooking-methods` | |
 | `GET /api/equipment` | |
 | `POST /api/edit/<same>` | |
@@ -428,15 +435,17 @@ and names are unique case-insensitively per slot.
 before the database is asked; the `RESTRICT` foreign key is the backstop. The
 count is the number of `RESTRICT` references: for a course, the recipes filed
 in it (a recipe that only serves as that course does not count, and its link
-goes with the course); for a cooking method, ingredient heating rows plus
+goes with the course); for a status, the recipes in it; for a source platform,
+the sources naming it, so one recipe with two sources from one book counts
+twice; for a cooking method, ingredient heating rows plus
 recipes using it; for equipment, recipes using it.
 
 **`GET /api/vocabularies/fixed`** serves every closed list the interface
 renders, as `{value, label}` pairs under `preservation_methods`,
-`preservation_states`, `ratings`, `recipe_kinds`, `recipe_statuses`,
-`source_platforms` and `kitchen_note_kinds`, so no component keeps its own
-copy. These
-lists are constants in the code and are not editable through the API.
+`preservation_states`, `ratings`, `recipe_kinds` and `kitchen_note_kinds`,
+so no component keeps its own copy. These lists are constants in the code and
+are not editable through the API; recipe statuses and source platforms are not
+among them — they are managed vocabularies, above.
 
 ## Images
 

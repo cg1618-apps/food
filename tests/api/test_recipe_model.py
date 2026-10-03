@@ -22,12 +22,34 @@ from app.models import (
     RecipeImage,
     RecipeLine,
     RecipeSource,
+    RecipeStatus,
     RecipeStep,
+    SourcePlatform,
 )
+
+
+@pytest.fixture(autouse=True)
+def status(db):
+    """Every recipe needs a status; `make` files one under this unless told
+    otherwise."""
+    row = RecipeStatus(name_cn="想試")
+    db.add(row)
+    db.flush()
+    return row
+
+
+@pytest.fixture
+def platform(db):
+    row = SourcePlatform(name_cn="YouTube")
+    db.add(row)
+    db.flush()
+    return row
 
 
 def make(db, **kwargs):
     kwargs.setdefault("name_cn", "番茄炒蛋")
+    if "status_id" not in kwargs:
+        kwargs["status_id"] = db.query(RecipeStatus.id).order_by(RecipeStatus.id).first()[0]
     recipe = Recipe(**kwargs)
     db.add(recipe)
     db.flush()
@@ -37,8 +59,8 @@ def make(db, **kwargs):
 # --- recipe ---------------------------------------------------------------
 
 
-def test_a_recipe_with_no_name_at_all_is_refused(db):
-    db.add(Recipe(name_cn=None, name_en=None, name_alt=None))
+def test_a_recipe_with_no_name_at_all_is_refused(db, status):
+    db.add(Recipe(name_cn=None, name_en=None, name_alt=None, status_id=status.id))
     with pytest.raises(IntegrityError) as excinfo:
         db.flush()
     assert "ck_recipe_has_a_name" in str(excinfo.value)
@@ -56,11 +78,39 @@ def test_two_recipes_may_share_a_name(db):
     assert db.query(Recipe).filter_by(name_cn="咖哩").count() == 2
 
 
-def test_a_new_recipe_defaults_to_a_dish_nobody_has_tried(db):
+def test_a_new_recipe_defaults_to_a_dish(db):
     recipe = make(db)
     db.refresh(recipe)
     assert recipe.kind == "dish"
-    assert recipe.status == "want_to_try"
+
+
+def test_a_recipe_with_no_status_is_refused(db):
+    """No server default: which status comes first is the owner's data, so the
+    write path picks it (`recipes.create`) and the column only refuses."""
+    db.add(Recipe(name_cn="番茄炒蛋"))
+    with pytest.raises(IntegrityError) as excinfo:
+        db.flush()
+    assert "status_id" in str(excinfo.value)
+
+
+def test_a_status_a_recipe_is_in_cannot_be_deleted(db, status):
+    make(db, status_id=status.id)
+    db.delete(status)
+    with pytest.raises(IntegrityError) as excinfo:
+        db.flush()
+    assert "recipe_status_id_fkey" in str(excinfo.value)
+
+
+def test_a_platform_a_source_names_cannot_be_deleted(db, platform):
+    """The source is the fixture that makes this bite; an unused platform
+    deletes, as the vocabulary tests show over HTTP."""
+    recipe = make(db)
+    db.add(RecipeSource(recipe_id=recipe.id, platform_id=platform.id, title="x"))
+    db.flush()
+    db.delete(platform)
+    with pytest.raises(IntegrityError) as excinfo:
+        db.flush()
+    assert "recipe_source_platform_id_fkey" in str(excinfo.value)
 
 
 def test_a_recipe_may_not_be_a_version_of_itself(db):
@@ -140,18 +190,18 @@ def test_two_recipes_may_share_an_alias(db):
     db.flush()
 
 
-def test_a_source_with_nothing_but_a_platform_is_refused(db):
+def test_a_source_with_nothing_but_a_platform_is_refused(db, platform):
     recipe = make(db)
-    db.add(RecipeSource(recipe_id=recipe.id, platform="youtube"))
+    db.add(RecipeSource(recipe_id=recipe.id, platform_id=platform.id))
     with pytest.raises(IntegrityError) as excinfo:
         db.flush()
     assert "ck_recipe_source_has_content" in str(excinfo.value)
 
 
-def test_a_source_with_only_a_creator_is_allowed(db):
+def test_a_source_with_only_a_creator_is_allowed(db, platform):
     """The mirror: a book has no URL, and a remembered channel no title."""
     recipe = make(db)
-    db.add(RecipeSource(recipe_id=recipe.id, platform="book", creator="阿基師"))
+    db.add(RecipeSource(recipe_id=recipe.id, platform_id=platform.id, creator="阿基師"))
     db.flush()
 
 
@@ -269,7 +319,7 @@ def test_two_images_may_not_share_a_recipe_gallery_position(db):
     assert "uq_recipe_image_position" in str(excinfo.value)
 
 
-def test_deleting_a_recipe_takes_every_child_with_it(db, ingredient):
+def test_deleting_a_recipe_takes_every_child_with_it(db, ingredient, platform):
     """CASCADE from the recipe down to everything it owns - and no further:
     the ingredient, the vocabulary rows and the picture all survive."""
     course = RecipeCourse(name_cn="主食")
@@ -287,7 +337,7 @@ def test_deleting_a_recipe_takes_every_child_with_it(db, ingredient):
     db.add_all(
         [
             RecipeAlias(recipe_id=recipe.id, value="tomato egg"),
-            RecipeSource(recipe_id=recipe.id, platform="website", url="https://x.example"),
+            RecipeSource(recipe_id=recipe.id, platform_id=platform.id, url="https://x.example"),
             RecipeLine(recipe_id=recipe.id, position=0, ingredient_id=ingredient.id),
             RecipeStep(recipe_id=recipe.id, position=0, body="炒"),
             RecipeImage(recipe_id=recipe.id, image_id=image.id, position=0),
@@ -309,6 +359,7 @@ def test_deleting_a_recipe_takes_every_child_with_it(db, ingredient):
     assert db.get(Ingredient, ingredient.id) is not None
     assert db.get(Image, image.id) is not None
     assert db.query(CookingMethod).count() == 1
+    assert db.get(SourcePlatform, platform.id) is not None
 
 
 # --- RESTRICT -------------------------------------------------------------

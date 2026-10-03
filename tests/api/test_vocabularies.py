@@ -1,10 +1,16 @@
-"""The three managed vocabularies share one router factory, so one parametrised
-suite covers all three. The fixtures that make refusals bite are the in-use
+"""The five managed vocabularies share one router factory, so one parametrised
+suite covers all five. The fixtures that make refusals bite are the in-use
 rows: a vocabulary value nothing uses deletes freely, and that is the mirror."""
 
 import pytest
 
-RESOURCES = ["recipe-courses", "cooking-methods", "equipment"]
+RESOURCES = [
+    "recipe-courses",
+    "recipe-statuses",
+    "source-platforms",
+    "cooking-methods",
+    "equipment",
+]
 
 
 @pytest.mark.parametrize("resource", RESOURCES)
@@ -74,22 +80,22 @@ def test_values_list_in_sort_order_then_name(client):
 # where an unused value deletes.
 
 
-def _recipe(db, **kwargs):
+def _recipe(db, status, **kwargs):
     from app.models import Recipe
 
-    recipe = Recipe(name_cn="番茄炒蛋", **kwargs)
+    recipe = Recipe(name_cn="番茄炒蛋", status_id=status.id, **kwargs)
     db.add(recipe)
     db.flush()
     return recipe
 
 
-def test_a_cooking_method_used_only_by_a_recipe_cannot_be_deleted(client, db):
+def test_a_cooking_method_used_only_by_a_recipe_cannot_be_deleted(client, db, recipe_statuses):
     from app.models import CookingMethod
 
     method = CookingMethod(name_cn="蒸")
     db.add(method)
     db.flush()
-    recipe = _recipe(db)
+    recipe = _recipe(db, recipe_statuses["想試"])
     recipe.methods.append(method)
     db.flush()
 
@@ -99,7 +105,7 @@ def test_a_cooking_method_used_only_by_a_recipe_cannot_be_deleted(client, db):
 
 
 def test_a_cooking_method_counts_heating_rows_and_recipes_together(
-    client, db, fallback_category
+    client, db, fallback_category, recipe_statuses
 ):
     from app.models import CookingMethod, Ingredient, IngredientHeating
 
@@ -108,7 +114,7 @@ def test_a_cooking_method_counts_heating_rows_and_recipes_together(
     db.add_all([method, ingredient])
     db.flush()
     db.add(IngredientHeating(ingredient_id=ingredient.id, method_id=method.id))
-    recipe = _recipe(db)
+    recipe = _recipe(db, recipe_statuses["想試"])
     recipe.methods.append(method)
     db.flush()
 
@@ -116,13 +122,13 @@ def test_a_cooking_method_counts_heating_rows_and_recipes_together(
     assert listed[method.id]["usage_count"] == 2
 
 
-def test_equipment_used_by_a_recipe_cannot_be_deleted(client, db):
+def test_equipment_used_by_a_recipe_cannot_be_deleted(client, db, recipe_statuses):
     from app.models import Equipment
 
     pan = Equipment(name_cn="電鍋")
     db.add(pan)
     db.flush()
-    recipe = _recipe(db)
+    recipe = _recipe(db, recipe_statuses["想試"])
     recipe.equipment.append(pan)
     db.flush()
 
@@ -131,20 +137,20 @@ def test_equipment_used_by_a_recipe_cannot_be_deleted(client, db):
     assert response.json()["usage_count"] == 1
 
 
-def test_a_course_a_recipe_is_filed_in_cannot_be_deleted(client, db):
+def test_a_course_a_recipe_is_filed_in_cannot_be_deleted(client, db, recipe_statuses):
     from app.models import RecipeCourse
 
     course = RecipeCourse(name_cn="主食")
     db.add(course)
     db.flush()
-    _recipe(db, course_id=course.id)
+    _recipe(db, recipe_statuses["想試"], course_id=course.id)
 
     response = client.delete(f"/api/edit/recipe-courses/{course.id}")
     assert response.status_code == 409
     assert response.json()["usage_count"] == 1
 
 
-def test_a_course_a_recipe_only_serves_as_can_be_deleted(client, db):
+def test_a_course_a_recipe_only_serves_as_can_be_deleted(client, db, recipe_statuses):
     """Serves-as links CASCADE and are not a reason to refuse - the mirror of
     the test above, with a link in place so the count had something to miss."""
     from app.models import RecipeCourse
@@ -152,7 +158,7 @@ def test_a_course_a_recipe_only_serves_as_can_be_deleted(client, db):
     course = RecipeCourse(name_cn="配菜")
     db.add(course)
     db.flush()
-    recipe = _recipe(db)
+    recipe = _recipe(db, recipe_statuses["想試"])
     recipe.serves_as.append(course)
     db.flush()
 
@@ -161,14 +167,60 @@ def test_a_course_a_recipe_only_serves_as_can_be_deleted(client, db):
     assert client.delete(f"/api/edit/recipe-courses/{course.id}").status_code == 204
 
 
+def test_a_status_a_recipe_is_in_cannot_be_deleted(client, db, recipe_statuses):
+    """The recipe on 可煮 is the fixture that makes the 409 bite; 常煮, which
+    nothing uses, is the mirror and deletes."""
+    _recipe(db, recipe_statuses["可煮"])
+
+    listed = {row["name_cn"]: row for row in client.get("/api/recipe-statuses").json()}
+    assert listed["可煮"]["usage_count"] == 1
+    assert listed["常煮"]["usage_count"] == 0
+
+    response = client.delete(f"/api/edit/recipe-statuses/{recipe_statuses['可煮'].id}")
+    assert response.status_code == 409
+    assert response.json()["usage_count"] == 1
+    unused = client.delete(f"/api/edit/recipe-statuses/{recipe_statuses['常煮'].id}")
+    assert unused.status_code == 204
+
+
+def test_a_platform_a_source_names_cannot_be_deleted(
+    client, db, recipe_statuses, source_platforms
+):
+    """Two sources on one recipe count twice: the count is the rows that would
+    stop the delete, as a method counts heating rows and recipes together."""
+    from app.models import RecipeSource
+
+    recipe = _recipe(db, recipe_statuses["想試"])
+    book = source_platforms["書"]
+    db.add_all(
+        [
+            RecipeSource(recipe_id=recipe.id, platform_id=book.id, title="家常菜", sort_order=0),
+            RecipeSource(recipe_id=recipe.id, platform_id=book.id, title="快手菜", sort_order=1),
+        ]
+    )
+    db.flush()
+
+    listed = {row["name_cn"]: row for row in client.get("/api/source-platforms").json()}
+    assert listed["書"]["usage_count"] == 2
+    assert listed["其他"]["usage_count"] == 0
+
+    response = client.delete(f"/api/edit/source-platforms/{book.id}")
+    assert response.status_code == 409
+    assert response.json()["usage_count"] == 2
+    other = source_platforms["其他"]
+    assert client.delete(f"/api/edit/source-platforms/{other.id}").status_code == 204
+
+
+def test_statuses_and_platforms_list_in_sort_order(client, recipe_statuses, source_platforms):
+    statuses = [row["display_name"] for row in client.get("/api/recipe-statuses").json()]
+    platforms = [row["display_name"] for row in client.get("/api/source-platforms").json()]
+    assert statuses == ["想試", "可煮", "常煮"]
+    assert platforms == ["YouTube", "Shorts", "網站", "書", "其他"]
+
+
 def test_the_recipe_fixed_vocabularies_are_served_with_labels(client):
+    """Statuses and platforms are managed vocabularies now, not closed lists."""
     body = client.get("/api/vocabularies/fixed").json()
     assert [e["value"] for e in body["recipe_kinds"]] == ["dish", "base"]
-    assert {"value": "want_to_try", "label": "想試"} in body["recipe_statuses"]
-    assert [e["value"] for e in body["source_platforms"]] == [
-        "youtube",
-        "shorts",
-        "website",
-        "book",
-        "other",
-    ]
+    assert "recipe_statuses" not in body
+    assert "source_platforms" not in body
