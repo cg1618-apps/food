@@ -16,9 +16,11 @@
 // What a change here makes stale is named per vocabulary: a renamed course,
 // status, source platform, author or 材料分組 / 步驟分組 is shown on every recipe, a renamed method on
 // recipes and on ingredient heating rows, a renamed label on all three kinds
-// of owner.
+// of owner. 常用食材 is not a vocabulary but an ordered pick of ingredients -
+// the recipe form's chips - and makes only its own list stale.
 import { endpoints } from '../../api/endpoints'
 import CategoryEditor from '../../components/settings/CategoryEditor'
+import CommonIngredientsEditor from '../../components/settings/CommonIngredientsEditor'
 import VocabularyEditor from '../../components/settings/VocabularyEditor'
 import { LinkButton, Tabs } from '../../components/ui/primitives'
 import { useUrlTab } from '../../hooks/useUrlTab'
@@ -140,6 +142,7 @@ function FactoryEditor({ vocabulary, ...section }) {
 // links to it exist; the first entry is the default.
 const TABS = [
   { id: 'categories', label: '食材分類', render: () => <CategoryEditor /> },
+  { id: 'common-ingredients', label: '常用食材', render: () => <CommonIngredientsEditor /> },
   { id: 'labels', label: '標籤', render: () => <LabelEditor /> },
   ...FACTORY.map(({ key, vocabulary = key, ...section }) => ({
     id: key,

@@ -801,6 +801,131 @@ describe('RecipeForm groups', () => {
   })
 })
 
+describe('RecipeForm 常用食材', () => {
+  const COMMON = [
+    { ingredient: { id: 1, display_name: '蒜', needs_detail: false }, sort_order: 0 },
+    { ingredient: { id: 2, display_name: '薑', needs_detail: true }, sort_order: 1 },
+  ]
+  const LINE_GROUPS = [
+    { id: 11, display_name: '主料', name_cn: '主料', name_en: null, sort_order: 10, usage_count: 0 },
+  ]
+  const commonData =
+    (common) =>
+    ({ url, method }) => {
+      if (url === '/api/common-ingredients') return json(common)
+      if (url === '/api/line-groups') return json(LINE_GROUPS)
+      if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
+      return json([])
+    }
+  const area = (title) => screen.getByRole('heading', { level: 2, name: title }).closest('section')
+  const chips = () => screen.getByRole('group', { name: '常用食材' })
+
+  it('appends a line for a tapped chip to the ungrouped lines, focused on its amount', async () => {
+    handler = commonData(COMMON)
+    wrap(<AppRoutes />, '/edit/recipes/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '炒青菜' } })
+    const lines = area('材料')
+
+    // A group first, so "ungrouped" is a place a line could miss.
+    fireEvent.click(within(lines).getByRole('button', { name: '＋ 加分組' }))
+    fireEvent.click(await within(lines).findByRole('button', { name: '＋ 主料' }))
+
+    // In list order.
+    const offered = await within(chips()).findAllByRole('button')
+    expect(offered.map((chip) => chip.getAttribute('aria-label'))).toEqual(['加一行「蒜」', '加一行「薑」'])
+
+    fireEvent.click(within(chips()).getByRole('button', { name: '加一行「蒜」' }))
+    const first = screen.getByRole('group', { name: '材料 1' })
+    expect(within(first).getByText('蒜')).toBeTruthy()
+    expect(document.activeElement).toBe(within(first).getByLabelText('份量'))
+    fireEvent.change(document.activeElement, { target: { value: '3 瓣' } })
+
+    // Used now, and still tappable: the same ingredient may be on two lines.
+    const used = within(chips()).getByRole('button', { name: '加一行「蒜」（已在材料中）' })
+    expect(used.getAttribute('data-used')).toBe('true')
+    expect(within(chips()).getByRole('button', { name: '加一行「薑」' }).getAttribute('data-used')).toBeNull()
+    fireEvent.click(used)
+    const second = screen.getByRole('group', { name: '材料 2' })
+    expect(document.activeElement).toBe(within(second).getByLabelText('份量'))
+
+    // A stub chip makes a line that shows 待補.
+    fireEvent.click(within(chips()).getByRole('button', { name: '加一行「薑」' }))
+    expect(within(screen.getByRole('group', { name: '材料 3' })).getByText('待補')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+    const body = calls.find((c) => c.method === 'POST' && c.url === '/api/edit/recipes').body
+    expect(body.lines).toEqual([
+      { amount: '3 瓣', note: null, is_optional: false, ingredient_id: 1 },
+      { amount: null, note: null, is_optional: false, ingredient_id: 1 },
+      { amount: null, note: null, is_optional: false, ingredient_id: 2 },
+    ])
+    expect(body.line_groups).toEqual([{ line_group_id: 11, lines: [] }])
+  })
+
+  it('marks a chip used when its ingredient is on a line inside a group', async () => {
+    const RECIPE = {
+      id: 5,
+      display_name: '薑母鴨',
+      name_cn: '薑母鴨',
+      kind: 'dish',
+      status: { id: 1, display_name: '想試' },
+      sources: [],
+      lines: [],
+      line_groups: [
+        {
+          id: 3,
+          position: 0,
+          group: { id: 11, display_name: '主料' },
+          name: null,
+          display_name: '主料',
+          lines: [
+            {
+              id: 1,
+              position: 0,
+              ingredient: { id: 2, display_name: '薑', needs_detail: true },
+              sub_recipe: null,
+              amount: '1 塊',
+              note: null,
+              is_optional: false,
+            },
+          ],
+        },
+      ],
+      steps: [],
+      step_groups: [],
+      serves_as: [],
+      labels: [],
+      methods: [],
+      equipment: [],
+      images: [],
+      aliases: [],
+      variant_of: null,
+      versions: [],
+      used_in: [],
+      written_up: true,
+    }
+    const data = commonData(COMMON)
+    handler = (call) => (call.url === '/api/recipes/5' ? json(RECIPE) : data(call))
+    wrap(<AppRoutes />, '/edit/recipes/5')
+    expect(await within(await screen.findByRole('group', { name: '常用食材' })).findByRole('button', {
+      name: '加一行「薑」（已在材料中）',
+    })).toBeTruthy()
+    expect(within(chips()).getByRole('button', { name: '加一行「蒜」' })).toBeTruthy()
+  })
+
+  it('shows no chip row at all while the list is empty', async () => {
+    handler = commonData([])
+    wrap(<AppRoutes />, '/edit/recipes/new')
+    await screen.findByLabelText('中文名')
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/common-ingredients')).toBe(true))
+    // Give the read a chance to answer before asserting absence.
+    await act(async () => {})
+    expect(screen.queryByRole('group', { name: '常用食材' })).toBeNull()
+    expect(within(area('材料')).queryByText(/常用/)).toBeNull()
+  })
+})
+
 describe('IngredientForm', () => {
   const TREE = [{ id: 1, display_name: '預設', is_fallback: true, children: [] }]
 

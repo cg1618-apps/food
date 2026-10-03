@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from app import errors, logging_config
 from app.request_context import RequestIdMiddleware
 from app.routers import (
+    common_ingredient,
     edit_session,
     health,
     image,
@@ -47,6 +48,8 @@ def create_app(dist: Path = DIST) -> FastAPI:
     # discovered by the prefix test.
     app.include_router(ingredient.router)
     app.include_router(ingredient.edit)
+    app.include_router(common_ingredient.router)
+    app.include_router(common_ingredient.edit)
     app.include_router(ingredient_category.router)
     app.include_router(ingredient_category.edit)
     app.include_router(label.router)

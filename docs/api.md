@@ -229,7 +229,10 @@ The target wins every collision:
   `sourcing_notes`, `preservation_notes`) moves when the target's is empty and
   is dropped otherwise; `prose` lists only fields the source has;
 - names, category, parent, rating and `needs_detail` are the target's and are
-  not touched.
+  not touched;
+- the source's 常用食材 entry moves to the target in the same place, unless
+  the target is listed already, when it is dropped. It is not in the preview
+  or the fingerprint: it moves no content.
 
 Refused with 422: into itself, into one of its own descendants, and an `into`
 that names nothing. A missing source — the id in the URL — is 404. The body
@@ -546,6 +549,32 @@ already missing is not an error.
 URL never changes meaning and may be cached indefinitely. A key that does not
 exist is a 404, not the application shell: the bundle's catch-all refuses
 `/images` for the same reason it refuses `/api` and `/health`.
+
+## 常用食材
+
+| Route | |
+| --- | --- |
+| `GET /api/common-ingredients` | the list, in order |
+| `PUT /api/edit/common-ingredients` | replaces the whole list |
+
+The list is the ingredients the recipe form offers as chips:
+
+```json
+[{"ingredient": {"id": 3, "display_name": "蒜", "needs_detail": false}, "sort_order": 0},
+ {"ingredient": {"id": 8, "display_name": "薑", "needs_detail": true}, "sort_order": 1}]
+```
+
+`ingredient` is the shape a recipe line embeds (`IngredientRef`).
+
+**The `PUT` body is `{"ingredient_ids": [3, 8]}`** and the list becomes
+exactly that, numbered 0, 1, 2 … in the order sent; `[]` empties it. Adding,
+removing and reordering are each this one call. The answer is the list, as
+the `GET` gives it. An id that names no ingredient is 422 naming the id, the
+same id twice is 422, and an unknown field in the body is 422; each changes
+nothing.
+
+Deleting an ingredient takes it off the list (`CASCADE`); merging one moves
+its entry to the target (see Ingredients).
 
 ## Categories
 

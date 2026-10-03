@@ -1,5 +1,9 @@
 """Every schema, re-exported so call sites write `schemas.IngredientResponse`."""
 
+from app.schemas.common_ingredient import (
+    CommonIngredientResponse,
+    CommonIngredientsIn,
+)
 from app.schemas.image import (
     AttachedImage,
     CoverRef,
@@ -69,6 +73,8 @@ IngredientResponse.model_rebuild(_types_namespace={"RecipeRef": RecipeRef})
 
 __all__ = [
     "AttachedImage",
+    "CommonIngredientResponse",
+    "CommonIngredientsIn",
     "CoverRef",
     "ImageAttachmentIn",
     "ImageDetail",

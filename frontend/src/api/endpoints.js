@@ -68,6 +68,12 @@ export const endpoints = {
     upload: () => `${WRITE}/images`,
     remove: (id) => `${WRITE}/images/${id}`,
   },
+  // 常用食材: the recipe form's one-tap chips. PUT {ingredient_ids} in order
+  // replaces the whole list - add, remove and reorder are each one call.
+  commonIngredients: {
+    list: () => `${API}/common-ingredients`,
+    replace: () => `${WRITE}/common-ingredients`,
+  },
   categories: {
     tree: () => `${API}/ingredient-categories`,
     create: () => `${WRITE}/ingredient-categories`,

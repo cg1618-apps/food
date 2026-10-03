@@ -30,9 +30,11 @@ import { Button } from '../ui/primitives'
 import { ErrorNote, Loading } from '../ui/states'
 
 // A merge moves recipe lines, varieties, labels, pictures and heating rows
-// onto the target and deletes the source: every read those touch is stale.
+// onto the target and deletes the source: every read those touch is stale,
+// 常用食材 among them (the source's chip moves to the target, or goes).
 const INVALIDATE = [
   endpoints.ingredients.list(),
+  endpoints.commonIngredients.list(),
   endpoints.categories.tree(),
   endpoints.labels.list(),
   endpoints.recipes.list(),

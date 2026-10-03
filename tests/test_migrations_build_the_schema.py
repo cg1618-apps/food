@@ -80,7 +80,7 @@ def test_upgrade_head_runs_against_an_empty_database(scratch_database):
     engine = create_engine(scratch_database)
     with engine.connect() as conn:
         stamped = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert stamped == "s1tepkinds"
+        assert stamped == "c1ommon"
 
         # No longer vacuous: it bites from i1ngredients onwards, and a
         # revision that declares a model without creating its table fails
@@ -100,7 +100,7 @@ def test_there_is_exactly_one_head():
     assert result.returncode == 0, result.stderr
     lines = [line for line in result.stdout.splitlines() if line.strip()]
     assert len(lines) == 1, result.stdout
-    assert "s1tepkinds" in lines[0], result.stdout
+    assert "c1ommon" in lines[0], result.stdout
 
 
 def test_the_migrated_schema_matches_the_models(scratch_database):

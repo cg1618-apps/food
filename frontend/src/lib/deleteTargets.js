@@ -47,6 +47,8 @@ export const DELETE_TARGETS = {
     ],
     invalidate: [
       endpoints.ingredients.list(),
+      // A deleted ingredient leaves 常用食材 (ON DELETE CASCADE).
+      endpoints.commonIngredients.list(),
       endpoints.categories.tree(),
       endpoints.labels.list(),
       endpoints.recipes.list(),

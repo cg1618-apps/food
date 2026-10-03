@@ -239,8 +239,9 @@ if the categories fail to load.
   stale (a 新增 line files a stub in the fallback category, whose count
   moves), the label, course, status, source platform, method, equipment,
   材料分組 and 步驟分組 counts and the image library; an ingredient save, its delete and a merge move the category
-  tree, labels, methods (heating rows), recipes (line names, used-in) and
-  images; a note moves labels and images.
+  tree, labels, methods (heating rows), recipes (line names, used-in),
+  images and 常用食材 (a renamed, deleted or merged ingredient is a changed
+  chip); a note moves labels and images.
 - **Every list is `components/forms/RowEditor.jsx`**: controlled `rows` /
   `onChange`, each row with a drag handle (⠿) and ✕, an add button under
   the list, and a render prop for the row's cells (`children(row, { index,
@@ -317,6 +318,16 @@ note in. The rows' accessible names - 「步驟 3」, 「步驟 3 的種類」 -
 running index RowEditor gives every row, so each stays unique whatever its
 kind. The save sends each step as `{body, kind}`.
 
+**常用 chips** sit above 材料 (`components/forms/CommonIngredientChips.jsx`),
+one per 設定 常用食材, in that list's order. A tap appends a line naming that
+ingredient to the **ungrouped** lines - whatever groups the recipe has - and
+moves the focus to that line's 份量, so the amount is typed next. A chip
+whose ingredient is already on a line anywhere in the recipe, grouped or not,
+is drawn as used (✓, muted, `data-used`, and named 「加一行「蒜」（已在材料中）」
+rather than 「加一行「蒜」」 for a screen reader) and still adds a line: one
+ingredient on two lines is a real recipe. While the list is empty there is no
+chip row and no hint - nothing at all.
+
 **材料 and 步驟 sit in groups** (`components/forms/GroupedRowEditor.jsx`,
 state and operations in `lib/groupedRows.js`). The ungrouped rows come first,
 with their own add button; then each group is a box: a header with its drag
@@ -378,8 +389,8 @@ cover and a thumbnail) and 移除.
 
 ## 設定 and 圖片
 
-`/edit/settings` is `pages/edit/Settings.jsx`: a tab each for 食材分類, 標籤,
-類別, 狀態, 來源, 作者, 材料分組, 步驟分組, 做法 and 器材, with 圖片庫 - the way
+`/edit/settings` is `pages/edit/Settings.jsx`: a tab each for 食材分類,
+常用食材, 標籤, 類別, 狀態, 來源, 作者, 材料分組, 步驟分組, 做法 and 器材, with 圖片庫 - the way
 into `/edit/images` - beside the heading. 狀態 is the recipe statuses (想試,
 可煮, 常煮 …; the first is what a new recipe starts on), 來源 the source
 platforms (YouTube, 網站, 書 …), 作者 the sources' authors, and 材料分組 /
@@ -389,7 +400,8 @@ that order - and counted by the recipe groups using them; renaming any of
 them marks every recipe read stale, as a course does. 作者 is listed by name, as 標籤 is, so it has no
 drag handle and a new author is added without a `sort_order`.
 
-- **The tab is in the URL**, `?tab=` with `categories`, `labels`, `courses`,
+- **The tab is in the URL**, `?tab=` with `categories`, `common-ingredients`,
+  `labels`, `courses`,
   `statuses`, `platforms`, `authors`, `line-groups`, `step-groups`, `methods` or
   `equipment` (`hooks/useUrlTab.js`), so a tab can be linked to
   and survives a reload. A missing or unknown tab is the first, 食材分類, and
@@ -441,6 +453,19 @@ Each value is a `components/settings/NameRow.jsx`:
   goes after the last one. A category row's ＋子分類 opens the same line
   under that node; renaming a category also offers 上層, its parent (never
   itself or anything beneath it).
+
+**常用食材** (`components/settings/CommonIngredientsEditor.jsx`) is not a
+vocabulary but an ordered pick of ingredients: the chips the recipe form
+offers above its 材料. Each row is the ingredient's name (with 待補 for a
+stub), a drag handle and ✕; under the list, an ingredient typeahead adds one
+at the end - existing ingredients only, no 「新增」, and one already listed is
+never offered. Every change - a drag (or Up / Down on the handle), a ✕, a
+pick - `PUT`s the whole list (`{ingredient_ids}`) at once, by the rule a
+vocabulary's move follows: the new list shows immediately, the handles and
+✕ are off until the `PUT` has landed and the list has been read again, and a
+failure puts the stored list back with the server's sentence above it. A
+change makes only `GET /api/common-ingredients` stale - which is what the
+recipe form's chips read.
 
 Label rows show where each label is used - 食材, 食譜 and 筆記 separately; the
 other vocabularies show `usage_count`. A change invalidates the vocabulary

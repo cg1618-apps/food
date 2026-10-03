@@ -33,7 +33,7 @@ reference work.
 ## Status
 
 **Modules 1 and 2 are built, with kitchen notes.** The schema is at revision
-`s1tepkinds` (the head).
+`c1ommon` (the head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
   parent, rating, labels, storage as a state x method grid with day ranges, a
@@ -44,8 +44,8 @@ reference work.
   設定 材料分組 / 步驟分組 value or
   a one-off name, rows dragged within and between them), sources with an
   author picked or made by the save, versions, a status, courses,
-  methods, equipment, labels, galleries, and "used in" for ingredients and
-  base recipes.
+  methods, equipment, labels, galleries, "used in" for ingredients and
+  base recipes, and 常用 chips above the lines that add one in a tap.
 - **Kitchen notes** - bookmarks with a title, a kind, a link, a body, labels
   and a gallery.
 - **The notebook UI** - 食譜 · 食材 · 筆記 · 設定: the three libraries
@@ -53,7 +53,9 @@ reference work.
   table), their detail pages, their add and edit forms with the gallery
   picker, one delete dialog, ingredient merge, 設定 for every vocabulary
   (categories, labels, courses, recipe statuses, source platforms, authors,
-  材料分組, 步驟分組, cooking methods, equipment) and 圖片, the image library.
+  材料分組, 步驟分組, cooking methods, equipment) and for 常用食材 (the
+  recipe form's chips, an ordered pick of ingredients), and 圖片, the image
+  library.
 
 **The starting ingredient list is loaded by `i3import`**: 194 names from the
 recipe document's ingredient lists, approved by the owner, read from

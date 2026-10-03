@@ -1,6 +1,6 @@
 # Data model
 
-What the database holds today: thirty-three tables, at revision `s1tepkinds`.
+What the database holds today: thirty-four tables, at revision `c1ommon`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the eight managed
 vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
@@ -8,7 +8,8 @@ its three galleries (`image`, `ingredient_image`, `recipe_image`,
 `kitchen_note_image`), the recipe family's eleven (`recipe`, `recipe_alias`,
 `recipe_serves_as`, `recipe_label`, `recipe_method`, `recipe_equipment`,
 `recipe_source`, `recipe_line_group`, `recipe_line`, `recipe_step_group`,
-`recipe_step`), and kitchen notes' two (`kitchen_note`, `kitchen_note_label`).
+`recipe_step`), kitchen notes' two (`kitchen_note`, `kitchen_note_label`), and
+`common_ingredient`, the 常用食材 list.
 
 ## Conventions shared by every table
 
@@ -154,6 +155,17 @@ stored temperatures can disagree and one cannot.
 A reference link — where the advice came from. `url` is required and the API
 accepts `http` and `https` only, because a `javascript:` URL rendered as a link
 is script execution. `title` is optional; rows are ordered by `sort_order`.
+
+## `common_ingredient`
+
+常用食材: the ingredients the recipe form offers as one-tap chips above its
+材料, in the owner's order. `ingredient_id` is the primary key - an
+ingredient is listed once or not at all - and a foreign key to `ingredient`
+with `ON DELETE CASCADE`, so a deleted ingredient leaves the list.
+`sort_order` (NOT NULL) is the chip's place; the API writes the whole list at
+once and numbers it 0, 1, 2 … in the order sent. A merge moves the source's
+row to the target in the same place, unless the target is listed already,
+when the source's row goes with the source.
 
 ## The managed vocabularies
 
@@ -421,6 +433,7 @@ Labels have two name slots, not three; a tag has no formal alternative form.
 | Relationship | Behaviour |
 | --- | --- |
 | ingredient → its aliases, preservation rows, heating rows, links, label links, gallery rows | `CASCADE` |
+| ingredient → its 常用食材 row | `CASCADE` |
 | ingredient → its children | `RESTRICT` |
 | ingredient → the recipe lines that name it | `RESTRICT` |
 | category → its ingredients and child categories | `RESTRICT` |

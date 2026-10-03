@@ -91,6 +91,9 @@ of a group's name comes back as the first spelling.
 `s1tepkinds`'s downgrade drops `recipe_step.kind`: every step stays, and an
 optional step or a note comes back as an ordinary step.
 
+`c1ommon`'s downgrade drops `common_ingredient`, and the 常用食材 list with
+it. No ingredient is touched.
+
 **So there is no route that keeps the data.** The real choice is:
 
 - **roll back**, and lose everything entered since the release, or
@@ -127,7 +130,8 @@ they ever do not, believe the box.
 | Statuses and source platforms as vocabularies | `v2ocabulary` — twenty-eight tables |
 | Authors as a vocabulary | `a1uthors` — twenty-nine tables |
 | Line and step groups | `g1roups` — thirty-three tables |
-| Step kinds | `s1tepkinds` — no new table, the current head |
+| Step kinds | `s1tepkinds` — no new table |
+| 常用食材 | `c1ommon` — thirty-four tables, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

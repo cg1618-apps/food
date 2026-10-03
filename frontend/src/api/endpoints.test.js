@@ -22,6 +22,7 @@ const WRITE_KEYS = new Set([
   'label',
   'upload',
   'session',
+  'replace',
 ])
 const READ_KEYS = new Set([
   'list',
