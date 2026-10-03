@@ -14,15 +14,20 @@ words:
 
 - an **ingredient library** — what an ingredient is, how to pick a good one,
   how to preserve it;
-- **recipes**, and **general recipes** — a sauce or a base that is used inside
-  other dishes rather than eaten on its own;
+- **dishes** (料理) and **sauces** (醬料) — a dish in general, or a sauce or
+  base used inside other dishes rather than eaten on its own — and their
+  **recipes**, each one specific way of making the dish;
 - a library of **what can be cooked**, with notes;
-- the **cooking schedule**;
+- the **cooking schedule** — a weekly plan, Saturday to Friday as the
+  owner's sheet runs it: per day what to buy, what to thaw, four meals and
+  the fruit;
 - **what is in the kitchen right now**, with notes on each thing;
 - a **dessert library** — cookies, candies, sweets — carrying health
   information;
 - a **random picker**, for when nothing suggests itself;
-- a **restaurant library**.
+- a **restaurant library**;
+- **TBD** — a page of loose notes, a name and links each, related to nothing
+  else in the app.
 
 Two shapes run through that list and are worth naming early: most of it is a
 **catalogue of entities with notes**, and a little of it — the schedule, what
@@ -32,25 +37,50 @@ reference work.
 
 ## Status
 
-**Modules 1 and 2 are built, with kitchen notes.** The schema is at revision
-`i3import` (the head).
+**Modules 1 and 2 are built, with dishes, recipe templates, kitchen notes,
+the weekly schedule and TBD.** The schema is at revision `s4chedule` (the
+head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
   parent, rating, labels, storage as a state x method grid with day ranges, a
   heating guide, links, galleries, the 待補 (`needs_detail`) stub backlog,
   and merge.
-- **Recipes** - lines naming an ingredient, a sub-recipe or a new stub made
-  by the save, steps in sections, sources, versions, a status, courses,
-  methods, equipment, labels, galleries, and "used in" for ingredients and
-  base recipes.
+- **Dishes** - a dish (料理) or a sauce (醬料) in general: names and aliases,
+  kind, course, region, labels, serves-as, a description and a gallery; its
+  recipes, and "used in" - the recipes whose lines name it. A dish with
+  recipes, one a line names, or one a meal item on the schedule names
+  cannot be deleted.
+- **Recipes** - each one way of making a dish, with an optional name of its
+  own and 其他版本 (the dish's other recipes); lines naming an ingredient, a
+  dish, or a new stub or dish made by the save, and steps (each a 步驟, 可省略
+  or 備註), each in groups (a 設定 材料分組 / 步驟分組 value or a one-off name,
+  rows dragged within and between them), sources with an author picked or
+  made by the save, a status, methods, equipment, galleries, "used in" for
+  ingredients, and 常用 chips above the lines that add one in a tap. A new
+  recipe starts blank, from a template, or as a copy of another recipe.
+- **Recipe templates** - a named skeleton (servings, time, lines and steps in
+  their groups, methods, equipment) stored as one JSONB body, made on its own
+  form or from a recipe (存成範本), ordered on 設定; a reference to something
+  since deleted is dropped when it is read, and counted.
 - **Kitchen notes** - bookmarks with a title, a kind, a link, a body, labels
   and a gallery.
-- **The notebook UI** - 食譜 · 食材 · 筆記 · 設定: the three libraries
+- **The weekly schedule (排程)** - per date, four meals (早, 中, 下午, 晚),
+  水果, the true-or-false marks 要買? / 早退冰? / 中退冰? / 晚退冰?, and 備註;
+  each meal free text and any number of items, each a dish and optionally
+  one of that dish's recipes; read two weeks at a time at `/schedule` (a
+  table on a desktop, a card per day on a phone, a mark shown only when
+  true) and edited a day at a time at `/edit/schedule`.
+- **TBD** - a standalone page of entries, each an optional name and any
+  number of links, in the owner's order; read at `/tbd`, edited in place at
+  `/edit/tbd`.
+- **The notebook UI** - 料理 · 食譜 · 食材 · 筆記 · 排程 · TBD · 設定: the four libraries
   (search and filters in the URL, a sidebar or a phone drawer, covers or a
   table), their detail pages, their add and edit forms with the gallery
   picker, one delete dialog, ingredient merge, 設定 for every vocabulary
-  (categories, labels, courses, cooking methods, equipment) and 圖片, the
-  image library.
+  (categories, labels, courses, regions, recipe statuses, source platforms, authors,
+  材料分組, 步驟分組, cooking methods, equipment), for 常用食材 (the
+  recipe form's chips, an ordered pick of ingredients) and for 範本 (the
+  recipe templates), and 圖片, the image library.
 
 **The starting ingredient list is loaded by `i3import`**: 194 names from the
 recipe document's ingredient lists, approved by the owner, read from

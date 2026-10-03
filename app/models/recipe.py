@@ -1,15 +1,20 @@
-"""The recipe library: the recipe, what it is made of, how it is made, where it
-came from, and the vocabularies it is tagged with.
+"""The recipe library: the recipe, what it is made of, how it is made, and
+where it came from. What is true of the dish whoever makes it - its names,
+kind, course, region, labels - lives on the dish (`app/models/dish.py`).
 
 One family, one file, as `ingredient.py` is. The gallery table is the exception
 and lives in `image.py` beside `IngredientImage`, because the galleries share a
 shape with each other more than with their owners.
 
-Three directions of deletion meet here and they differ on purpose (the table is
+Two directions of deletion meet here and they differ on purpose (the table is
 in `docs/data-model.md`): what a recipe OWNS cascades with it; what it NAMES -
-an ingredient, a sub-recipe, a course, a method, a piece of equipment - is
-RESTRICT, so nothing in use disappears from under a recipe; and its versions
-are SET NULL, because a version is a complete recipe in its own right.
+its dish, an ingredient, a sub-dish, a status, a source platform, an author, a
+method, a piece of equipment, a 材料分組 or 步驟分組 value - is RESTRICT, so
+nothing in use disappears from under a recipe.
+
+A line's or a step's own group is the third direction: SET NULL, so a group
+that goes takes no row with it - the row is ungrouped instead, which is what
+the form's 移除分組 does too.
 """
 
 from sqlalchemy import (
@@ -32,11 +37,13 @@ from app.database import Base, get_taipei_now
 from app.models.base import NameFallbackMixin
 
 
-class Recipe(Base, NameFallbackMixin):
-    """One recipe - a dish, or a base used inside other dishes.
+class Recipe(Base):
+    """One specific way of making a dish - 照燒雞腿排 as one author makes it.
 
-    Names are NOT unique, unlike every other named table here: versions of one
-    dish share its name, and that is the ordinary case rather than a clash.
+    The dish carries what is true of the dish whoever cooks it - its names,
+    kind, course, region, labels; the recipe carries what this way of making
+    it needs. A recipe's own `name` is optional and only says how it differs
+    from its dish's other recipes; its display name falls back to the dish's.
 
     "Written up" is derived - at least one line or step - and never stored. A
     stored flag would disagree with the content the first time someone forgot
@@ -47,56 +54,43 @@ class Recipe(Base, NameFallbackMixin):
 
     id = Column(Integer, primary_key=True)
 
-    name_cn = Column(String, nullable=True)
-    name_en = Column(String, nullable=True)
-    name_alt = Column(String, nullable=True)
-
-    # Validated against RECIPE_KINDS / RECIPE_STATUSES in the schema layer.
-    kind = Column(String, nullable=False, server_default=text("'dish'"))
-    course_id = Column(
-        Integer, ForeignKey("recipe_course.id", ondelete="RESTRICT"), nullable=True, index=True
+    # RESTRICT: a dish with recipes cannot be deleted from under them, and
+    # deleting the last recipe of a dish leaves the dish.
+    dish_id = Column(
+        Integer, ForeignKey("dish.id", ondelete="RESTRICT"), nullable=False, index=True
     )
-    # One level deep - a version may not have versions, nor point at one - and
-    # that is enforced on the write path, because a CHECK cannot see another
-    # row. The CHECK below only covers the case a single row can state.
-    variant_of_id = Column(
-        Integer, ForeignKey("recipe.id", ondelete="SET NULL"), nullable=True, index=True
+    name = Column(String, nullable=True)
+    # No server default: which status comes first is the owner's data, so
+    # `recipes.create` picks it, and the column only refuses a missing one.
+    status_id = Column(
+        Integer, ForeignKey("recipe_status.id", ondelete="RESTRICT"), nullable=False, index=True
     )
-    status = Column(String, nullable=False, server_default=text("'want_to_try'"))
 
     # Free text: "2-3 人", "1hr", "30m". Nothing computes with either.
     servings = Column(String, nullable=True)
     time = Column(String, nullable=True)
 
-    description = Column(Text, nullable=True)
     storage_notes = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=get_taipei_now)
     updated_at = Column(DateTime, default=get_taipei_now, onupdate=get_taipei_now)
 
-    course = relationship("RecipeCourse")
-    variant_of = relationship("Recipe", remote_side=[id], back_populates="variants")
-    # passive_deletes=True so deleting the original leaves the database to
-    # apply SET NULL to versions the session never loaded, rather than the ORM
-    # selecting every one of them first to null the column itself.
-    variants = relationship("Recipe", back_populates="variant_of", passive_deletes=True)
+    dish = relationship("Dish", back_populates="recipes")
+    status = relationship("RecipeStatus")
 
-    aliases = relationship(
-        "RecipeAlias", back_populates="recipe", cascade="all, delete-orphan"
-    )
     sources = relationship(
         "RecipeSource",
         back_populates="recipe",
         cascade="all, delete-orphan",
         order_by="RecipeSource.sort_order",
     )
-    # foreign_keys is required: recipe_line points at recipe twice, once as
-    # its owner and once as the base it names.
+    # Every line and step of the recipe, grouped or not, in position order -
+    # which is the order the page shows them: ungrouped first, then group by
+    # group. The groups are their own lists; a row names its group.
     lines = relationship(
         "RecipeLine",
         back_populates="recipe",
-        foreign_keys="RecipeLine.recipe_id",
         cascade="all, delete-orphan",
         order_by="RecipeLine.position",
     )
@@ -106,6 +100,18 @@ class Recipe(Base, NameFallbackMixin):
         cascade="all, delete-orphan",
         order_by="RecipeStep.position",
     )
+    line_groups = relationship(
+        "RecipeLineGroup",
+        back_populates="recipe",
+        cascade="all, delete-orphan",
+        order_by="RecipeLineGroup.position",
+    )
+    step_groups = relationship(
+        "RecipeStepGroup",
+        back_populates="recipe",
+        cascade="all, delete-orphan",
+        order_by="RecipeStepGroup.position",
+    )
     images = relationship(
         "RecipeImage",
         back_populates="recipe",
@@ -113,73 +119,19 @@ class Recipe(Base, NameFallbackMixin):
         order_by="RecipeImage.position",
     )
 
-    labels = relationship("Label", secondary="recipe_label")
     methods = relationship("CookingMethod", secondary="recipe_method")
     equipment = relationship("Equipment", secondary="recipe_equipment")
-    serves_as = relationship("RecipeCourse", secondary="recipe_serves_as")
 
-    __table_args__ = (
-        CheckConstraint(
-            "num_nonnulls(name_cn, name_en, name_alt) >= 1", name="ck_recipe_has_a_name"
-        ),
-        CheckConstraint(
-            "variant_of_id IS NULL OR variant_of_id <> id",
-            name="ck_recipe_not_its_own_version",
-        ),
-    )
+    @property
+    def display_name(self) -> str:
+        """The recipe's own name, else its dish's display name.
 
-
-class RecipeAlias(Base):
-    """Anything you might type to find a recipe. Never displayed.
-
-    As `IngredientAlias`, and for the same reasons: a real table rather than an
-    array, and unique per recipe rather than globally.
-    """
-
-    __tablename__ = "recipe_alias"
-
-    id = Column(Integer, primary_key=True)
-    recipe_id = Column(
-        Integer, ForeignKey("recipe.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    value = Column(String, nullable=False)
-
-    recipe = relationship("Recipe", back_populates="aliases")
-
-    __table_args__ = (
-        UniqueConstraint("recipe_id", "value", name="uq_recipe_alias"),
-        Index("ix_recipe_alias_lookup", func.lower(value)),
-    )
-
-
-class RecipeServesAs(Base):
-    """The other courses a dish can stand in for - a soup that is a meal.
-
-    Both sides CASCADE. Unlike `recipe.course_id`, a serves-as link is not a
-    reason to refuse deleting a course: it is a hint, not where the recipe is
-    filed. It may repeat the recipe's own course; the UI does not offer that.
-    """
-
-    __tablename__ = "recipe_serves_as"
-
-    recipe_id = Column(Integer, ForeignKey("recipe.id", ondelete="CASCADE"), primary_key=True)
-    course_id = Column(
-        Integer, ForeignKey("recipe_course.id", ondelete="CASCADE"), primary_key=True, index=True
-    )
-
-
-class RecipeLabel(Base):
-    """Both sides CASCADE, as `ingredient_label` - one label behaviour for
-    every owner."""
-
-    __tablename__ = "recipe_label"
-
-    recipe_id = Column(Integer, ForeignKey("recipe.id", ondelete="CASCADE"), primary_key=True)
-    # Indexed on its own: the composite key leads with recipe_id, so it cannot
-    # serve "which recipes carry this label" - nor the cascade from the label.
-    label_id = Column(
-        Integer, ForeignKey("label.id", ondelete="CASCADE"), primary_key=True, index=True
-    )
+        "" rather than None when neither is there, as `NameFallbackMixin`
+        does - a recipe not yet flushed may have no dish loaded.
+        """
+        if self.name and self.name.strip():
+            return self.name
+        return self.dish.display_name if self.dish is not None else ""
 
 
 class RecipeMethod(Base):
@@ -208,9 +160,9 @@ class RecipeEquipment(Base):
 class RecipeSource(Base):
     """Where the recipe came from: a video, a page, a book.
 
-    `url` is optional because a book has none; `creator` is free text, and its
-    distinct values are what suggestions and the filter are built from. A row
-    that is only a platform says nothing, hence the CHECK.
+    `url` is optional because a book has none, and the author is optional
+    because a page may have none worth naming. A row that is only a platform
+    says nothing, hence the CHECK: an author, a link or a title.
     """
 
     __tablename__ = "recipe_source"
@@ -219,32 +171,132 @@ class RecipeSource(Base):
     recipe_id = Column(
         Integer, ForeignKey("recipe.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    # Validated against SOURCE_PLATFORMS in the schema layer.
-    platform = Column(String, nullable=False)
-    creator = Column(String, nullable=True)
+    platform_id = Column(
+        Integer,
+        ForeignKey("source_platform.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    author_id = Column(
+        Integer, ForeignKey("author.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     url = Column(String, nullable=True)
     title = Column(String, nullable=True)
     sort_order = Column(Integer, nullable=False, server_default=text("0"))
 
     recipe = relationship("Recipe", back_populates="sources")
+    platform = relationship("SourcePlatform")
+    author = relationship("Author")
 
     __table_args__ = (
         CheckConstraint(
-            "num_nonnulls(creator, url, title) >= 1", name="ck_recipe_source_has_content"
+            "num_nonnulls(author_id, url, title) >= 1", name="ck_recipe_source_has_content"
         ),
     )
 
 
+class RecipeLineGroup(Base, NameFallbackMixin):
+    """One group of a recipe's ingredient lines - its 醬汁, its 主料.
+
+    Real rows rather than a label on each line: a group exists on its own (an
+    empty one is kept), has its own place in the recipe, and is renamed once.
+    It names a 材料分組 value from 設定 or carries a one-off `name`, exactly
+    one of the two. The write path stores a typed name that matches a value
+    as that value, so the same group is never both.
+
+    A recipe may not hold one group twice: unique on the value, and on the
+    one-off name case-insensitively. Both uniques are NULLS DISTINCT, so the
+    rows using the other arm never collide on the NULL.
+
+    `display_name` is the value's, else the one-off name: the mixin reads
+    `name_cn` and `name_en`, which are the value's here.
+    """
+
+    __tablename__ = "recipe_line_group"
+
+    id = Column(Integer, primary_key=True)
+    recipe_id = Column(
+        Integer, ForeignKey("recipe.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    position = Column(Integer, nullable=False)
+    line_group_id = Column(
+        Integer, ForeignKey("line_group.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    name = Column(String, nullable=True)
+
+    recipe = relationship("Recipe", back_populates="line_groups")
+    # passive_deletes="all", as across every RESTRICT here.
+    group = relationship("LineGroup", passive_deletes="all")
+
+    __table_args__ = (
+        UniqueConstraint("recipe_id", "position", name="uq_recipe_line_group_position"),
+        UniqueConstraint("recipe_id", "line_group_id", name="uq_recipe_line_group_value"),
+        Index("uq_recipe_line_group_name", "recipe_id", func.lower(name), unique=True),
+        CheckConstraint(
+            "num_nonnulls(line_group_id, name) = 1", name="ck_recipe_line_group_one_name"
+        ),
+    )
+
+    @property
+    def name_cn(self):
+        return self.group.name_cn if self.group else self.name
+
+    @property
+    def name_en(self):
+        return self.group.name_en if self.group else None
+
+
+class RecipeStepGroup(Base, NameFallbackMixin):
+    """One group of a recipe's steps - its 備料, its 烹飪. The same shape and
+    rules as RecipeLineGroup, naming a 步驟分組 value instead."""
+
+    __tablename__ = "recipe_step_group"
+
+    id = Column(Integer, primary_key=True)
+    recipe_id = Column(
+        Integer, ForeignKey("recipe.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    position = Column(Integer, nullable=False)
+    step_group_id = Column(
+        Integer, ForeignKey("step_group.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    name = Column(String, nullable=True)
+
+    recipe = relationship("Recipe", back_populates="step_groups")
+    group = relationship("StepGroup", passive_deletes="all")
+
+    __table_args__ = (
+        UniqueConstraint("recipe_id", "position", name="uq_recipe_step_group_position"),
+        UniqueConstraint("recipe_id", "step_group_id", name="uq_recipe_step_group_value"),
+        Index("uq_recipe_step_group_name", "recipe_id", func.lower(name), unique=True),
+        CheckConstraint(
+            "num_nonnulls(step_group_id, name) = 1", name="ck_recipe_step_group_one_name"
+        ),
+    )
+
+    @property
+    def name_cn(self):
+        return self.group.name_cn if self.group else self.name
+
+    @property
+    def name_en(self):
+        return self.group.name_en if self.group else None
+
+
 class RecipeLine(Base):
-    """One ingredient line: an ingredient, or another recipe, never both.
+    """One ingredient line: an ingredient, or a dish - usually a sauce - never
+    both. A line names the DISH, not one recipe of it: 照燒醬 is used, however
+    it is made.
 
     Which kind of line it is comes from which column is set, never from a
     stored discriminator that could disagree with them.
 
     Nothing is unique on the ingredient - the same one may appear twice, once
-    for the meat and once for the sauce - only on the position. The nesting
-    graph may not cycle; a CHECK sees one row, so it refuses only the direct
-    case (a line naming its own recipe) and the write path refuses the rest.
+    for the meat and once for the sauce - only on the position, which runs
+    through the whole recipe in the order the page shows it (ungrouped lines
+    first, then group by group), not restarting in each group. The nesting
+    graph may not cycle and a recipe may not use its own dish; a CHECK sees one
+    row and cannot see the recipe's dish, so the write path refuses both.
     """
 
     __tablename__ = "recipe_line"
@@ -254,40 +306,48 @@ class RecipeLine(Base):
         Integer, ForeignKey("recipe.id", ondelete="CASCADE"), nullable=False, index=True
     )
     position = Column(Integer, nullable=False)
-    # A free-text heading the line sits under - 醬汁, 醃料. Lines sharing one
-    # are grouped by the UI; nothing else reads it.
-    section = Column(String, nullable=True)
+    # The recipe group the line sits in; null is ungrouped. SET NULL rather
+    # than CASCADE: a group going never takes its lines with it (the module
+    # docstring). The write path only ever names a group of the same recipe;
+    # a single-column key cannot say so, and a composite one could not be
+    # SET NULL without nulling recipe_id too.
+    group_id = Column(
+        Integer, ForeignKey("recipe_line_group.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     ingredient_id = Column(
         Integer, ForeignKey("ingredient.id", ondelete="RESTRICT"), nullable=True, index=True
     )
-    sub_recipe_id = Column(
-        Integer, ForeignKey("recipe.id", ondelete="RESTRICT"), nullable=True, index=True
+    sub_dish_id = Column(
+        Integer, ForeignKey("dish.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     amount = Column(String, nullable=True)
     note = Column(String, nullable=True)
     is_optional = Column(Boolean, nullable=False, server_default=text("false"))
 
-    recipe = relationship("Recipe", back_populates="lines", foreign_keys=[recipe_id])
+    recipe = relationship("Recipe", back_populates="lines")
+    group = relationship("RecipeLineGroup")
     # passive_deletes="all" on both, as across every RESTRICT here: the ORM
     # must not null the column before the DELETE, or the database never gets
     # to refuse and an ingredient in use disappears from under its recipes.
     ingredient = relationship("Ingredient", passive_deletes="all")
-    sub_recipe = relationship("Recipe", foreign_keys=[sub_recipe_id], passive_deletes="all")
+    sub_dish = relationship("Dish", passive_deletes="all")
 
     __table_args__ = (
         UniqueConstraint("recipe_id", "position", name="uq_recipe_line_position"),
         CheckConstraint(
-            "num_nonnulls(ingredient_id, sub_recipe_id) = 1", name="ck_recipe_line_one_target"
-        ),
-        CheckConstraint(
-            "sub_recipe_id IS NULL OR sub_recipe_id <> recipe_id",
-            name="ck_recipe_line_not_itself",
+            "num_nonnulls(ingredient_id, sub_dish_id) = 1", name="ck_recipe_line_one_target"
         ),
     )
 
 
 class RecipeStep(Base):
-    """One step of the method, in order."""
+    """One row of the method, in order: the position runs through the whole
+    recipe as a line's does.
+
+    The position is not the step's number. Only a `step`-kind row is
+    numbered; an optional step and a note sit in the order unnumbered, so the
+    number is counted by whoever draws the page, never stored.
+    """
 
     __tablename__ = "recipe_step"
 
@@ -296,10 +356,16 @@ class RecipeStep(Base):
         Integer, ForeignKey("recipe.id", ondelete="CASCADE"), nullable=False, index=True
     )
     position = Column(Integer, nullable=False)
-    section = Column(String, nullable=True)
+    # As RecipeLine.group_id.
+    group_id = Column(
+        Integer, ForeignKey("recipe_step_group.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Validated against STEP_KINDS in the schema layer.
+    kind = Column(String, nullable=False, server_default=text("'step'"))
     body = Column(Text, nullable=False)
 
     recipe = relationship("Recipe", back_populates="steps")
+    group = relationship("RecipeStepGroup")
 
     __table_args__ = (
         UniqueConstraint("recipe_id", "position", name="uq_recipe_step_position"),

@@ -74,6 +74,77 @@ place: the owner may have filled them in since, and deleting them is worse
 than keeping them. Re-running its upgrade inserts nothing that is already
 there, so a downgrade and upgrade round trip is harmless.
 
+`v2ocabulary`'s downgrade puts `recipe.status` and `recipe_source.platform`
+back as strings, mapping each row to its old key by name, and drops
+`recipe_status` and `source_platform`. A status or platform the owner created
+or renamed has no old key and lands on `want_to_try` or `other`.
+
+`a1uthors`'s downgrade puts `recipe_source.creator` back as each source's
+author's display name and drops `author`. A creator that was a later spelling
+of a name (babish after Babish) comes back as the first spelling.
+
+`g1roups`'s downgrade puts each grouped line's and step's group name back
+into `section` and drops the four group tables. A recipe's empty groups have
+no row to carry their name and are lost; a section that was a later spelling
+of a group's name comes back as the first spelling.
+
+`s1tepkinds`'s downgrade drops `recipe_step.kind`: every step stays, and an
+optional step or a note comes back as an ordinary step.
+
+`c1ommon`'s downgrade drops `common_ingredient`, and the 常用食材 list with
+it. No ingredient is touched.
+
+`t1bd`'s downgrade drops `tbd_link` and `tbd_entry`, and every entry on the
+TBD page with them. Nothing else is touched.
+
+**`d1ishes` restructures every recipe**, so its two directions are worth
+reading before either runs.
+
+The upgrade groups the recipes into dishes. Recipes linked through
+`variant_of_id` form a family - each connected component of that graph - and
+each family becomes one dish. The family's root (the recipe with no
+`variant_of_id`; the lowest id when there are several, or a cycle) gives the
+dish its name slots, aliases, course, serves-as and description, and its kind
+with `base` renamed `sauce`; the dish's labels are the union of the family's.
+The root's `name` is null. Every other recipe of the family keeps its old
+display name as its `name` when that differs from the dish's display name,
+and a description of its own that differs from the root's is appended to its
+`notes` after 「原簡介：」. A line naming a recipe names that recipe's dish.
+Dish galleries start empty, and regions empty on every dish. **What the
+upgrade does not carry**: a non-root recipe's aliases, and its name slots
+other than the one that was its display name - the dish takes the root's.
+
+The downgrade spreads each dish back over its recipes: every recipe gets the
+dish's name slots - or its own `name`, in `name_cn`, when it has one - its
+kind (`sauce` back to `base`), course, description, aliases, labels and
+serves-as. The lowest-id recipe of each dish becomes the original and every
+other recipe of the dish a version of it. A line naming a dish names that
+dish's lowest-id recipe other than the line's own. **What a downgrade cannot
+restore**, and drops:
+
+- a dish with no recipe - it has nothing to land on - and **a line naming
+  one**, or naming only its own recipe's dish, which is deleted;
+- the dish galleries - the attachments go, the pictures stay in the library;
+- every region, and the `region` vocabulary;
+- the 「原簡介：」 split - an appended description stays in the notes;
+- the difference between a dish's fields and a recipe's: a recipe added to a
+  dish after the upgrade comes back carrying the dish's names, labels,
+  course and description, as a version of the dish's lowest-id recipe;
+- the upgrade's choice of original - the downgrade takes the lowest id, which
+  need not be the recipe the family had as its root.
+
+`t2emplates`'s downgrade drops `recipe_template`, and every recipe template
+with it. No recipe, ingredient or vocabulary is touched.
+
+`s3chedule`'s downgrade drops `schedule_meal` and `schedule_day`, and every
+planned day with them. No dish or recipe is touched.
+
+`s4chedule`'s downgrade turns the four marks back into text - a true mark
+becomes `✓` and a false one NULL, so what the sheet-era text said is not
+recovered - and keeps only each meal's first item (the lowest position) as
+its dish and recipe, dropping `schedule_meal_item` with every later item. A
+meal's free text is kept.
+
 **So there is no route that keeps the data.** The real choice is:
 
 - **roll back**, and lose everything entered since the release, or
@@ -106,7 +177,17 @@ they ever do not, believe the box.
 | The image library | `m1images` — thirteen tables |
 | Recipes | `r1recipes` — twenty-three tables |
 | Kitchen notes | `k1notes` — twenty-six tables |
-| The starting ingredient list | `i3import` — no new table, the current head |
+| The starting ingredient list | `i3import` — no new table |
+| Statuses and source platforms as vocabularies | `v2ocabulary` — twenty-eight tables |
+| Authors as a vocabulary | `a1uthors` — twenty-nine tables |
+| Line and step groups | `g1roups` — thirty-three tables |
+| Step kinds | `s1tepkinds` — no new table |
+| 常用食材 | `c1ommon` — thirty-four tables |
+| TBD | `t1bd` — thirty-six tables |
+| Dishes, regions; recipes as ways of making a dish | `d1ishes` — thirty-nine tables |
+| Recipe templates | `t2emplates` — forty tables |
+| The weekly schedule | `s3chedule` — forty-two tables |
+| Schedule marks as booleans, several dishes per meal | `s4chedule` — forty-three tables, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

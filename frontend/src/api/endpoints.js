@@ -14,7 +14,7 @@
 const API = '/api'
 const WRITE = '/api/edit'
 
-// The three vocabularies the backend builds from one factory
+// The nine vocabularies the backend builds from one factory
 // (app/routers/vocabulary.py) share one URL shape.
 function vocabulary(resource) {
   return {
@@ -26,18 +26,39 @@ function vocabulary(resource) {
 }
 
 export const endpoints = {
+  // 料理: a dish or a sauce in general; its recipes are the ways of making it.
+  dishes: {
+    list: () => `${API}/dishes`,
+    detail: (id) => `${API}/dishes/${id}`,
+    cascade: (id) => `${API}/dishes/${id}/cascade`,
+    create: () => `${WRITE}/dishes`,
+    update: (id) => `${WRITE}/dishes/${id}`,
+    remove: (id) => `${WRITE}/dishes/${id}`,
+    images: (id) => `${WRITE}/dishes/${id}/images`,
+  },
   recipes: {
     list: () => `${API}/recipes`,
     detail: (id) => `${API}/recipes/${id}`,
     cascade: (id) => `${API}/recipes/${id}/cascade`,
-    // Distinct creator names already used in sources, for suggestions.
-    creators: () => `${API}/recipe-creators`,
     create: () => `${WRITE}/recipes`,
-    // PATCH; a body of only {status} is the in-place status change.
+    // PATCH; a body of only {status_id} is the in-place status change.
     update: (id) => `${WRITE}/recipes/${id}`,
     remove: (id) => `${WRITE}/recipes/${id}`,
     // PUT [{image_id, focus}] in order: replaces the gallery.
     images: (id) => `${WRITE}/recipes/${id}/images`,
+  },
+  // 範本: a named skeleton a new recipe starts from. The detail is the body
+  // resolved into a recipe's shapes, with `dropped` counting what no longer
+  // exists; PUT {ids} saves the order of them all after a drag; POST {name}
+  // to fromRecipe makes one from that recipe's structure.
+  templates: {
+    list: () => `${API}/recipe-templates`,
+    detail: (id) => `${API}/recipe-templates/${id}`,
+    create: () => `${WRITE}/recipe-templates`,
+    update: (id) => `${WRITE}/recipe-templates/${id}`,
+    remove: (id) => `${WRITE}/recipe-templates/${id}`,
+    order: () => `${WRITE}/recipe-templates/order`,
+    fromRecipe: (recipeId) => `${WRITE}/recipe-templates/from-recipe/${recipeId}`,
   },
   ingredients: {
     list: () => `${API}/ingredients`,
@@ -62,6 +83,21 @@ export const endpoints = {
     remove: (id) => `${WRITE}/kitchen-notes/${id}`,
     images: (id) => `${WRITE}/kitchen-notes/${id}/images`,
   },
+  // TBD: a standalone page of names and links. Read whole; written one entry
+  // at a time, and PUT {ids} saves the order of them all after a drag.
+  tbd: {
+    list: () => `${API}/tbd`,
+    create: () => `${WRITE}/tbd`,
+    update: (id) => `${WRITE}/tbd/${id}`,
+    remove: (id) => `${WRITE}/tbd/${id}`,
+    order: () => `${WRITE}/tbd/order`,
+  },
+  // 排程: the weekly schedule. GET with ?start=YYYY-MM-DD&days=N answers
+  // every date in the range, stored or not; PUT replaces one whole day.
+  schedule: {
+    list: () => `${API}/schedule`,
+    update: (date) => `${WRITE}/schedule/${date}`,
+  },
   images: {
     list: () => `${API}/images`,
     detail: (id) => `${API}/images/${id}`,
@@ -69,6 +105,12 @@ export const endpoints = {
     // checksum already exists.
     upload: () => `${WRITE}/images`,
     remove: (id) => `${WRITE}/images/${id}`,
+  },
+  // 常用食材: the recipe form's one-tap chips. PUT {ingredient_ids} in order
+  // replaces the whole list - add, remove and reorder are each one call.
+  commonIngredients: {
+    list: () => `${API}/common-ingredients`,
+    replace: () => `${WRITE}/common-ingredients`,
   },
   categories: {
     tree: () => `${API}/ingredient-categories`,
@@ -83,11 +125,21 @@ export const endpoints = {
     remove: (id) => `${WRITE}/labels/${id}`,
   },
   courses: vocabulary('recipe-courses'),
+  // 地區: where a dish comes from.
+  regions: vocabulary('regions'),
+  statuses: vocabulary('recipe-statuses'),
+  platforms: vocabulary('source-platforms'),
   methods: vocabulary('cooking-methods'),
   equipment: vocabulary('equipment'),
+  // A source's author; listed by name, and grown by the recipe form too.
+  authors: vocabulary('authors'),
+  // The groups a recipe's ingredient lines (材料分組) and steps (步驟分組)
+  // are picked from; a recipe may also name a group of its own.
+  lineGroups: vocabulary('line-groups'),
+  stepGroups: vocabulary('step-groups'),
   vocabularies: {
     // Every closed list with its display label: preservation methods and
-    // states, ratings, recipe kinds and statuses, source platforms, note kinds.
+    // states, ratings, dish kinds, note kinds, step kinds, meal slots.
     fixed: () => `${API}/vocabularies/fixed`,
   },
   // GET under the gated prefix: 204 when Access let the request through, and

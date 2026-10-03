@@ -25,26 +25,25 @@ PRESERVATION_STATES = {
 # How good one variety is: the Fruit sheet's grades.
 RATINGS = ["S", "A", "B", "C", "D"]
 
-# A dish is eaten; a base - a sauce, a stock, a dough - is cooked to be used
-# inside other recipes. The kind is how the library files a recipe, not a rule:
-# a recipe line's sub_recipe_id may name a recipe of either kind.
-RECIPE_KINDS = {"dish": "料理", "base": "基底"}
-
-# How far a recipe has got from "saw it somewhere" to "cook it every week".
-RECIPE_STATUSES = {"want_to_try": "想試", "can_cook": "可煮", "regular": "常煮"}
-
-# Where a recipe came from - the platform of one recipe_source row.
-SOURCE_PLATFORMS = {
-    "youtube": "YouTube",
-    "shorts": "Shorts",
-    "website": "網站",
-    "book": "書",
-    "other": "其他",
-}
+# A dish is eaten; a 醬料 - a sauce, a stock, a dough - is cooked to be used
+# inside other dishes. The kind is how the libraries file a dish, not a rule:
+# a recipe line's sub_dish_id may name a dish of either kind.
+DISH_KINDS = {"dish": "料理", "sauce": "醬料"}
 
 # What a kitchen note is: a compilation of many dishes, one technique, or
 # something to look up. How the notes library files a note, not a rule.
 KITCHEN_NOTE_KINDS = {"compilation": "合輯", "technique": "技巧", "reference": "參考"}
+
+# What one step of a method is. Only a `step` is numbered: an optional step
+# may be skipped and a note is advice among the steps, so neither takes a
+# number, and the page draws a note differently. The kind changes how a row
+# is shown, which is why it is a fixed list rather than a 設定 vocabulary.
+STEP_KINDS = {"step": "步驟", "optional": "可省略", "note": "備註"}
+
+# The four meals of a day on the schedule, in the owner's sheet's order. A
+# slot is a column of the schedule, not something the owner files things in,
+# which is why it is a fixed list rather than a 設定 vocabulary.
+MEAL_SLOTS = {"breakfast": "早", "lunch": "中", "afternoon": "下午", "dinner": "晚"}
 
 # Every closed list the frontend renders, with its display label, served by
 # GET /api/vocabularies/fixed so no list is copied into a component.
@@ -52,8 +51,8 @@ FIXED_VOCABULARIES = {
     "preservation_methods": [{"value": m, "label": m} for m in PRESERVATION_METHODS],
     "preservation_states": [{"value": k, "label": v} for k, v in PRESERVATION_STATES.items()],
     "ratings": [{"value": r, "label": r} for r in RATINGS],
-    "recipe_kinds": [{"value": k, "label": v} for k, v in RECIPE_KINDS.items()],
-    "recipe_statuses": [{"value": k, "label": v} for k, v in RECIPE_STATUSES.items()],
-    "source_platforms": [{"value": k, "label": v} for k, v in SOURCE_PLATFORMS.items()],
+    "dish_kinds": [{"value": k, "label": v} for k, v in DISH_KINDS.items()],
     "kitchen_note_kinds": [{"value": k, "label": v} for k, v in KITCHEN_NOTE_KINDS.items()],
+    "step_kinds": [{"value": k, "label": v} for k, v in STEP_KINDS.items()],
+    "meal_slots": [{"value": k, "label": v} for k, v in MEAL_SLOTS.items()],
 }

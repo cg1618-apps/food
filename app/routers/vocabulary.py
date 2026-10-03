@@ -1,4 +1,4 @@
-"""One factory, three vocabularies. Reads are public; writes sit behind Access.
+"""One factory, nine vocabularies. Reads are public; writes sit behind Access.
 
 A delete of a value still in use is refused here with a 409 that carries the
 count, before the database is asked. The RESTRICT foreign keys are the
@@ -13,7 +13,17 @@ from app import schemas
 from app.constants import FIXED_VOCABULARIES
 from app.database import get_db
 from app.errors import AppError
-from app.models import CookingMethod, Equipment, RecipeCourse
+from app.models import (
+    Author,
+    CookingMethod,
+    Equipment,
+    LineGroup,
+    RecipeCourse,
+    RecipeStatus,
+    Region,
+    SourcePlatform,
+    StepGroup,
+)
 from app.routing import read_router, write_router
 from app.services import vocabularies
 
@@ -86,10 +96,24 @@ def build(model, resource: str, tag: str, noun: str) -> tuple[APIRouter, APIRout
 
 
 course_router, course_edit = build(RecipeCourse, "recipe-courses", "Recipe courses", "course")
+# Hand-ordered like courses: the order is the one the dish form and the
+# filters offer them in.
+region_router, region_edit = build(Region, "regions", "Regions", "region")
+status_router, status_edit = build(RecipeStatus, "recipe-statuses", "Recipe statuses", "status")
+platform_router, platform_edit = build(
+    SourcePlatform, "source-platforms", "Source platforms", "source platform"
+)
 method_router, method_edit = build(
     CookingMethod, "cooking-methods", "Cooking methods", "cooking method"
 )
 equipment_router, equipment_edit = build(Equipment, "equipment", "Equipment", "piece of equipment")
+# Listed by name: every author has sort_order 0 (app/models/vocabulary.py), so
+# the (sort_order, name) order above needs nothing of its own.
+author_router, author_edit = build(Author, "authors", "Authors", "author")
+# Hand-ordered like courses: the order is the one the recipe form offers them
+# in when a group is added.
+line_group_router, line_group_edit = build(LineGroup, "line-groups", "Line groups", "line group")
+step_group_router, step_group_edit = build(StepGroup, "step-groups", "Step groups", "step group")
 
 fixed_router = read_router("vocabularies", "Vocabularies")
 
@@ -103,9 +127,21 @@ def fixed_vocabularies():
 ROUTERS = [
     course_router,
     course_edit,
+    region_router,
+    region_edit,
+    status_router,
+    status_edit,
+    platform_router,
+    platform_edit,
     method_router,
     method_edit,
     equipment_router,
     equipment_edit,
+    author_router,
+    author_edit,
+    line_group_router,
+    line_group_edit,
+    step_group_router,
+    step_group_edit,
     fixed_router,
 ]

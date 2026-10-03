@@ -5,6 +5,8 @@
 // is stripped because the page numbers steps itself: a stored "1." would read
 // "1. 1. 切菜" and go wrong the moment a step is moved.
 
+import { blankToNull, keyed } from './rowList'
+
 // Leading markers, in the shapes recipes are actually written in:
 //   1.  1)  1、 1：  (1)  （1）  ①..⑳  一、 二. 十二、  第一步 第3步  Step 1:
 //   and bullets - * • ・
@@ -36,3 +38,31 @@ export function splitSteps(text) {
     .map(stripNumbering)
     .filter(Boolean)
 }
+
+// A step's kind (STEP_KINDS on the server, served as `step_kinds`): an
+// ordinary `step`, an `optional` one, or a `note` among the steps. Only an
+// ordinary step is numbered - a step with no kind is one - so the number
+// counts the steps a cook must do, and an optional step or a note sits in the
+// order without one.
+export const STEP = 'step'
+export const NOTE = 'note'
+export const OPTIONAL = 'optional'
+
+/** Whether a step takes a number. */
+export const isNumbered = (step) => (step.kind ?? STEP) === STEP
+
+/** The numbers a list of steps is shown with, in order: 1..n over the
+ * ordinary steps, null for the rest. */
+export function stepNumbers(steps) {
+  let number = 0
+  return steps.map((step) => (isNumbered(step) ? ++number : null))
+}
+
+/** A form row for one step - a pasted line, a saved step, or a blank one -
+ * an ordinary step unless it says otherwise. */
+export const stepRow = (entry = {}) => keyed({ body: entry.body ?? '', kind: entry.kind ?? STEP })
+
+/** Some of the form's step rows -> their payload. A step left blank is an
+ * "add" pressed once too often, not a step. */
+export const stepsPayload = (rows) =>
+  rows.filter((row) => blankToNull(row.body)).map((row) => ({ body: row.body.trim(), kind: row.kind }))

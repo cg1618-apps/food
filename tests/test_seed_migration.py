@@ -143,3 +143,587 @@ def test_the_storage_migration_copies_the_old_duration_and_downgrades_lossily(sc
     # minimum-only row keeps its minimum; a row with both ends keeps the
     # maximum (1..2 downgrades to 2, not 1).
     assert rows == [("冷藏", 5), ("冷凍", 30), ("常溫", 2)]
+
+
+def test_the_status_and_platform_migration_maps_every_string_to_a_row_and_back(scratch):
+    """Recipes and sources already holding each kind of value are the fixture:
+    on empty tables the mapping and the downgrade's reverse mapping touch
+    nothing, and a migration that dropped the columns unfilled would pass.
+
+    The owner's own status and platform - created after the upgrade, so with
+    no old key to return to - downgrade to the old defaults."""
+    _alembic("upgrade", "i3import")
+    with scratch.begin() as conn:
+        recipes = {
+            status: conn.execute(
+                text("INSERT INTO recipe (name_cn, status) VALUES (:n, :s) RETURNING id"),
+                {"n": f"菜-{status}", "s": status},
+            ).scalar()
+            for status in ("want_to_try", "can_cook", "regular")
+        }
+        for i, platform in enumerate(("youtube", "shorts", "website", "book", "other")):
+            conn.execute(
+                text(
+                    "INSERT INTO recipe_source (recipe_id, platform, title, sort_order) "
+                    "VALUES (:r, :p, :t, :i)"
+                ),
+                {"r": recipes["can_cook"], "p": platform, "t": f"來源-{platform}", "i": i},
+            )
+
+    _alembic("upgrade", "v2ocabulary")
+    with scratch.begin() as conn:
+        statuses = conn.execute(
+            text("SELECT name_cn FROM recipe_status ORDER BY sort_order")
+        ).scalars().all()
+        platforms = conn.execute(
+            text("SELECT name_cn FROM source_platform ORDER BY sort_order")
+        ).scalars().all()
+        filed = dict(
+            conn.execute(
+                text(
+                    "SELECT r.name_cn, s.name_cn FROM recipe r "
+                    "JOIN recipe_status s ON s.id = r.status_id"
+                )
+            ).all()
+        )
+        named = dict(
+            conn.execute(
+                text(
+                    "SELECT rs.title, p.name_cn FROM recipe_source rs "
+                    "JOIN source_platform p ON p.id = rs.platform_id"
+                )
+            ).all()
+        )
+        columns = {
+            (table, column)
+            for table, column in conn.execute(
+                text(
+                    "SELECT table_name, column_name FROM information_schema.columns "
+                    "WHERE table_name IN ('recipe', 'recipe_source')"
+                )
+            ).all()
+        }
+        mine_status = conn.execute(
+            text("INSERT INTO recipe_status (name_cn, sort_order) VALUES ('冷凍好', 40) RETURNING id")
+        ).scalar()
+        mine_platform = conn.execute(
+            text("INSERT INTO source_platform (name_cn, sort_order) VALUES ('IG', 60) RETURNING id")
+        ).scalar()
+        conn.execute(
+            text("UPDATE recipe SET status_id = :s WHERE id = :r"),
+            {"s": mine_status, "r": recipes["regular"]},
+        )
+        conn.execute(
+            text("UPDATE recipe_source SET platform_id = :p WHERE title = '來源-youtube'"),
+            {"p": mine_platform},
+        )
+
+    assert statuses == ["想試", "可煮", "常煮"]
+    assert platforms == ["YouTube", "Shorts", "網站", "書", "其他"]
+    assert filed == {"菜-want_to_try": "想試", "菜-can_cook": "可煮", "菜-regular": "常煮"}
+    assert named == {
+        "來源-youtube": "YouTube",
+        "來源-shorts": "Shorts",
+        "來源-website": "網站",
+        "來源-book": "書",
+        "來源-other": "其他",
+    }
+    assert ("recipe", "status") not in columns and ("recipe", "status_id") in columns
+    assert ("recipe_source", "platform") not in columns
+    assert ("recipe_source", "platform_id") in columns
+
+    _alembic("downgrade", "i3import")
+    with scratch.connect() as conn:
+        restored = dict(conn.execute(text("SELECT name_cn, status FROM recipe")).all())
+        sources = dict(conn.execute(text("SELECT title, platform FROM recipe_source")).all())
+        tables = conn.execute(
+            text(
+                "SELECT count(*) FROM information_schema.tables "
+                "WHERE table_name IN ('recipe_status', 'source_platform')"
+            )
+        ).scalar()
+    assert restored == {
+        "菜-want_to_try": "want_to_try",
+        "菜-can_cook": "can_cook",
+        "菜-regular": "want_to_try",  # was on 冷凍好, which has no old key
+    }
+    assert sources == {
+        "來源-youtube": "other",  # was on IG, which has no old key
+        "來源-shorts": "shorts",
+        "來源-website": "website",
+        "來源-book": "book",
+        "來源-other": "other",
+    }
+    assert tables == 0
+
+
+def test_the_author_migration_makes_one_author_per_distinct_creator_and_back(scratch):
+    """Sources already holding creators are the fixture: on an empty table the
+    insert and the matching touch nothing, and a migration that dropped the
+    column unfilled would pass. Two spellings of one name, a padded one and a
+    source with no creator at all are what make the de-duplication, the trim
+    and the null-skip each bite.
+
+    The first spelling wins, by source id - the one saved first."""
+    _alembic("upgrade", "v2ocabulary")
+    with scratch.begin() as conn:
+        status = conn.execute(text("SELECT id FROM recipe_status ORDER BY sort_order")).scalar()
+        platform = conn.execute(
+            text("SELECT id FROM source_platform ORDER BY sort_order")
+        ).scalar()
+        recipe = conn.execute(
+            text("INSERT INTO recipe (name_cn, status_id) VALUES ('菜', :s) RETURNING id"),
+            {"s": status},
+        ).scalar()
+        for i, (creator, title) in enumerate(
+            [
+                ("Babish", "一"),
+                ("阿基師", "二"),
+                ("babish", "三"),  # the same author, a later spelling
+                ("  阿基師 ", "四"),  # the same author, padded
+                ("Joshua Weissman", "五"),
+                ("たかし", "六"),  # kana counts as the Chinese slot, as in the form
+                (None, "七"),
+            ]
+        ):
+            conn.execute(
+                text(
+                    "INSERT INTO recipe_source (recipe_id, platform_id, creator, title, sort_order) "
+                    "VALUES (:r, :p, :c, :t, :i)"
+                ),
+                {"r": recipe, "p": platform, "c": creator, "t": title, "i": i},
+            )
+
+    _alembic("upgrade", "a1uthors")
+    with scratch.begin() as conn:
+        authors = sorted(
+            conn.execute(text("SELECT name_cn, name_en, sort_order FROM author")).all(),
+            key=lambda row: (row[0] or "", row[1] or ""),
+        )
+        named = dict(
+            conn.execute(
+                text(
+                    "SELECT rs.title, coalesce(a.name_cn, a.name_en) FROM recipe_source rs "
+                    "LEFT JOIN author a ON a.id = rs.author_id"
+                )
+            ).all()
+        )
+        columns = set(
+            conn.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'recipe_source'"
+                )
+            ).scalars()
+        )
+        # The new CHECK lets a source stand on its author alone.
+        babish = conn.execute(text("SELECT id FROM author WHERE name_en = 'Babish'")).scalar()
+        conn.execute(
+            text(
+                "INSERT INTO recipe_source (recipe_id, platform_id, author_id, sort_order) "
+                "VALUES (:r, :p, :a, 9)"
+            ),
+            {"r": recipe, "p": platform, "a": babish},
+        )
+
+    assert authors == [
+        (None, "Babish", 0),
+        (None, "Joshua Weissman", 0),
+        ("たかし", None, 0),
+        ("阿基師", None, 0),
+    ]
+    assert named == {
+        "一": "Babish",
+        "二": "阿基師",
+        "三": "Babish",
+        "四": "阿基師",
+        "五": "Joshua Weissman",
+        "六": "たかし",
+        "七": None,
+    }
+    assert "creator" not in columns and "author_id" in columns
+
+    _alembic("downgrade", "v2ocabulary")
+    with scratch.connect() as conn:
+        restored = dict(
+            conn.execute(
+                text("SELECT title, creator FROM recipe_source WHERE title IS NOT NULL")
+            ).all()
+        )
+        only_author = conn.execute(
+            text("SELECT creator FROM recipe_source WHERE title IS NULL")
+        ).scalar()
+        tables = conn.execute(
+            text("SELECT count(*) FROM information_schema.tables WHERE table_name = 'author'")
+        ).scalar()
+    # Back from the author's display name: the later spelling and the padding
+    # are not restored, which is the de-duplication doing what it was for.
+    assert restored == {
+        "一": "Babish",
+        "二": "阿基師",
+        "三": "Babish",
+        "四": "阿基師",
+        "五": "Joshua Weissman",
+        "六": "たかし",
+        "七": None,
+    }
+    assert only_author == "Babish"
+    assert tables == 0
+
+
+def _rows(conn, table: str, group_table: str, vocabulary: str, recipe: int, field: str):
+    """`(group display name or None, field)` for one recipe's rows, in position
+    order, with the positions themselves."""
+    return conn.execute(
+        text(
+            f"SELECT coalesce(v.name_cn, g.name), r.{field}, r.position FROM {table} r "
+            f"LEFT JOIN {group_table} g ON g.id = r.group_id "
+            f"LEFT JOIN {vocabulary} v ON v.id = g.{vocabulary}_id "
+            "WHERE r.recipe_id = :r ORDER BY r.position"
+        ),
+        {"r": recipe},
+    ).all()
+
+
+def test_the_group_migration_turns_sections_into_groups_and_back(scratch):
+    """Rows already carrying sections are the fixture: on empty tables the
+    grouping touches nothing, and a migration that dropped `section` unread
+    would pass. A section split by a later row (醬汁, 主料, 醬汁), a section
+    matching a seeded value in another case (主料 / 備料), a padded one, a
+    blank one and rows with none are what make the first-use order, the
+    vocabulary match, the trim and the ungrouped-first re-numbering each bite.
+    """
+    _alembic("upgrade", "a1uthors")
+    with scratch.begin() as conn:
+        status = conn.execute(text("SELECT id FROM recipe_status ORDER BY sort_order")).scalar()
+        category = conn.execute(
+            text("SELECT id FROM ingredient_category WHERE is_fallback")
+        ).scalar()
+        ingredient = conn.execute(
+            text("INSERT INTO ingredient (name_cn, category_id) VALUES ('測試用食材', :c) RETURNING id"),
+            {"c": category},
+        ).scalar()
+        recipe, other = (
+            conn.execute(
+                text("INSERT INTO recipe (name_cn, status_id) VALUES (:n, :s) RETURNING id"),
+                {"n": name, "s": status},
+            ).scalar()
+            for name in ("麻婆豆腐", "白飯")
+        )
+        for position, (section, note) in enumerate(
+            [
+                ("醬汁", "a"),
+                (None, "b"),
+                ("主料", "c"),
+                (" 醬汁 ", "d"),  # padded: the same group
+                ("  ", "e"),  # blank: no group
+                ("Sauce", "f"),
+                ("sauce", "g"),  # another case: the same one-off group
+            ]
+        ):
+            conn.execute(
+                text(
+                    "INSERT INTO recipe_line (recipe_id, position, section, ingredient_id, note) "
+                    "VALUES (:r, :p, :s, :i, :n)"
+                ),
+                {"r": recipe, "p": position, "s": section, "i": ingredient, "n": note},
+            )
+        for position, (section, body) in enumerate(
+            [("備料", "切"), (None, "看"), ("炒", "炒"), ("備料", "醃")]
+        ):
+            conn.execute(
+                text(
+                    "INSERT INTO recipe_step (recipe_id, position, section, body) "
+                    "VALUES (:r, :p, :s, :b)"
+                ),
+                {"r": recipe, "p": position, "s": section, "b": body},
+            )
+        conn.execute(
+            text("INSERT INTO recipe_step (recipe_id, position, body) VALUES (:r, 0, '煮')"),
+            {"r": other},
+        )
+
+    _alembic("upgrade", "g1roups")
+    with scratch.begin() as conn:
+        line_values = conn.execute(
+            text("SELECT name_cn FROM line_group ORDER BY sort_order")
+        ).scalars().all()
+        step_values = conn.execute(
+            text("SELECT name_cn FROM step_group ORDER BY sort_order")
+        ).scalars().all()
+        line_groups = conn.execute(
+            text(
+                "SELECT g.position, v.name_cn, g.name FROM recipe_line_group g "
+                "LEFT JOIN line_group v ON v.id = g.line_group_id "
+                "WHERE g.recipe_id = :r ORDER BY g.position"
+            ),
+            {"r": recipe},
+        ).all()
+        step_groups = conn.execute(
+            text(
+                "SELECT g.position, v.name_cn, g.name FROM recipe_step_group g "
+                "LEFT JOIN step_group v ON v.id = g.step_group_id "
+                "WHERE g.recipe_id = :r ORDER BY g.position"
+            ),
+            {"r": recipe},
+        ).all()
+        lines = _rows(conn, "recipe_line", "recipe_line_group", "line_group", recipe, "note")
+        steps = _rows(conn, "recipe_step", "recipe_step_group", "step_group", recipe, "body")
+        others = _rows(conn, "recipe_step", "recipe_step_group", "step_group", other, "body")
+        columns = set(
+            conn.execute(
+                text(
+                    "SELECT table_name || '.' || column_name FROM information_schema.columns "
+                    "WHERE table_name IN ('recipe_line', 'recipe_step')"
+                )
+            ).scalars()
+        )
+
+    assert line_values == ["主料", "配料", "調味料"]
+    assert step_values == ["備料", "烹飪", "醬汁"]
+    # First-use order; 主料 is the seeded value, the rest one-off names, the
+    # first spelling kept.
+    assert line_groups == [(0, None, "醬汁"), (1, "主料", None), (2, None, "Sauce")]
+    # 醬汁 is a step-group value, so on the step side it would match - but no
+    # step used it. 備料 matches; 炒 does not.
+    assert step_groups == [(0, "備料", None), (1, None, "炒")]
+    # Ungrouped first, then group by group; relative order kept inside each.
+    assert lines == [
+        (None, "b", 0),
+        (None, "e", 1),
+        ("醬汁", "a", 2),
+        ("醬汁", "d", 3),
+        ("主料", "c", 4),
+        ("Sauce", "f", 5),
+        ("Sauce", "g", 6),
+    ]
+    assert steps == [(None, "看", 0), ("備料", "切", 1), ("備料", "醃", 2), ("炒", "炒", 3)]
+    assert others == [(None, "煮", 0)]
+    assert "recipe_line.section" not in columns and "recipe_line.group_id" in columns
+    assert "recipe_step.section" not in columns and "recipe_step.group_id" in columns
+
+    _alembic("downgrade", "a1uthors")
+    with scratch.connect() as conn:
+        restored_lines = conn.execute(
+            text("SELECT section, note, position FROM recipe_line ORDER BY position")
+        ).all()
+        restored_steps = conn.execute(
+            text(
+                "SELECT section, body, position FROM recipe_step WHERE recipe_id = :r "
+                "ORDER BY position"
+            ),
+            {"r": recipe},
+        ).all()
+        tables = conn.execute(
+            text(
+                "SELECT count(*) FROM information_schema.tables WHERE table_name IN "
+                "('line_group', 'step_group', 'recipe_line_group', 'recipe_step_group')"
+            )
+        ).scalar()
+    assert restored_lines == [
+        (None, "b", 0),
+        (None, "e", 1),
+        ("醬汁", "a", 2),
+        ("醬汁", "d", 3),
+        ("主料", "c", 4),
+        ("Sauce", "f", 5),
+        ("Sauce", "g", 6),
+    ]
+    assert restored_steps == [(None, "看", 0), ("備料", "切", 1), ("備料", "醃", 2), ("炒", "炒", 3)]
+    assert tables == 0
+
+
+def test_the_step_kind_migration_makes_existing_steps_ordinary_and_drops_on_downgrade(scratch):
+    """An existing step is the fixture: on an empty table the column would be
+    added with nothing to default, and a NOT NULL without a server default
+    would pass."""
+    _alembic("upgrade", "g1roups")
+    with scratch.begin() as conn:
+        status = conn.execute(text("SELECT id FROM recipe_status ORDER BY sort_order")).scalar()
+        recipe = conn.execute(
+            text("INSERT INTO recipe (name_cn, status_id) VALUES ('白飯', :s) RETURNING id"),
+            {"s": status},
+        ).scalar()
+        conn.execute(
+            text("INSERT INTO recipe_step (recipe_id, position, body) VALUES (:r, 0, '煮')"),
+            {"r": recipe},
+        )
+
+    _alembic("upgrade", "s1tepkinds")
+    with scratch.connect() as conn:
+        kinds = conn.execute(text("SELECT kind FROM recipe_step")).scalars().all()
+    assert kinds == ["step"]
+
+    _alembic("downgrade", "g1roups")
+    with scratch.connect() as conn:
+        columns = set(
+            conn.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'recipe_step'"
+                )
+            ).scalars()
+        )
+        bodies = conn.execute(text("SELECT body FROM recipe_step")).scalars().all()
+    assert "kind" not in columns
+    assert bodies == ["煮"]
+
+
+def _insert_recipe(conn, status: int, **columns) -> int:
+    names = ", ".join(["status_id", *columns])
+    values = ", ".join([":status_id", *(f":{c}" for c in columns)])
+    return conn.execute(
+        text(f"INSERT INTO recipe ({names}) VALUES ({values}) RETURNING id"),
+        {"status_id": status, **columns},
+    ).scalar()
+
+
+def test_the_dish_migration_groups_versions_into_dishes_and_back(scratch):
+    """Recipes already linked as versions are the fixture: on empty tables the
+    grouping touches nothing, and a migration that dropped the recipe columns
+    unread would pass.
+
+    A three-recipe version family (one original, two versions - one with its
+    own name and description, one sharing the original's name), a base
+    recipe a line names, and a lone recipe are what make each part of the
+    rule bite: one dish per family, the original's names, the labels' union,
+    base -> sauce, a version's own name kept and an identical one dropped, a
+    differing description appended to the notes, and the line repointed."""
+    _alembic("upgrade", "t1bd")
+    with scratch.begin() as conn:
+        status = conn.execute(text("SELECT id FROM recipe_status ORDER BY sort_order")).scalar()
+        course = conn.execute(text("SELECT id FROM recipe_course WHERE name_cn = '主食'")).scalar()
+        side = conn.execute(text("SELECT id FROM recipe_course WHERE name_cn = '配菜'")).scalar()
+        rice, noodle, meat = (
+            conn.execute(text("SELECT id FROM label WHERE name_cn = :n"), {"n": n}).scalar()
+            for n in ("飯", "麵", "肉")
+        )
+        original = _insert_recipe(
+            conn, status, name_cn="照燒雞腿排", name_en="teriyaki chicken",
+            course_id=course, description="甜鹹", notes="原本的筆記",
+        )
+        named = _insert_recipe(
+            conn, status, name_cn="照燒雞腿排 (詹姆士)", variant_of_id=original,
+            description="快速版", notes="版本筆記",
+        )
+        same = _insert_recipe(
+            conn, status, name_cn="照燒雞腿排", variant_of_id=original, description="甜鹹",
+        )
+        sauce = _insert_recipe(conn, status, name_cn="照燒醬", kind="base")
+        lone = _insert_recipe(conn, status, name_en="rice")
+        conn.execute(
+            text("INSERT INTO recipe_alias (recipe_id, value) VALUES (:r, 'teriyaki')"),
+            {"r": original},
+        )
+        conn.execute(
+            text("INSERT INTO recipe_serves_as (recipe_id, course_id) VALUES (:r, :c)"),
+            {"r": original, "c": side},
+        )
+        for recipe, label in ((original, rice), (named, noodle), (same, rice), (same, meat)):
+            conn.execute(
+                text("INSERT INTO recipe_label (recipe_id, label_id) VALUES (:r, :l)"),
+                {"r": recipe, "l": label},
+            )
+        conn.execute(
+            text("INSERT INTO recipe_line (recipe_id, position, sub_recipe_id) VALUES (:r, 0, :s)"),
+            {"r": named, "s": sauce},
+        )
+
+    _alembic("upgrade", "d1ishes")
+    with scratch.begin() as conn:
+        dishes = conn.execute(
+            text(
+                "SELECT id, name_cn, name_en, kind, course_id, description FROM dish ORDER BY id"
+            )
+        ).all()
+        by_name = {row.name_cn or row.name_en: row for row in dishes}
+        recipes = {
+            row.id: row
+            for row in conn.execute(text("SELECT id, dish_id, name, notes FROM recipe")).all()
+        }
+        teriyaki = by_name["照燒雞腿排"]
+        labels = set(
+            conn.execute(
+                text("SELECT label_id FROM dish_label WHERE dish_id = :d"), {"d": teriyaki.id}
+            ).scalars()
+        )
+        aliases = conn.execute(
+            text("SELECT value FROM dish_alias WHERE dish_id = :d"), {"d": teriyaki.id}
+        ).scalars().all()
+        serves = conn.execute(
+            text("SELECT course_id FROM dish_serves_as WHERE dish_id = :d"), {"d": teriyaki.id}
+        ).scalars().all()
+        line_target = conn.execute(text("SELECT sub_dish_id FROM recipe_line")).scalar()
+        regions = conn.execute(text("SELECT name_cn FROM region ORDER BY sort_order")).scalars().all()
+        columns = set(
+            conn.execute(
+                text(
+                    "SELECT table_name || '.' || column_name FROM information_schema.columns "
+                    "WHERE table_name IN ('recipe', 'recipe_line')"
+                )
+            ).scalars()
+        )
+
+    assert len(dishes) == 3
+    assert (teriyaki.name_en, teriyaki.kind, teriyaki.course_id, teriyaki.description) == (
+        "teriyaki chicken", "dish", course, "甜鹹",
+    )
+    assert by_name["照燒醬"].kind == "sauce"
+    assert by_name["rice"].kind == "dish"
+    assert {recipes[r].dish_id for r in (original, named, same)} == {teriyaki.id}
+    assert recipes[lone].dish_id == by_name["rice"].id
+    assert labels == {rice, noodle, meat}
+    assert aliases == ["teriyaki"] and serves == [side]
+    # The original names nothing of its own; the version with another name
+    # keeps it; the version sharing the dish's name does not repeat it.
+    assert recipes[original].name is None and recipes[original].notes == "原本的筆記"
+    assert recipes[named].name == "照燒雞腿排 (詹姆士)"
+    assert recipes[named].notes == "版本筆記\n\n原簡介：快速版"
+    assert recipes[same].name is None and recipes[same].notes is None
+    assert line_target == by_name["照燒醬"].id
+    assert regions == ["台式", "中式", "日式", "韓式", "泰式", "西式"]
+    for gone in ("recipe.name_cn", "recipe.kind", "recipe.course_id", "recipe.variant_of_id",
+                 "recipe.description", "recipe_line.sub_recipe_id"):
+        assert gone not in columns, gone
+
+    _alembic("downgrade", "t1bd")
+    with scratch.connect() as conn:
+        restored = {
+            row.id: row
+            for row in conn.execute(
+                text(
+                    "SELECT id, name_cn, name_en, kind, course_id, variant_of_id, description "
+                    "FROM recipe"
+                )
+            ).all()
+        }
+        restored_labels = set(
+            conn.execute(
+                text("SELECT label_id FROM recipe_label WHERE recipe_id = :r"), {"r": named}
+            ).scalars()
+        )
+        restored_aliases = conn.execute(
+            text("SELECT recipe_id FROM recipe_alias ORDER BY recipe_id")
+        ).scalars().all()
+        sub = conn.execute(text("SELECT sub_recipe_id FROM recipe_line")).scalar()
+        tables = conn.execute(
+            text(
+                "SELECT count(*) FROM information_schema.tables WHERE table_name IN "
+                "('dish', 'dish_alias', 'dish_label', 'dish_serves_as', 'dish_image', 'region')"
+            )
+        ).scalar()
+
+    assert tables == 0
+    assert restored[original].name_cn == "照燒雞腿排"
+    assert restored[original].name_en == "teriyaki chicken"
+    assert restored[original].variant_of_id is None
+    assert restored[named].name_cn == "照燒雞腿排 (詹姆士)"
+    assert restored[named].variant_of_id == original
+    assert restored[same].name_cn == "照燒雞腿排" and restored[same].variant_of_id == original
+    assert restored[named].course_id == course and restored[named].description == "甜鹹"
+    assert restored[sauce].kind == "base"
+    assert restored[lone].name_en == "rice" and restored[lone].variant_of_id is None
+    # The dish's labels and aliases land on every recipe of it.
+    assert restored_labels == {rice, noodle, meat}
+    assert restored_aliases == sorted([original, named, same])
+    assert sub == sauce

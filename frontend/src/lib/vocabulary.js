@@ -2,38 +2,39 @@
 // where a new value goes, and what a refused delete says.
 //
 // Pure, so the cases that are easy to get wrong (ties in sort_order, a move
-// off either end) are tested here rather than by clicking.
+// off either end, a drop several places away) are tested here rather than by
+// clicking.
 
 /**
- * The PATCHes that move `rows[index]` one place up (`delta` -1) or down (+1).
+ * The PATCHes that move `rows[from]` to position `to` - where a drag dropped
+ * it, or one place along for an arrow key.
  *
  * `rows` are siblings in the order the API listed them, by sort_order then
- * name. When every sort_order among them is distinct, the two rows swap
- * values: one PATCH each, and moving a row up and back down restores exactly
- * the numbers it started with. When any two tie - the seed gives everything
- * 0, and a tie is ordered by name, which a swap cannot change - the whole
- * list is renumbered 1..n in its new order, and only the rows whose number
- * actually changes are sent.
+ * name. When every sort_order among them is distinct, the rows keep the same
+ * set of numbers, handed out again in the new order: a one-place move is a
+ * swap of two values, and moving a row and then back restores exactly the
+ * numbers it started with. When any two tie - the seed gives everything 0,
+ * and a tie is ordered by name, which no reassignment of equal values can
+ * change - the whole list is renumbered 1..n in its new order. Either way,
+ * only the rows whose number actually changes are sent.
  *
- * Answers [] for a move off either end.
+ * Answers [] for a move off either end, or onto itself.
  */
-export function reorderPatches(rows, index, delta) {
-  const target = index + delta
-  if (index < 0 || index >= rows.length || target < 0 || target >= rows.length) return []
-
-  const orders = rows.map((row) => row.sort_order)
-  if (new Set(orders).size === orders.length) {
-    return [
-      { id: rows[index].id, sort_order: rows[target].sort_order },
-      { id: rows[target].id, sort_order: rows[index].sort_order },
-    ]
-  }
+export function reorderPatches(rows, from, to) {
+  if (from === to || from < 0 || from >= rows.length || to < 0 || to >= rows.length) return []
 
   const moved = [...rows]
-  const [row] = moved.splice(index, 1)
-  moved.splice(target, 0, row)
+  const [row] = moved.splice(from, 1)
+  moved.splice(to, 0, row)
+
+  const orders = rows.map((each) => each.sort_order)
+  const numbers =
+    new Set(orders).size === orders.length
+      ? [...orders].sort((a, b) => a - b)
+      : moved.map((_, position) => position + 1)
+
   return moved
-    .map((each, position) => ({ id: each.id, sort_order: position + 1 }))
+    .map((each, position) => ({ id: each.id, sort_order: numbers[position] }))
     .filter(({ id, sort_order }) => rows.find((each) => each.id === id).sort_order !== sort_order)
 }
 

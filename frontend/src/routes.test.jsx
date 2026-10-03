@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { SECTIONS } from './lib/nav'
 import AppRoutes from './routes'
 
 // Where the router ended up, so a redirect is asserted by its destination.
@@ -36,14 +37,24 @@ afterEach(() => {
 
 describe('every page has a route', () => {
   it.each([
+    ['/dishes', '料理'],
     ['/recipes', '食譜'],
     ['/notes', '筆記'],
+    ['/edit/dishes/new', '新增料理'],
+    ['/edit/dishes/1', '編輯料理'],
     ['/edit/recipes/new', '新增食譜'],
     ['/edit/recipes/1', '編輯食譜'],
+    ['/edit/recipes/new?blank=1', '新增食譜'],
+    ['/edit/templates/new', '新增範本'],
+    ['/edit/templates/1', '編輯範本'],
     ['/edit/notes/new', '新增筆記'],
     ['/edit/notes/1', '編輯筆記'],
     ['/edit/settings', '設定'],
     ['/edit/images', '圖片'],
+    ['/schedule', '排程'],
+    ['/edit/schedule', '編輯排程'],
+    ['/tbd', 'TBD'],
+    ['/edit/tbd', '編輯 TBD'],
     ['/no/such/page', '找不到這一頁'],
   ])('%s renders its page', (path, heading) => {
     expect(renderAt(path)).toBe(path)
@@ -54,7 +65,7 @@ describe('every page has a route', () => {
 // The detail pages fetch before they have a heading; their content is
 // pages/detail/details.test.jsx's. Here only that the route is theirs.
 describe('every detail page has a route', () => {
-  it.each(['/recipes/1', '/ingredients/1', '/notes/1'])('%s stays on its route', (path) => {
+  it.each(['/dishes/1', '/recipes/1', '/ingredients/1', '/notes/1'])('%s stays on its route', (path) => {
     expect(renderAt(path)).toBe(path)
     expect(screen.queryByRole('heading', { name: '找不到這一頁' })).toBeNull()
   })
@@ -62,7 +73,7 @@ describe('every detail page has a route', () => {
 
 describe('redirects', () => {
   it.each([
-    ['/', '/recipes'],
+    ['/', '/schedule'],
     ['/settings', '/edit/settings'],
     // The first release's paths: bookmarks survive, query string included.
     ['/library/ingredient', '/ingredients'],
@@ -71,6 +82,8 @@ describe('redirects', () => {
     ['/edit/ingredient/new', '/edit/ingredients/new'],
     ['/edit/ingredient/7', '/edit/ingredients/7'],
     ['/edit/vocabularies', '/edit/settings'],
+    // The dish form's path as the design named it.
+    ['/edit/dishes/4/edit', '/edit/dishes/4'],
   ])('%s goes to %s', (from, to) => {
     expect(renderAt(from)).toBe(to)
   })
@@ -84,6 +97,22 @@ describe('navigation', () => {
       .map((link) => link.textContent)
     // Two navs - the desktop bar and the phone bar - both say 食譜.
     expect(current).toEqual(['食譜', '食譜'])
+  })
+
+  it('marks TBD on its edit page too', () => {
+    renderAt('/edit/tbd')
+    const current = screen.getAllByRole('link', { current: 'page' }).map((link) => link.textContent)
+    expect(current).toEqual(['TBD', 'TBD'])
+  })
+
+  it('gives the phone bar one column per section, whatever their number', () => {
+    renderAt('/recipes')
+    const [, phone] = screen.getAllByRole('navigation', { name: '主要' })
+    expect(SECTIONS.length).toBe(7)
+    expect(phone.style.gridTemplateColumns).toBe(`repeat(${SECTIONS.length}, minmax(0, 1fr))`)
+    expect(within(phone).getAllByRole('link').map((link) => link.textContent)).toEqual(
+      SECTIONS.map((section) => section.label),
+    )
   })
 
   it('links 設定 to the gated settings page', () => {

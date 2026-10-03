@@ -1,146 +1,168 @@
 // Frontend: add or edit a recipe, /edit/recipes/new and /edit/recipes/:id.
 //
-// In the order the page reads: names and how it is filed (kind, course,
-// what else it serves as, status, servings, time, the recipe it is a version
-// of); sources; ingredient lines; steps; labels, methods, equipment; the
-// prose; aliases; the gallery.
+// A new recipe asks first how to start (NewRecipeChooser): 空白, 從範本 or
+// 複製另一份食譜. The answer is in the URL (lib/newRecipe.js) - ?blank=1,
+// ?template=<id>, ?from=<recipe id> - and the form opens on it:
+//   - from a template: servings, time, the lines and steps in their groups
+//     (steps keeping their kinds), methods and equipment. A reference the
+//     template still holds to something since deleted is left out by the
+//     server, and the form says how many (「範本裡有 n 個項目已不存在，已略過」).
+//   - from another recipe: all of that, and its storage notes and notes, with
+//     its dish chosen unless ?dish= names another. Not its name, sources,
+//     status or pictures - and the form says which recipe it was copied from.
+// Nothing is saved until 儲存, and what is saved is a new recipe.
 //
-// A line's ingredient or sub-recipe is picked with the Typeahead, which
-// searches both libraries. When nothing matches, 「新增 'xxx'」 makes the
-// line name an ingredient that does not exist yet: it is shown with 待補 until
-// the save, which creates it as a stub in the same transaction (the server
-// folds a name it already knows into that row rather than duplicating it).
-// Steps take a pasted block too: 「貼上多行」 splits it into one step per line
-// and strips the numbering (lib/steps.js).
+// In the order the page reads: the dish this is a recipe of, and the
+// recipe's own optional name; status, servings, time; sources; ingredient
+// lines; steps; methods, equipment; storage and notes; the gallery. What is
+// true of the dish whoever cooks it - names, kind, course, region, labels,
+// serves-as, a description - is the dish's form's, not this one's.
+//
+// The dish is picked with the Typeahead, searching the dish library. When
+// nothing matches, 「新增」 names a dish the save creates, as a 料理 or a 醬料
+// (料理 unless switched); a name the server already knows is reused instead.
+// `?dish=<id>` - the dish page's 「＋ 新增食譜」 - starts a new recipe with that
+// dish chosen, whichever start is chosen.
+//
+// 材料, 步驟 and 做法、器材 are the sections the template form shares
+// (components/forms/RecipeLinesSection.jsx, RecipeStepsSection.jsx,
+// RecipeMethodsSection.jsx): the 常用 chips, the groups, the line typeahead
+// with its 「新增」 and 「新增料理」 - a stub ingredient or a 醬料 made by the
+// save, folded into an existing row when the server already knows the name -
+// the step kinds and numbering, and 「貼上多行」.
+// A source's author is picked from the authors list, which is small enough to
+// fetch once and filter in the browser; 「新增」 there makes the author on
+// save, and a name the server already knows is reused.
 //
 // POST takes the whole recipe and PATCH replaces each list wholesale, so the
-// form always sends every list. Saving goes to the recipe's page.
-import { useId, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+// form always sends every list - lines with line_groups, steps with
+// step_groups, the pairs the server replaces together. Saving goes to the
+// recipe's page.
+import { useState } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { endpoints } from '../../api/endpoints'
-import ChipPicker from '../../components/forms/ChipPicker'
 import DeleteDialog from '../../components/forms/DeleteDialog'
 import FormActions from '../../components/forms/FormActions'
 import GalleryPicker from '../../components/forms/GalleryPicker'
+import RecipeLinesSection from '../../components/forms/RecipeLinesSection'
+import RecipeMethodsSection from '../../components/forms/RecipeMethodsSection'
+import RecipeStepsSection from '../../components/forms/RecipeStepsSection'
 import RowEditor from '../../components/forms/RowEditor'
 import Typeahead, { Picked } from '../../components/forms/Typeahead'
-import Dialog from '../../components/ui/Dialog'
-import { Button, Field, Input, Section, Select, TextArea } from '../../components/ui/primitives'
+import { Field, Input, LinkButton, Section, Select, TextArea, Toggle } from '../../components/ui/primitives'
 import { ErrorNote, Loading } from '../../components/ui/states'
-import { useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
+import { fixedLabel, useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
 import { useOwnerSave } from '../../hooks/useOwnerSave'
 import { galleryChanged, galleryFromImages } from '../../lib/gallery'
-import { emptyLine, isStub, lineFromResponse, linesPayload, sectionsOf, targetFromOption } from '../../lib/recipeLines'
-import { blankToNull, keyed, splitAliases } from '../../lib/rowList'
-import { splitSteps } from '../../lib/steps'
+import { newRecipeStart } from '../../lib/newRecipe'
+import { DISH, newNames, targetFromOption } from '../../lib/recipeLines'
+import { authorFromOption, sourceRow, sourcesPayload } from '../../lib/recipeSources'
+import { emptyStructure, structureFromResponse, structurePayload } from '../../lib/recipeStructure'
+import { blankToNull } from '../../lib/rowList'
+import NewRecipeChooser from './NewRecipeChooser'
 
-// A recipe save moves its own reads, the creators list, the ingredient
-// library (a 新增 line makes a stub; used-in counts move), the category tree
-// (the stub is filed in the fallback category, whose count moves), and the
-// usage counts of every vocabulary and picture it names.
+// A recipe save moves its own reads, the dish library (its dish's recipe
+// count, cover and "used in"; a 新增 dish is a new row), the authors list, the
+// ingredient library (a 新增 line makes a stub; used-in counts move), the
+// category tree (the stub is filed in the fallback category, whose count
+// moves), and the usage counts of every vocabulary and picture it names.
 const INVALIDATE = [
+  endpoints.dishes.list(),
   endpoints.recipes.list(),
-  endpoints.recipes.creators(),
+  endpoints.authors.list(),
   endpoints.ingredients.list(),
   endpoints.categories.tree(),
-  endpoints.labels.list(),
-  endpoints.courses.list(),
+  endpoints.statuses.list(),
+  endpoints.platforms.list(),
   endpoints.methods.list(),
   endpoints.equipment.list(),
+  endpoints.lineGroups.list(),
+  endpoints.stepGroups.list(),
   endpoints.images.list(),
 ]
 
-const EMPTY = {
-  name_cn: '',
-  name_en: '',
-  name_alt: '',
-  kind: 'dish',
-  course_id: '',
-  serves_as_ids: [],
-  status: 'want_to_try',
-  servings: '',
-  time: '',
-  variant_of: null,
+const empty = () => ({
+  // { type: 'dish', id, label, kind } or { type: 'new-dish', label, kind }.
+  dish: null,
+  name: '',
+  // '' until chosen: the first status is shown, and sent, in its place.
+  status_id: '',
+  // servings, time, lines, steps, method_ids, equipment_ids.
+  ...emptyStructure(),
   sources: [],
-  lines: [],
-  steps: [],
-  label_ids: [],
-  method_ids: [],
-  equipment_ids: [],
-  description: '',
   storage_notes: '',
   notes: '',
-  aliases: '',
   gallery: [],
-}
+})
 
-const sourceRow = (entry = {}) =>
-  keyed({
-    platform: entry.platform ?? 'youtube',
-    creator: entry.creator ?? '',
-    url: entry.url ?? '',
-    title: entry.title ?? '',
-  })
+const dishPick = (dish) => ({ type: 'dish', id: dish.id, label: dish.display_name, kind: dish.kind })
 
-const stepRow = (entry = {}) => keyed({ section: entry.section ?? '', body: entry.body ?? '' })
-
-const ids = (refs) => (refs ?? []).map((ref) => ref.id)
-
-// A source row with nothing typed - the platform always has a value - is an
-// "add" pressed once too often, as a blank line or step is.
-const isBlankSource = (row) => !blankToNull(row.creator) && !blankToNull(row.url) && !blankToNull(row.title)
+// The recipe's own dish from a typeahead pick: a new one is a 料理 unless the
+// form's switch says 醬料 - a line's new dish is the other way round.
+const dishFromOption = (option) =>
+  option.type === 'new-dish'
+    ? { ...targetFromOption(option), kind: DISH }
+    : { type: 'dish', id: option.id, label: option.label, kind: option.kind }
 
 function fromRecipe(row) {
   return {
-    name_cn: row.name_cn ?? '',
-    name_en: row.name_en ?? '',
-    name_alt: row.name_alt ?? '',
-    kind: row.kind ?? 'dish',
-    course_id: row.course ? String(row.course.id) : '',
-    serves_as_ids: ids(row.serves_as),
-    status: row.status ?? 'want_to_try',
-    servings: row.servings ?? '',
-    time: row.time ?? '',
-    variant_of: row.variant_of ? { id: row.variant_of.id, label: row.variant_of.display_name } : null,
+    dish: row.dish ? dishPick(row.dish) : null,
+    name: row.name ?? '',
+    status_id: row.status ? String(row.status.id) : '',
+    ...structureFromResponse(row),
     sources: (row.sources ?? []).map(sourceRow),
-    lines: (row.lines ?? []).map(lineFromResponse),
-    steps: (row.steps ?? []).map(stepRow),
-    label_ids: ids(row.labels),
-    method_ids: ids(row.methods),
-    equipment_ids: ids(row.equipment),
-    description: row.description ?? '',
     storage_notes: row.storage_notes ?? '',
     notes: row.notes ?? '',
-    aliases: (row.aliases ?? []).join('、'),
     gallery: galleryFromImages(row.images),
   }
 }
 
+// What a copy of another recipe carries: its structure and its two notes.
+// Not its name, sources, status or pictures - those are what make it that
+// recipe rather than this one.
+const copiedFrom = (row) => ({
+  ...structureFromResponse(row),
+  storage_notes: row.storage_notes ?? '',
+  notes: row.notes ?? '',
+})
+
 export default function RecipeForm() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
+  const start = id === undefined ? newRecipeStart(searchParams) : null
+  if (start && !start.chosen) return <NewRecipeChooser />
+  // Keyed by the start, so choosing again from the chooser opens a fresh form.
+  return <RecipeEditor key={`${id ?? 'new'}:${start?.template}:${start?.from}`} id={id} start={start} />
+}
+
+function RecipeEditor({ id, start }) {
   const isNew = id === undefined
   const navigate = useNavigate()
-  const sectionListId = useId()
-  const creatorListId = useId()
+  // ?dish=<id>: the dish page's 「＋ 新增食譜」. Only a new recipe reads it.
+  const presetId = start?.dish ?? null
+  const templateId = start?.template ?? null
+  const fromId = start?.from ?? null
 
   const existing = useApiQuery(endpoints.recipes.detail(id), null, { enabled: !isNew })
-  const courses = useApiQuery(endpoints.courses.list())
-  const methods = useApiQuery(endpoints.methods.list())
-  const equipment = useApiQuery(endpoints.equipment.list())
-  const labels = useApiQuery(endpoints.labels.list())
-  const creators = useApiQuery(endpoints.recipes.creators())
+  const preset = useApiQuery(endpoints.dishes.detail(presetId), null, { enabled: presetId !== null })
+  const template = useApiQuery(endpoints.templates.detail(templateId), null, { enabled: templateId !== null })
+  const source = useApiQuery(endpoints.recipes.detail(fromId), null, { enabled: fromId !== null })
+  const statuses = useApiQuery(endpoints.statuses.list())
+  const platforms = useApiQuery(endpoints.platforms.list())
+  const authors = useApiQuery(endpoints.authors.list())
   const fixed = useFixedVocabularies()
   const { save, saving } = useOwnerSave({ group: endpoints.recipes, invalidate: INVALIDATE })
 
-  const [form, setForm] = useState(EMPTY)
+  const [form, setForm] = useState(empty)
   const [loaded, setLoaded] = useState(null)
   const [error, setError] = useState(null)
   const [deleting, setDeleting] = useState(false)
-  const [pasting, setPasting] = useState(false)
-  // Typed into the version-of box and not picked: refused on save, never
-  // dropped (Typeahead's onQueryChange).
-  const [variantTyped, setVariantTyped] = useState('')
+  // Typed into the dish box and not picked: refused on save, never dropped
+  // (Typeahead's onQueryChange).
+  const [dishTyped, setDishTyped] = useState('')
+  const [presetApplied, setPresetApplied] = useState(false)
+  const [prefilled, setPrefilled] = useState(false)
 
   // Adjusting state to the loaded row during render, keyed on the id so a
   // background refetch never throws away what is being typed.
@@ -148,64 +170,80 @@ export default function RecipeForm() {
     setLoaded(existing.data)
     setForm(fromRecipe(existing.data))
   }
+  // The preset dish, once, the first time it answers - and never over a dish
+  // chosen in the meantime.
+  if (isNew && preset.data && !presetApplied) {
+    setPresetApplied(true)
+    setForm((previous) => (previous.dish ? previous : { ...previous, dish: dishPick(preset.data) }))
+  }
+  // The start, once, the first time it answers. The form is not drawn until
+  // then, so it never lands on top of something already typed.
+  if (isNew && !prefilled && template.data) {
+    setPrefilled(true)
+    setForm((previous) => ({ ...previous, ...structureFromResponse(template.data.body) }))
+  }
+  if (isNew && !prefilled && source.data) {
+    setPrefilled(true)
+    setForm((previous) => ({
+      ...previous,
+      ...copiedFrom(source.data),
+      // The copied recipe's dish, unless ?dish= named one.
+      dish: presetId !== null || previous.dish ? previous.dish : dishPick(source.data.dish),
+    }))
+  }
+  const starting = templateId !== null ? template : fromId !== null ? source : null
 
   const setField = (field, value) => setForm((previous) => ({ ...previous, [field]: value }))
   const set = (field) => (event) => setField(field, event.target.value)
-  // A line's typed-but-unpicked text, by the row's key and from the latest
+  // A section's setter: a value, or (previous) => value from the latest state.
+  const setter = (field) => (next) =>
+    setForm((previous) => ({ ...previous, [field]: typeof next === 'function' ? next(previous[field]) : next }))
+
+  // A source's typed-but-unpicked author, by the row's key and from the latest
   // state: a pick calls onSelect and then reports '' in the same tick, and
   // RowEditor's update() would build the second change from the rows the
   // first had not yet replaced.
-  const setLinePending = (key, pending) =>
+  const setSourcePending = (key, pendingAuthor) =>
     setForm((previous) => ({
       ...previous,
-      lines: previous.lines.map((line) => (line._key === key ? { ...line, pending } : line)),
+      sources: previous.sources.map((row) => (row._key === key ? { ...row, pendingAuthor } : row)),
     }))
-  const sections = sectionsOf(form.lines, form.steps)
+  const firstId = (query) => (query.data?.length ? String(query.data[0].id) : '')
+  const statusId = form.status_id || firstId(statuses)
+  const platformOf = (row) => row.platform_id || firstId(platforms)
 
   function payload() {
     return {
-      name_cn: blankToNull(form.name_cn),
-      name_en: blankToNull(form.name_en),
-      name_alt: blankToNull(form.name_alt),
-      kind: form.kind,
-      course_id: form.course_id ? Number(form.course_id) : null,
-      // The UI does not offer the recipe's own course as a serves-as.
-      serves_as_ids: form.serves_as_ids.filter((courseId) => String(courseId) !== form.course_id),
-      status: form.status,
-      servings: blankToNull(form.servings),
-      time: blankToNull(form.time),
-      variant_of_id: form.variant_of?.id ?? null,
-      sources: form.sources.filter((row) => !isBlankSource(row)).map((row) => ({
-        platform: row.platform,
-        creator: blankToNull(row.creator),
-        url: blankToNull(row.url),
-        title: blankToNull(row.title),
-      })),
-      lines: linesPayload(form.lines),
-      // A step left blank is an "add" pressed once too often, not a step.
-      steps: form.steps
-        .filter((row) => blankToNull(row.body))
-        .map((row) => ({ section: blankToNull(row.section), body: row.body.trim() })),
-      label_ids: form.label_ids,
-      method_ids: form.method_ids,
-      equipment_ids: form.equipment_ids,
-      description: blankToNull(form.description),
+      ...(form.dish.type === 'dish'
+        ? { dish_id: form.dish.id }
+        : { new_dish: { ...newNames(form.dish.label), kind: form.dish.kind } }),
+      name: blankToNull(form.name),
+      // Left out when there is no status to choose: the server then gives
+      // the first one, or says there is none.
+      ...(statusId ? { status_id: Number(statusId) } : {}),
+      sources: sourcesPayload(form.sources, platformOf),
+      ...structurePayload(form),
       storage_notes: blankToNull(form.storage_notes),
       notes: blankToNull(form.notes),
-      aliases: splitAliases(form.aliases),
     }
   }
 
   async function submit(event) {
     event.preventDefault()
     setError(null)
-    if (!form.variant_of && variantTyped.trim()) {
+    if (!form.dish) {
       setError(
-        new Error(`「是哪道食譜的另一版」打了「${variantTyped.trim()}」，但還沒從清單選：選一道，或把文字清掉。`),
+        new Error(
+          dishTyped.trim()
+            ? `「料理」打了「${dishTyped.trim()}」，但還沒從清單選：選一道，或選「新增」。`
+            : '這份食譜是哪道料理？先選一道，或打名字新增。',
+        ),
       )
       return
     }
     try {
+      // Inside the try: payload() refuses a line or an author typed and
+      // never picked, and that sentence is shown like the server's.
       const saved = await save({
         id,
         body: payload(),
@@ -218,13 +256,19 @@ export default function RecipeForm() {
     }
   }
 
-  const fixedOptions = (list) =>
-    (list ?? []).map((entry) => (
-      <option key={entry.value} value={entry.value}>
-        {entry.label}
+  const dishKinds = fixed.data?.dish_kinds ?? []
+  const kindWord = (kind) => fixedLabel(dishKinds, kind)
+  const ownDish = form.dish?.type === 'dish' ? [form.dish.id] : []
+  const vocabularyOptions = (rows) =>
+    (rows ?? []).map((row) => (
+      <option key={row.id} value={row.id}>
+        {row.display_name}
       </option>
     ))
-  const otherCourses = (courses.data ?? []).filter((course) => String(course.id) !== form.course_id)
+  // A new recipe's form waits for the start it was opened on; an existing
+  // one for the recipe.
+  const ready = isNew ? !starting || prefilled : Boolean(existing.data)
+  const chooseAgain = `/edit/recipes/new${presetId !== null ? `?dish=${presetId}` : ''}`
 
   return (
     <form onSubmit={submit} className="mx-auto max-w-3xl space-y-6">
@@ -233,55 +277,83 @@ export default function RecipeForm() {
         {!isNew && existing.data ? (
           <p className="text-sm text-text-muted">{existing.data.display_name}</p>
         ) : null}
+        {isNew && template.data ? (
+          <div role="status" className="space-y-0.5 text-sm text-text-muted">
+            <p>從範本「{template.data.name}」開始。</p>
+            {template.data.dropped ? (
+              <p className="text-danger">範本裡有 {template.data.dropped} 個項目已不存在，已略過。</p>
+            ) : null}
+          </div>
+        ) : null}
+        {isNew && source.data ? (
+          <p role="status" className="text-sm text-text-muted">
+            複製自「
+            <Link to={`/recipes/${source.data.id}`} className="text-brand hover:underline">
+              {source.data.display_name}
+            </Link>
+            」。名稱、來源、狀態和圖片沒有複製。
+          </p>
+        ) : null}
       </header>
 
       {!isNew && existing.isPending ? <Loading /> : null}
       {!isNew && existing.error ? <ErrorNote error={existing.error} /> : null}
+      {starting?.isPending ? <Loading /> : null}
+      {starting?.error ? (
+        <div className="space-y-2">
+          <ErrorNote error={starting.error}>
+            {templateId !== null ? '讀不到這個範本：' : '讀不到要複製的食譜：'}
+            {starting.error.message}
+          </ErrorNote>
+          <LinkButton to={chooseAgain} size="sm">
+            重新選擇
+          </LinkButton>
+        </div>
+      ) : null}
 
-      {/* Shared suggestions: a section typed once is offered on every line
-          and step, and a creator typed on any recipe is offered here. */}
-      <datalist id={sectionListId}>
-        {sections.map((section) => (
-          <option key={section} value={section} />
-        ))}
-      </datalist>
-      <datalist id={creatorListId}>
-        {(creators.data ?? []).map((creator) => (
-          <option key={creator} value={creator} />
-        ))}
-      </datalist>
-
-      {isNew || existing.data ? (
+      {ready ? (
         <>
-          <Section title="名稱與分類">
+          <Section title="料理">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <span className="text-sm font-medium text-text-muted">料理</span>
+                {form.dish ? (
+                  <Picked
+                    label={form.dish.label}
+                    tag={form.dish.type === 'new-dish' ? `新${kindWord(form.dish.kind)}` : kindWord(form.dish.kind)}
+                    onClear={() => {
+                      setField('dish', null)
+                      setDishTyped('')
+                    }}
+                  />
+                ) : (
+                  <Typeahead
+                    sources={['dish']}
+                    allowNewDish
+                    newDishHint="（存檔時建立料理）"
+                    label="料理"
+                    placeholder="這是哪道料理的食譜…"
+                    onSelect={(option) => setField('dish', dishFromOption(option))}
+                    onQueryChange={setDishTyped}
+                  />
+                )}
+                {form.dish?.type === 'new-dish' && dishKinds.length ? (
+                  <Toggle
+                    label="新料理的種類"
+                    options={dishKinds}
+                    value={form.dish.kind}
+                    onChange={(kind) => setField('dish', { ...form.dish, kind })}
+                  />
+                ) : null}
+              </div>
+              <Field label="名稱" hint="同一道料理有好幾份食譜時用來分辨，例如作者或做法。留空就用料理的名字。">
+                <Input value={form.name} onChange={set('name')} />
+              </Field>
+            </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <Field label="中文名">
-                <Input value={form.name_cn} onChange={set('name_cn')} />
-              </Field>
-              <Field label="英文名">
-                <Input value={form.name_en} onChange={set('name_en')} />
-              </Field>
-              <Field label="其他名稱">
-                <Input value={form.name_alt} onChange={set('name_alt')} />
-              </Field>
-              <Field label="種類" hint="基底：醬汁、高湯、麵團這類拿來做別道菜的">
-                <Select value={form.kind} onChange={set('kind')}>
-                  {fixedOptions(fixed.data?.recipe_kinds ?? [{ value: form.kind, label: form.kind }])}
-                </Select>
-              </Field>
-              <Field label="類別">
-                <Select value={form.course_id} onChange={set('course_id')}>
-                  <option value="">—</option>
-                  {(courses.data ?? []).map((course) => (
-                    <option key={course.id} value={course.id}>
-                      {course.display_name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
               <Field label="狀態">
-                <Select value={form.status} onChange={set('status')}>
-                  {fixedOptions(fixed.data?.recipe_statuses ?? [{ value: form.status, label: form.status }])}
+                <Select value={statusId} onChange={set('status_id')}>
+                  {vocabularyOptions(statuses.data)}
                 </Select>
               </Field>
               <Field label="份量">
@@ -290,38 +362,6 @@ export default function RecipeForm() {
               <Field label="時間">
                 <Input value={form.time} onChange={set('time')} placeholder="例如 30 分鐘" />
               </Field>
-              <div className="space-y-1">
-                <span className="text-sm font-medium text-text-muted">是哪道食譜的另一版</span>
-                {form.variant_of ? (
-                  <Picked
-                    label={form.variant_of.label}
-                    onClear={() => {
-                      setField('variant_of', null)
-                      setVariantTyped('')
-                    }}
-                    clearLabel="移除"
-                  />
-                ) : (
-                  <Typeahead
-                    sources={['recipe']}
-                    label="是哪道食譜的另一版"
-                    placeholder="不是就留空"
-                    exclude={{ recipe: id ? [Number(id)] : [] }}
-                    onSelect={(option) => setField('variant_of', { id: option.id, label: option.label })}
-                    onQueryChange={setVariantTyped}
-                  />
-                )}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <span className="text-sm font-medium text-text-muted">也可以當作</span>
-              <ChipPicker
-                label="也可以當作"
-                options={otherCourses}
-                value={form.serves_as_ids}
-                onChange={(value) => setField('serves_as_ids', value)}
-                empty="還沒有類別，可以在設定裡新增。"
-              />
             </div>
           </Section>
 
@@ -333,22 +373,32 @@ export default function RecipeForm() {
               addLabel="加一個來源"
               itemLabel="來源"
             >
-              {(row, { update }) => (
+              {(row, { update, index }) => (
                 <div className="grid gap-2 sm:grid-cols-4">
                   <Select
                     aria-label="平台"
-                    value={row.platform}
-                    onChange={(event) => update({ platform: event.target.value })}
+                    value={platformOf(row)}
+                    onChange={(event) => update({ platform_id: event.target.value })}
                   >
-                    {fixedOptions(fixed.data?.source_platforms ?? [{ value: row.platform, label: row.platform }])}
+                    {vocabularyOptions(platforms.data)}
                   </Select>
-                  <Input
-                    aria-label="作者"
-                    placeholder="作者"
-                    list={creatorListId}
-                    value={row.creator}
-                    onChange={(event) => update({ creator: event.target.value })}
-                  />
+                  {row.author ? (
+                    <Picked
+                      label={row.author.label}
+                      tag={row.author.type === 'new' ? '新作者' : null}
+                      onClear={() => update({ author: null, pendingAuthor: '' })}
+                    />
+                  ) : (
+                    <Typeahead
+                      items={authors.data ?? []}
+                      allowNew
+                      newHint="（存檔時建立作者）"
+                      label={`作者 ${index + 1}`}
+                      placeholder="作者（可留空）"
+                      onSelect={(option) => update({ author: authorFromOption(option) })}
+                      onQueryChange={(text) => setSourcePending(row._key, text)}
+                    />
+                  )}
                   <Input
                     aria-label="來源標題"
                     placeholder="標題"
@@ -369,154 +419,16 @@ export default function RecipeForm() {
             </RowEditor>
           </Section>
 
-          <Section title="材料">
-            <RowEditor
-              rows={form.lines}
-              onChange={(rows) => setField('lines', rows)}
-              newRow={() => emptyLine(form.lines.at(-1)?.section ?? '')}
-              addLabel="加一行材料"
-              itemLabel="材料"
-            >
-              {(line, { update, index }) => (
-                <div className="grid gap-2 sm:grid-cols-6">
-                  <div className="sm:col-span-3">
-                    {line.target ? (
-                      <Picked
-                        label={line.target.label}
-                        stub={isStub(line.target)}
-                        tag={line.target.type === 'recipe' ? '食譜' : null}
-                        onClear={() => update({ target: null, pending: '' })}
-                      />
-                    ) : (
-                      <Typeahead
-                        allowNew
-                        label={`材料 ${index + 1}`}
-                        placeholder="食材或食譜…"
-                        exclude={{ recipe: id ? [Number(id)] : [] }}
-                        onSelect={(option) => update({ target: targetFromOption(option) })}
-                        onQueryChange={(text) => setLinePending(line._key, text)}
-                      />
-                    )}
-                  </div>
-                  <Input
-                    aria-label="份量"
-                    placeholder="份量"
-                    value={line.amount}
-                    onChange={(event) => update({ amount: event.target.value })}
-                    className="sm:col-span-1"
-                  />
-                  <Input
-                    aria-label="分段"
-                    placeholder="分段，例如 醬汁"
-                    list={sectionListId}
-                    value={line.section}
-                    onChange={(event) => update({ section: event.target.value })}
-                    className="sm:col-span-2"
-                  />
-                  <Input
-                    aria-label="材料備註"
-                    placeholder="備註，例如 切絲"
-                    value={line.note}
-                    onChange={(event) => update({ note: event.target.value })}
-                    className="sm:col-span-5"
-                  />
-                  <label className="flex items-center gap-1.5 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={line.is_optional}
-                      onChange={(event) => update({ is_optional: event.target.checked })}
-                    />
-                    可省略
-                  </label>
-                </div>
-              )}
-            </RowEditor>
-          </Section>
-
-          <Section title="步驟">
-            <RowEditor
-              rows={form.steps}
-              onChange={(rows) => setField('steps', rows)}
-              newRow={() => stepRow({ section: form.steps.at(-1)?.section ?? '' })}
-              addLabel="加一個步驟"
-              itemLabel="步驟"
-              actions={
-                <Button size="sm" onClick={() => setPasting(true)}>
-                  貼上多行
-                </Button>
-              }
-            >
-              {(row, { update, index }) => (
-                <div className="flex gap-2">
-                  <span className="w-6 shrink-0 pt-1.5 text-right font-display font-bold text-text-faint">
-                    {index + 1}
-                  </span>
-                  <div className="grid min-w-0 flex-1 gap-2">
-                    <TextArea
-                      aria-label={`步驟 ${index + 1}`}
-                      rows={2}
-                      value={row.body}
-                      onChange={(event) => update({ body: event.target.value })}
-                    />
-                    <Input
-                      aria-label="步驟分段"
-                      placeholder="分段（可留空）"
-                      list={sectionListId}
-                      value={row.section}
-                      onChange={(event) => update({ section: event.target.value })}
-                      className="sm:max-w-xs"
-                    />
-                  </div>
-                </div>
-              )}
-            </RowEditor>
-          </Section>
-
-          <Section title="標籤、做法、器材">
-            <div className="space-y-1">
-              <span className="text-sm font-medium text-text-muted">做法</span>
-              <ChipPicker
-                label="做法"
-                options={methods.data}
-                value={form.method_ids}
-                onChange={(value) => setField('method_ids', value)}
-                empty="還沒有做法，可以在設定裡新增。"
-              />
-            </div>
-            <div className="space-y-1">
-              <span className="text-sm font-medium text-text-muted">器材</span>
-              <ChipPicker
-                label="器材"
-                options={equipment.data}
-                value={form.equipment_ids}
-                onChange={(value) => setField('equipment_ids', value)}
-                empty="還沒有器材，可以在設定裡新增。"
-              />
-            </div>
-            <div className="space-y-1">
-              <span className="text-sm font-medium text-text-muted">標籤</span>
-              <ChipPicker
-                label="標籤"
-                options={labels.data}
-                value={form.label_ids}
-                onChange={(value) => setField('label_ids', value)}
-                empty="還沒有標籤，可以在設定裡新增。"
-              />
-            </div>
-          </Section>
+          <RecipeLinesSection value={form.lines} setValue={setter('lines')} excludeDishes={ownDish} />
+          <RecipeStepsSection value={form.steps} setValue={setter('steps')} />
+          <RecipeMethodsSection methodIds={form.method_ids} equipmentIds={form.equipment_ids} onChange={setField} />
 
           <Section title="說明">
-            <Field label="簡介">
-              <TextArea value={form.description} onChange={set('description')} />
-            </Field>
             <Field label="保存">
               <TextArea rows={3} value={form.storage_notes} onChange={set('storage_notes')} />
             </Field>
             <Field label="筆記">
               <TextArea value={form.notes} onChange={set('notes')} />
-            </Field>
-            <Field label="別名" hint="用逗號或頓號分開。搜尋得到，但不顯示。">
-              <Input value={form.aliases} onChange={set('aliases')} />
             </Field>
           </Section>
 
@@ -527,21 +439,12 @@ export default function RecipeForm() {
           <FormActions
             saving={saving}
             error={error}
-            onCancel={() => navigate(isNew ? '/recipes' : `/recipes/${id}`)}
+            onCancel={() =>
+              navigate(isNew ? (presetId ? `/dishes/${presetId}` : '/recipes') : `/recipes/${id}`)
+            }
             onDelete={isNew ? null : () => setDeleting(true)}
           />
         </>
-      ) : null}
-
-      {pasting ? (
-        <PasteSteps
-          onClose={() => setPasting(false)}
-          onAdd={(bodies) => {
-            const section = form.steps.at(-1)?.section ?? ''
-            setField('steps', [...form.steps, ...bodies.map((body) => stepRow({ section, body }))])
-            setPasting(false)
-          }}
-        />
       ) : null}
 
       {deleting ? (
@@ -553,31 +456,5 @@ export default function RecipeForm() {
         />
       ) : null}
     </form>
-  )
-}
-
-// 「貼上多行」: one step per line, numbering stripped, previewed by count
-// before anything is added.
-function PasteSteps({ onAdd, onClose }) {
-  const [text, setText] = useState('')
-  const bodies = splitSteps(text)
-  return (
-    <Dialog
-      title="貼上多行步驟"
-      size="md"
-      onClose={onClose}
-      footer={
-        <>
-          <Button onClick={onClose}>取消</Button>
-          <Button kind="primary" disabled={!bodies.length} onClick={() => onAdd(bodies)}>
-            加入 {bodies.length} 個步驟
-          </Button>
-        </>
-      }
-    >
-      <Field label="一行一個步驟" hint="開頭的編號（1.、1)、①、一、、第一步）會自動拿掉。">
-        <TextArea rows={10} value={text} onChange={(event) => setText(event.target.value)} autoFocus />
-      </Field>
-    </Dialog>
   )
 }

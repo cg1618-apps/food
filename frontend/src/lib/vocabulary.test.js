@@ -6,7 +6,7 @@ const rows = (...orders) => orders.map((sort_order, i) => ({ id: i + 1, sort_ord
 
 describe('reorderPatches', () => {
   it('swaps two values when every sort_order is distinct', () => {
-    expect(reorderPatches(rows(10, 20, 30), 2, -1)).toEqual([
+    expect(reorderPatches(rows(10, 20, 30), 2, 1)).toEqual([
       { id: 3, sort_order: 20 },
       { id: 2, sort_order: 30 },
     ])
@@ -14,7 +14,7 @@ describe('reorderPatches', () => {
 
   it('restores the original numbers when moved up and back down', () => {
     const start = rows(10, 20, 30)
-    const [a, b] = reorderPatches(start, 1, -1)
+    const [a, b] = reorderPatches(start, 1, 0)
     const after = [
       { id: 2, sort_order: a.sort_order },
       { id: 1, sort_order: b.sort_order },
@@ -22,24 +22,41 @@ describe('reorderPatches', () => {
     ]
     const back = reorderPatches(after, 0, 1)
     expect(back).toEqual([
-      { id: 2, sort_order: 20 },
       { id: 1, sort_order: 10 },
+      { id: 2, sort_order: 20 },
+    ])
+  })
+
+  it('hands the same numbers out again for a drop several places away', () => {
+    // The last of four dropped first: everything it passes shifts down one.
+    expect(reorderPatches(rows(10, 20, 30, 40), 3, 0)).toEqual([
+      { id: 4, sort_order: 10 },
+      { id: 1, sort_order: 20 },
+      { id: 2, sort_order: 30 },
+      { id: 3, sort_order: 40 },
+    ])
+    // The first dropped second-to-last: the last one does not move.
+    expect(reorderPatches(rows(10, 20, 30, 40), 0, 2)).toEqual([
+      { id: 2, sort_order: 10 },
+      { id: 3, sort_order: 20 },
+      { id: 1, sort_order: 30 },
     ])
   })
 
   it('renumbers when sort_orders tie, sending only what changes', () => {
     // [0, 0, 0] ordered by name; moving the last up gives 1, 3, 2.
-    expect(reorderPatches(rows(0, 0, 0), 2, -1)).toEqual([
+    expect(reorderPatches(rows(0, 0, 0), 2, 1)).toEqual([
       { id: 1, sort_order: 1 },
       { id: 3, sort_order: 2 },
       { id: 2, sort_order: 3 },
     ])
     // [1, 2, 2]: the third already holds 2, so only the second moves.
-    expect(reorderPatches(rows(1, 2, 2), 2, -1)).toEqual([{ id: 2, sort_order: 3 }])
+    expect(reorderPatches(rows(1, 2, 2), 2, 1)).toEqual([{ id: 2, sort_order: 3 }])
   })
 
-  it('answers nothing for a move off either end', () => {
+  it('answers nothing for a move off either end, or onto itself', () => {
     expect(reorderPatches(rows(1, 2), 0, -1)).toEqual([])
+    expect(reorderPatches(rows(1, 2), 1, 2)).toEqual([])
     expect(reorderPatches(rows(1, 2), 1, 1)).toEqual([])
   })
 })

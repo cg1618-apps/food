@@ -9,6 +9,8 @@ from fastapi.staticfiles import StaticFiles
 from app import errors, logging_config
 from app.request_context import RequestIdMiddleware
 from app.routers import (
+    common_ingredient,
+    dish,
     edit_session,
     health,
     image,
@@ -17,6 +19,9 @@ from app.routers import (
     kitchen_note,
     label,
     recipe,
+    recipe_template,
+    schedule,
+    tbd,
     vocabulary,
 )
 
@@ -47,15 +52,24 @@ def create_app(dist: Path = DIST) -> FastAPI:
     # discovered by the prefix test.
     app.include_router(ingredient.router)
     app.include_router(ingredient.edit)
+    app.include_router(common_ingredient.router)
+    app.include_router(common_ingredient.edit)
     app.include_router(ingredient_category.router)
     app.include_router(ingredient_category.edit)
     app.include_router(label.router)
     app.include_router(label.edit)
+    app.include_router(dish.router)
+    app.include_router(dish.edit)
     app.include_router(recipe.router)
     app.include_router(recipe.edit)
-    app.include_router(recipe.creators)
+    app.include_router(recipe_template.router)
+    app.include_router(recipe_template.edit)
     app.include_router(kitchen_note.router)
     app.include_router(kitchen_note.edit)
+    app.include_router(schedule.router)
+    app.include_router(schedule.edit)
+    app.include_router(tbd.router)
+    app.include_router(tbd.edit)
     app.include_router(image.router)
     app.include_router(image.edit)
     for vocabulary_router in vocabulary.ROUTERS:

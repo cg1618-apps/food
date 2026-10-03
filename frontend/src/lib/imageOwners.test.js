@@ -5,6 +5,7 @@ import { formatBytes, ownerHref, ownerKind } from './imageOwners'
 describe('ownerHref and ownerKind', () => {
   it.each([
     ['ingredient', '/ingredients/4', '食材'],
+    ['dish', '/dishes/4', '料理'],
     ['recipe', '/recipes/4', '食譜'],
     ['kitchen_note', '/notes/4', '筆記'],
   ])('%s', (type, href, kind) => {

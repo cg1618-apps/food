@@ -9,23 +9,45 @@ import { endpoints } from '../api/endpoints'
 // each is worded, which cascade keys BLOCK rather than cascade, and which
 // reads the delete makes stale.
 export const DELETE_TARGETS = {
+  dish: {
+    noun: '料理',
+    group: endpoints.dishes,
+    library: '/dishes',
+    counts: [['aliases', '個別名']],
+    blockers: [
+      ['recipes', (n) => `它底下還有 ${n} 份食譜，要先刪掉或移到別的料理。`],
+      ['used_in', (n) => `有 ${n} 份食譜把它當材料用，要先從那些食譜拿掉才能刪除。`],
+      ['meals', (n) => `排程裡排了它 ${n} 次，要先從排程拿掉才能刪除。`],
+    ],
+    invalidate: [
+      endpoints.dishes.list(),
+      endpoints.recipes.list(),
+      endpoints.labels.list(),
+      endpoints.courses.list(),
+      endpoints.regions.list(),
+      endpoints.images.list(),
+    ],
+  },
   recipe: {
     noun: '食譜',
     group: endpoints.recipes,
     library: '/recipes',
     counts: [
-      ['aliases', '個別名'],
       ['sources', '個來源'],
       ['lines', '行材料'],
       ['steps', '個步驟'],
     ],
-    blockers: [['used_in', (n) => `有 ${n} 道食譜把它當材料用，要先從那些食譜拿掉才能刪除。`]],
+    // Nothing refuses deleting a recipe: lines name the dish, never one
+    // recipe of it, and the dish stays. A meal item on the schedule naming it
+    // keeps its dish and loses only the recipe.
+    blockers: [],
     invalidate: [
+      endpoints.schedule.list(),
+      // The dish's recipe count and cover move.
+      endpoints.dishes.list(),
       endpoints.recipes.list(),
-      endpoints.recipes.creators(),
+      endpoints.authors.list(),
       endpoints.ingredients.list(),
-      endpoints.labels.list(),
-      endpoints.courses.list(),
       endpoints.methods.list(),
       endpoints.equipment.list(),
       endpoints.images.list(),
@@ -47,6 +69,8 @@ export const DELETE_TARGETS = {
     ],
     invalidate: [
       endpoints.ingredients.list(),
+      // A deleted ingredient leaves 常用食材 (ON DELETE CASCADE).
+      endpoints.commonIngredients.list(),
       endpoints.categories.tree(),
       endpoints.labels.list(),
       endpoints.recipes.list(),

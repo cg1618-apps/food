@@ -53,6 +53,6 @@ class LabelResponse(BaseModel):
     # Links per owner, and their total. `usage_count` is the name the other
     # vocabularies use for "how many things carry this".
     ingredient_count: int = 0
-    recipe_count: int = 0
+    dish_count: int = 0
     note_count: int = 0
     usage_count: int = 0

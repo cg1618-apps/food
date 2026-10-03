@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app import schemas
 from app.database import get_db
 from app.errors import AppError
-from app.models import IngredientLabel, KitchenNoteLabel, Label, RecipeLabel
+from app.models import DishLabel, IngredientLabel, KitchenNoteLabel, Label
 from app.routing import read_router, write_router
 
 router = read_router("labels", "Labels")
@@ -16,10 +16,10 @@ edit = write_router("labels", "Labels")
 
 # Every owner that carries labels, by the response field its count fills.
 # A label is one vocabulary across all three, so a count over one link table
-# would tell the settings page a label is unused while recipes carry it.
+# would tell the settings page a label is unused while dishes carry it.
 _LINK_TABLES = {
     "ingredient_count": IngredientLabel,
-    "recipe_count": RecipeLabel,
+    "dish_count": DishLabel,
     "note_count": KitchenNoteLabel,
 }
 
@@ -85,7 +85,7 @@ def delete_label(
     label_id: int,
     db: Session = Depends(get_db),
 ):
-    """Deleting a label detaches it from every ingredient, recipe and note
+    """Deleting a label detaches it from every ingredient, dish and note
     carrying it.
 
     That is a CASCADE on the link table and it is the right behaviour - a label

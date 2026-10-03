@@ -55,9 +55,18 @@ CONSTRAINT_MESSAGES = {
     "ck_recipe_course_has_a_name": "A course needs at least one name.",
     "uq_recipe_course_name_cn": "Another course already has that Chinese name.",
     "uq_recipe_course_name_en": "Another course already has that English name.",
+    "ck_recipe_status_has_a_name": "A status needs at least one name.",
+    "uq_recipe_status_name_cn": "Another status already has that Chinese name.",
+    "uq_recipe_status_name_en": "Another status already has that English name.",
+    "ck_source_platform_has_a_name": "A source platform needs at least one name.",
+    "uq_source_platform_name_cn": "Another source platform already has that Chinese name.",
+    "uq_source_platform_name_en": "Another source platform already has that English name.",
     "ck_cooking_method_has_a_name": "A cooking method needs at least one name.",
     "uq_cooking_method_name_cn": "Another cooking method already has that Chinese name.",
     "uq_cooking_method_name_en": "Another cooking method already has that English name.",
+    "ck_author_has_a_name": "An author needs at least one name.",
+    "uq_author_name_cn": "Another author already has that Chinese name.",
+    "uq_author_name_en": "Another author already has that English name.",
     "ck_equipment_has_a_name": "A piece of equipment needs at least one name.",
     "uq_equipment_name_cn": "Another piece of equipment already has that Chinese name.",
     "uq_equipment_name_en": "Another piece of equipment already has that English name.",
@@ -85,18 +94,26 @@ CONSTRAINT_MESSAGES = {
     "uq_ingredient_category_one_fallback": (
         "There is already a fallback category, and there may only be one."
     ),
-    "ck_recipe_has_a_name": "A recipe needs at least one name.",
-    "ck_recipe_not_its_own_version": "A recipe cannot be a version of itself.",
-    "uq_recipe_alias": "That recipe already carries that alias.",
-    "ck_recipe_source_has_content": "A source needs a creator, a link or a title.",
+    "ck_region_has_a_name": "A region needs at least one name.",
+    "uq_region_name_cn": "Another region already has that Chinese name.",
+    "uq_region_name_en": "Another region already has that English name.",
+    "ck_dish_has_a_name": "A dish needs at least one name.",
+    "uq_dish_alias": "That dish already carries that alias.",
+    "uq_dish_image_position": "Two images cannot share one position.",
+    "uq_dish_image_once": "That image is already in this gallery.",
+    "ck_recipe_source_has_content": "A source needs an author, a link or a title.",
     "uq_recipe_line_position": "Two ingredient lines cannot share one position.",
     "ck_recipe_line_one_target": (
-        "An ingredient line names exactly one ingredient or one recipe."
+        "An ingredient line names exactly one ingredient or one dish."
     ),
-    "ck_recipe_line_not_itself": "A recipe cannot use itself as an ingredient.",
     "uq_recipe_step_position": "Two steps cannot share one position.",
     "uq_recipe_image_position": "Two images cannot share one position.",
     "uq_recipe_image_once": "That image is already in this gallery.",
+    "uq_recipe_template_name": "Another template already has that name.",
+    "uq_schedule_meal_slot": "A day has one meal per slot.",
+    "uq_schedule_meal_item_position": "Two items of a meal cannot share one position.",
+    "ck_tbd_link_has_a_url": "A link needs a URL.",
+    "ck_recipe_template_has_a_name": "A template needs a name.",
 }
 
 GENERIC_MESSAGES = {

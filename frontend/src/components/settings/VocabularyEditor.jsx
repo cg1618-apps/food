@@ -1,10 +1,12 @@
-// Frontend: one flat vocabulary on 設定 - labels, courses, cooking methods,
-// equipment. Add, rename, reorder and delete, each in place.
+// Frontend: one flat vocabulary on 設定 - labels, courses, recipe statuses,
+// source platforms, cooking methods, equipment. Add, rename, reorder and
+// delete, each in place.
 //
-// The three factory vocabularies (app/routers/vocabulary.py) carry a
-// sort_order and are reordered with ▲ / ▼ (lib/vocabulary.js decides the
-// PATCHes); labels have none and are listed by name, so `ordered` is off for
-// them. A new value goes after the last one.
+// The five factory vocabularies (app/routers/vocabulary.py) carry a
+// sort_order and are reordered by dragging (lib/vocabulary.js decides the
+// PATCHes, hooks/useSortOrderMove.js holds the list still while they land);
+// labels have none and are listed by name, so `ordered` is off for them. A
+// new value goes after the last one.
 //
 //   title       the section heading
 //   endpoints   the resource's group in api/endpoints.js
@@ -17,8 +19,10 @@
 //   confirmText (row) => what the delete question says
 //   refusal     (row, error) => the inline sentence when a delete fails
 import { useApiMutation, useApiQuery } from '../../hooks/useApi'
-import { nextSortOrder, reorderPatches } from '../../lib/vocabulary'
+import { useSortOrderMove } from '../../hooks/useSortOrderMove'
+import { nextSortOrder } from '../../lib/vocabulary'
 import { Section } from '../ui/primitives'
+import { SortableList } from '../ui/Sortable'
 import { Empty, ErrorNote, Loading } from '../ui/states'
 import AddNameForm from './AddNameForm'
 import NameRow from './NameRow'
@@ -39,14 +43,23 @@ export default function VocabularyEditor({
   const update = useApiMutation({ method: 'PATCH', invalidate })
   const remove = useApiMutation({ method: 'DELETE', invalidate })
 
-  const rows = list.data ?? []
+  const sorter = useSortOrderMove((id, sort_order) =>
+    update.mutateAsync({ url: group.update(id), body: { sort_order } }),
+  )
+  const rows = sorter.ordered(list.data ?? [])
 
-  async function move(index, delta) {
-    const patches = reorderPatches(rows, index, delta)
-    await Promise.all(
-      patches.map(({ id, sort_order }) => update.mutateAsync({ url: group.update(id), body: { sort_order } })),
-    )
-  }
+  const items = rows.map((row) => (
+    <NameRow
+      key={row.id}
+      item={row}
+      meta={meta(row)}
+      onRename={(names) => update.mutateAsync({ url: group.update(row.id), body: names })}
+      sortable={ordered}
+      onDelete={() => remove.mutateAsync({ url: group.remove(row.id) })}
+      confirmText={confirmText(row)}
+      refusal={(error) => refusal(row, error)}
+    />
+  ))
 
   return (
     <Section title={title}>
@@ -56,22 +69,24 @@ export default function VocabularyEditor({
       {list.isError ? <ErrorNote error={list.error} /> : null}
       {list.isSuccess && rows.length === 0 ? <Empty>還沒有任何{title}。</Empty> : null}
 
-      {rows.length ? (
+      {sorter.error ? <ErrorNote error={sorter.error} /> : null}
+
+      {rows.length && ordered ? (
+        // The SortableList goes outside the list: dnd-kit draws its hidden
+        // screen-reader text beside its children, and a <ul> holds only <li>.
+        <SortableList
+          ids={rows.map((row) => row.id)}
+          onMove={(from, to) => sorter.move(rows, from, to)}
+          disabled={sorter.moving}
+        >
+          <ul className="space-y-1" aria-label={title}>
+            {items}
+          </ul>
+        </SortableList>
+      ) : null}
+      {rows.length && !ordered ? (
         <ul className="space-y-1" aria-label={title}>
-          {rows.map((row, index) => (
-            <NameRow
-              key={row.id}
-              item={row}
-              meta={meta(row)}
-              onRename={(names) => update.mutateAsync({ url: group.update(row.id), body: names })}
-              onMove={ordered ? (delta) => move(index, delta) : undefined}
-              canMoveUp={index > 0}
-              canMoveDown={index < rows.length - 1}
-              onDelete={() => remove.mutateAsync({ url: group.remove(row.id) })}
-              confirmText={confirmText(row)}
-              refusal={(error) => refusal(row, error)}
-            />
-          ))}
+          {items}
         </ul>
       ) : null}
 

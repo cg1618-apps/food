@@ -32,9 +32,11 @@ import { reconcileMinDays } from './storageDuration'
 
 // An ingredient save moves more than the ingredient's own reads: category and
 // label counts, cooking-method usage (heating rows), the recipes whose lines
-// name it, and the image library's usage counts.
+// name it, the image library's usage counts, and 常用食材 (a renamed
+// ingredient is a renamed chip).
 const INVALIDATE = [
   endpoints.ingredients.list(),
+  endpoints.commonIngredients.list(),
   endpoints.categories.tree(),
   endpoints.labels.list(),
   endpoints.methods.list(),

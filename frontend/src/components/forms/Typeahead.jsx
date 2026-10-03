@@ -2,26 +2,36 @@
 //
 // Diverges from media's ComboBox on purpose (docs/notes/decisions.md): that
 // one filters a list it was handed, which here would mean downloading every
-// ingredient and recipe for every line of a recipe. This one asks the server
+// ingredient and dish for every line of a recipe. This one asks the server
 // - the list endpoints' `q`, which matches every name slot and alias - after
 // the typing settles, and is driven from the keyboard: Up / Down move through
-// the options, Enter picks, Escape closes.
+// the options, Enter picks, Escape closes. Handed `items` - a list small
+// enough to hold whole, the authors - it filters that in the browser instead
+// and asks nothing.
 //
-// It only PICKS. What a pick means - a recipe line's target, a recipe's
-// "version of", a merge target - is the caller's, through `onSelect(option)`;
-// the box clears itself afterwards. Options are lib/typeahead.js's:
-// { type: 'ingredient' | 'recipe' | 'new', id, label, detail, needsDetail,
-// kind }.
+// It only PICKS. What a pick means - a recipe line's target, a recipe's dish,
+// a merge target - is the caller's, through `onSelect(option)`; the box
+// clears itself afterwards. Options are lib/typeahead.js's:
+// { type: 'ingredient' | 'dish' | 'recipe' | 'item' | 'new' | 'new-dish', id,
+// label, detail, needsDetail, kind }.
 //
-//   sources      which libraries to search: ['ingredient'], ['recipe'] or both
+//   sources      which libraries to search: ['ingredient'], ['dish'] or both;
+//                or ['recipe'] - the new-recipe chooser's 複製另一份食譜
+//   items        rows ({ id, display_name, name_cn, name_en }) to filter in
+//                the browser instead of searching; options are type 'item'
 //   onSelect     (option) => void
 //   allowNew     offer 「新增 'xxx'」 when nothing matches exactly
-//   exclude      { ingredient: [ids], recipe: [ids] } never offered
+//   newHint      the words beside 「新增」, saying what the save will make
+//   allowNewDish offer 「新增料理 'xxx'」 as well - a recipe line, which may
+//                name a dish (a 醬料) that does not exist yet
+//   newDishHint  the words beside that one
+//   exclude      { ingredient: [ids], dish: [ids] } never offered
 //   onQueryChange (text) => void - what is typed and not yet picked, '' after
 //                a pick. A caller that refuses to save over unpicked text
 //                (a line naming nothing, a parent nobody chose) needs it: the
 //                box is otherwise the only thing that knows the text is there.
 //   label        the input's accessible name
+//   disabled     turns the box off (a list still saving its last change)
 //   placeholder, autoFocus, className
 import { keepPreviousData } from '@tanstack/react-query'
 import { useId, useState } from 'react'
@@ -30,10 +40,10 @@ import { endpoints } from '../../api/endpoints'
 import { useApiQuery } from '../../hooks/useApi'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { cx } from '../../lib/cx'
-import { mergeResults, stepActive } from '../../lib/typeahead'
+import { localResults, mergeResults, stepActive } from '../../lib/typeahead'
 import { Badge, Chip, Input } from '../ui/primitives'
 
-const TYPE_WORDS = { ingredient: '食材', recipe: '食譜' }
+const TYPE_WORDS = { ingredient: '食材', dish: '料理', recipe: '食譜' }
 
 /**
  * What a typeahead chose, shown in its place: the name (a link when `to` is
@@ -66,14 +76,19 @@ export function Picked({ label, stub = false, tag, onClear, clearLabel = '更換
 }
 
 export default function Typeahead({
-  sources = ['ingredient', 'recipe'],
+  sources = ['ingredient', 'dish'],
+  items,
   onSelect,
   onQueryChange,
   allowNew = false,
+  newHint = '（存檔時建立待補食材）',
+  allowNewDish = false,
+  newDishHint = '（存檔時建立醬料）',
   exclude,
   label = '搜尋',
   placeholder = '輸入名稱搜尋…',
   autoFocus = false,
+  disabled = false,
   className,
 }) {
   const listId = useId()
@@ -82,12 +97,19 @@ export default function Typeahead({
   const [active, setActive] = useState(-1)
   const settled = useDebouncedValue(query.trim(), 250)
 
-  const searchIngredients = sources.includes('ingredient') && settled !== ''
-  const searchRecipes = sources.includes('recipe') && settled !== ''
+  const local = items !== undefined
+  const searchIngredients = !local && sources.includes('ingredient') && settled !== ''
+  const searchDishes = !local && sources.includes('dish') && settled !== ''
+  const searchRecipes = !local && sources.includes('recipe') && settled !== ''
   const ingredients = useApiQuery(
     endpoints.ingredients.list(),
     { q: settled },
     { enabled: searchIngredients, placeholderData: keepPreviousData },
+  )
+  const dishes = useApiQuery(
+    endpoints.dishes.list(),
+    { q: settled },
+    { enabled: searchDishes, placeholderData: keepPreviousData },
   )
   const recipes = useApiQuery(
     endpoints.recipes.list(),
@@ -97,18 +119,27 @@ export default function Typeahead({
 
   const typed = query.trim()
   const searching =
-    typed !== settled || (searchIngredients && ingredients.isFetching) || (searchRecipes && recipes.isFetching)
+    !local &&
+    (typed !== settled ||
+      (searchIngredients && ingredients.isFetching) ||
+      (searchDishes && dishes.isFetching) ||
+      (searchRecipes && recipes.isFetching))
   // 「新增」 waits for the search to answer: offered before it, a quick Enter
   // makes a stub named after something the library already has.
-  const options = typed
-    ? mergeResults({
-        ingredients: searchIngredients ? ingredients.data : [],
-        recipes: searchRecipes ? recipes.data : [],
-        query: typed,
-        exclude,
-        allowNew: allowNew && !searching,
-      })
-    : []
+  let options = []
+  if (typed && local) {
+    options = localResults({ items, query: typed, allowNew })
+  } else if (typed) {
+    options = mergeResults({
+      ingredients: searchIngredients ? ingredients.data : [],
+      dishes: searchDishes ? dishes.data : [],
+      recipes: searchRecipes ? recipes.data : [],
+      query: typed,
+      exclude,
+      allowNew: allowNew && !searching,
+      allowNewDish: allowNewDish && !searching,
+    })
+  }
   const showList = open && typed !== ''
   const activeIndex = active < options.length ? active : -1
 
@@ -156,6 +187,7 @@ export default function Typeahead({
         aria-activedescendant={activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
         autoComplete="off"
         autoFocus={autoFocus}
+        disabled={disabled}
         placeholder={placeholder}
         value={query}
         onChange={(event) => {
@@ -194,10 +226,12 @@ export default function Typeahead({
                   index === activeIndex ? 'bg-brand-soft text-brand' : 'text-text',
                 )}
               >
-                {option.type === 'new' ? (
+                {option.type === 'new' || option.type === 'new-dish' ? (
                   <span>
-                    新增「<strong>{option.label}</strong>」
-                    <span className="ml-1 text-xs text-text-faint">（存檔時建立待補食材）</span>
+                    {option.type === 'new-dish' && allowNew ? '新增料理' : '新增'}「<strong>{option.label}</strong>」
+                    <span className="ml-1 text-xs text-text-faint">
+                      {option.type === 'new-dish' ? newDishHint : newHint}
+                    </span>
                   </span>
                 ) : (
                   <>
@@ -208,8 +242,8 @@ export default function Typeahead({
                       ) : null}
                     </span>
                     {option.needsDetail ? <Badge kind="stub" /> : null}
-                    {option.kind === 'base' ? <Chip>基底</Chip> : null}
-                    {sources.length > 1 ? (
+                    {option.kind === 'sauce' ? <Chip>醬料</Chip> : null}
+                    {!local && sources.length > 1 ? (
                       <span className="shrink-0 text-xs text-text-faint">{TYPE_WORDS[option.type]}</span>
                     ) : null}
                   </>

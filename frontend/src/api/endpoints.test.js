@@ -22,12 +22,14 @@ const WRITE_KEYS = new Set([
   'label',
   'upload',
   'session',
+  'replace',
+  'order',
+  'fromRecipe',
 ])
 const READ_KEYS = new Set([
   'list',
   'detail',
   'cascade',
-  'creators',
   'mergePreview',
   'tree',
   'fixed',
@@ -76,8 +78,15 @@ describe('paths the backend actually serves', () => {
   // its name, and the routes added beside the plain CRUD.
   it.each([
     [endpoints.notes.list(), '/api/kitchen-notes'],
-    [endpoints.recipes.creators(), '/api/recipe-creators'],
+    [endpoints.authors.list(), '/api/authors'],
+    [endpoints.authors.update(6), '/api/edit/authors/6'],
+    [endpoints.lineGroups.list(), '/api/line-groups'],
+    [endpoints.lineGroups.remove(2), '/api/edit/line-groups/2'],
+    [endpoints.stepGroups.list(), '/api/step-groups'],
+    [endpoints.stepGroups.create(), '/api/edit/step-groups'],
     [endpoints.courses.list(), '/api/recipe-courses'],
+    [endpoints.statuses.update(3), '/api/edit/recipe-statuses/3'],
+    [endpoints.platforms.list(), '/api/source-platforms'],
     [endpoints.methods.update(4), '/api/edit/cooking-methods/4'],
     [endpoints.equipment.remove(5), '/api/edit/equipment/5'],
     [endpoints.ingredients.mergePreview(7), '/api/ingredients/7/merge-preview'],
@@ -85,6 +94,17 @@ describe('paths the backend actually serves', () => {
     [endpoints.ingredients.label(7, 2), '/api/edit/ingredients/7/labels/2'],
     [endpoints.images.upload(), '/api/edit/images'],
     [endpoints.vocabularies.fixed(), '/api/vocabularies/fixed'],
+    [endpoints.tbd.list(), '/api/tbd'],
+    [endpoints.tbd.create(), '/api/edit/tbd'],
+    [endpoints.tbd.update(4), '/api/edit/tbd/4'],
+    [endpoints.tbd.remove(4), '/api/edit/tbd/4'],
+    [endpoints.tbd.order(), '/api/edit/tbd/order'],
+    [endpoints.schedule.list(), '/api/schedule'],
+    [endpoints.schedule.update('2026-10-03'), '/api/edit/schedule/2026-10-03'],
+    [endpoints.templates.list(), '/api/recipe-templates'],
+    [endpoints.templates.detail(3), '/api/recipe-templates/3'],
+    [endpoints.templates.order(), '/api/edit/recipe-templates/order'],
+    [endpoints.templates.fromRecipe(9), '/api/edit/recipe-templates/from-recipe/9'],
   ])('%s', (actual, expected) => {
     expect(actual).toBe(expected)
   })

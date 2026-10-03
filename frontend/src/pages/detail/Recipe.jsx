@@ -1,38 +1,57 @@
 // Frontend: one recipe, /recipes/:id.
 //
-// One reading column, in the order a cook reads it: the pictures; course,
-// names and a meta line (servings, time, methods, equipment); the status,
-// changeable here; where it came from; other versions; the ingredients and
-// the steps, each grouped by section (lib/sections.js); notes; and for a base,
-// the recipes that use it. Every section with nothing in it is left out, so a
-// recipe saved as a bookmark is a short page rather than a page of empties.
+// One reading column, in the order a cook reads it: the pictures; the dish
+// it makes - a link, with the dish's kind, course, region, serves-as and
+// labels shown read-only, since they are the dish's and edited there; the
+// recipe's name and a meta line (servings, time, methods, equipment); the
+// status, changeable here; where it came from; 其他版本, the dish's other
+// recipes; the ingredients and the steps, each in its groups
+// (lib/recipeGroups.js) - the ungrouped rows first, then a block per group
+// under its name, ordinary steps numbered through every group, an optional
+// step marked 可省略 and a 備註 drawn as a callout; storage and notes. A line
+// naming a dish links to the dish. Every section with nothing in it is left
+// out, so a recipe saved as a bookmark is a short page rather than a page of
+// empties.
 //
 // The status is the one thing changed in place: 想試 -> 可煮 -> 常煮 is what
 // happens after cooking, standing at the stove with the page open, and a
-// round trip through the form for it would be the form's whole job. It is a
-// PATCH of `status` alone; the control shows the chosen value while the
+// round trip through the form for it would be the form's whole job. The
+// choices are the statuses 設定 manages, in their order. It is a PATCH of
+// `status_id` alone; the control shows the chosen value while the
 // request runs, then the recipe the PATCH answers with (put straight into the
 // detail read's cache), and goes back, with the server's sentence, if it
 // fails.
+//
+// Beside 編輯, 存成範本 makes a recipe template of this recipe's structure -
+// its lines and steps in their groups, the steps' kinds, methods, equipment,
+// servings and time - under a name asked for in a dialog (the recipe's name
+// to start with), then links to the new template's form. A name another
+// template has is refused, and the dialog says so and stays open.
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { endpoints } from '../../api/endpoints'
 import { DetailActions, DetailStatus, LabelLinks, Prose, RecipeLinks } from '../../components/layout/Detail'
+import Dialog from '../../components/ui/Dialog'
 import Gallery from '../../components/ui/Gallery'
-import { Badge, Chip, LinkButton, Section, Toggle } from '../../components/ui/primitives'
+import { Badge, Button, Chip, Field, Input, LinkButton, Section, Toggle } from '../../components/ui/primitives'
 import { ErrorNote } from '../../components/ui/states'
 import { fixedLabel, useApiMutation, useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
+import { cx } from '../../lib/cx'
 import { linkHost } from '../../lib/format'
-import { groupBySection, numberedStepGroups } from '../../lib/sections'
-import { otherVersions } from '../../lib/versions'
+import { blankToNull } from '../../lib/rowList'
+import { lineBlocks, stepBlocks } from '../../lib/recipeGroups'
+import { NOTE } from '../../lib/steps'
 
 const names = (refs) => (refs?.length ? refs.map((ref) => ref.display_name).join('、') : null)
 
 // A status change moves this recipe's reads and the library's status filter
-// and column - all under the recipes prefix.
-const STATUS_INVALIDATE = [endpoints.recipes.list()]
+// and column - all under the recipes prefix - the statuses' usage counts, and
+// the dish page's list of its recipes.
+const STATUS_INVALIDATE = [endpoints.recipes.list(), endpoints.statuses.list(), endpoints.dishes.list()]
 
-function StatusControl({ recipe, statuses }) {
+function StatusControl({ recipe }) {
+  const statuses = useApiQuery(endpoints.statuses.list())
   const mutation = useApiMutation({
     method: 'PATCH',
     invalidate: STATUS_INVALIDATE,
@@ -41,17 +60,18 @@ function StatusControl({ recipe, statuses }) {
     onSaved: (saved, _variables, queryClient) =>
       queryClient.setQueryData([endpoints.recipes.detail(recipe.id), null], saved),
   })
-  const shown = mutation.isPending ? mutation.variables.body.status : recipe.status
+  const shown = mutation.isPending ? mutation.variables.body.status_id : recipe.status.id
+  const options = (statuses.data ?? []).map((status) => ({ value: status.id, label: status.display_name }))
 
   return (
     <div className="space-y-2">
       <Toggle
         label="狀態"
-        options={statuses ?? []}
+        options={options}
         value={shown}
-        onChange={(status) => {
+        onChange={(statusId) => {
           if (mutation.isPending) return
-          mutation.mutate({ url: endpoints.recipes.update(recipe.id), body: { status } })
+          mutation.mutate({ url: endpoints.recipes.update(recipe.id), body: { status_id: statusId } })
         }}
       />
       {mutation.error ? (
@@ -61,22 +81,31 @@ function StatusControl({ recipe, statuses }) {
   )
 }
 
-function Sources({ sources, platforms }) {
+// Each source: its platform, its author (a link to the library filtered by
+// them, as the course is), and its title - the link out when there is a URL,
+// the URL's host standing in for a missing title.
+function Sources({ sources }) {
   if (!sources.length) return null
   return (
     <ul className="space-y-1 text-sm">
       {sources.map((source) => {
-        const words = [source.creator, source.title].filter(Boolean).join(' · ')
+        const words = source.title || (source.url ? linkHost(source.url) : null)
         return (
           <li key={source.id} className="flex flex-wrap items-baseline gap-2">
-            <Chip>{fixedLabel(platforms, source.platform)}</Chip>
+            <Chip>{source.platform.display_name}</Chip>
+            {source.author ? (
+              <Link to={`/recipes?author=${source.author.id}`} className="hover:text-brand hover:underline">
+                {source.author.display_name}
+              </Link>
+            ) : null}
+            {source.author && words ? <span className="text-text-faint">·</span> : null}
             {source.url ? (
               <a href={source.url} target="_blank" rel="noreferrer" className="text-brand hover:underline">
-                {words || linkHost(source.url)} ↗
+                {words} ↗
               </a>
-            ) : (
+            ) : words ? (
               <span>{words}</span>
-            )}
+            ) : null}
           </li>
         )
       })}
@@ -95,20 +124,20 @@ function LineTarget({ line }) {
       </>
     )
   }
-  if (line.sub_recipe) {
+  if (line.sub_dish) {
     return (
-      <Link to={`/recipes/${line.sub_recipe.id}`} className="text-brand hover:underline">
-        {line.sub_recipe.display_name}
+      <Link to={`/dishes/${line.sub_dish.id}`} className="text-brand hover:underline">
+        {line.sub_dish.display_name}
       </Link>
     )
   }
   return null
 }
 
-function Lines({ lines }) {
-  return groupBySection(lines).map((group) => (
-    <div key={group.section ?? ''} className="space-y-1">
-      {group.section ? <h3 className="text-sm font-bold text-text-muted">{group.section}</h3> : null}
+function Lines({ blocks }) {
+  return blocks.map((group) => (
+    <div key={group.key} className="space-y-1">
+      {group.heading ? <h3 className="text-sm font-bold text-text-muted">{group.heading}</h3> : null}
       <ul className="divide-y divide-border">
         {group.rows.map((line) => (
           <li
@@ -128,28 +157,137 @@ function Lines({ lines }) {
   ))
 }
 
-function Steps({ steps }) {
-  return numberedStepGroups(steps).map((group) => (
-    <div key={group.section ?? ''} className="space-y-2">
-      {group.section ? <h3 className="text-sm font-bold text-text-muted">{group.section}</h3> : null}
+// One block per group, as the lines are. An ordinary step has its number in
+// a disc; an optional one a 可省略 chip in that place and slightly muted
+// text; a note is a ruled, tinted callout with no number at all
+// (lib/steps.js). `kindLabel` is the fixed list's label for a kind.
+function Steps({ blocks, kindLabel }) {
+  return blocks.map((group) => (
+    <div key={group.key} className="space-y-2">
+      {group.heading ? <h3 className="text-sm font-bold text-text-muted">{group.heading}</h3> : null}
       <ol className="space-y-3">
-        {group.rows.map((step) => (
-          <li key={step.id} className="flex gap-3">
-            <span
-              aria-hidden="true"
-              className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft font-display text-sm font-bold text-brand"
-            >
-              {step.number}
-            </span>
-            <p className="whitespace-pre-line leading-relaxed">
-              <span className="sr-only">第 {step.number} 步：</span>
-              {step.body}
-            </p>
-          </li>
-        ))}
+        {group.rows.map((step) =>
+          step.kind === NOTE ? (
+            <li key={step.id} className="space-y-0.5 rounded-md border-l-4 border-border-strong bg-surface-2 px-3 py-2">
+              <p className="text-xs font-bold text-text-muted">{kindLabel(NOTE)}</p>
+              <p className="whitespace-pre-line text-sm leading-relaxed">{step.body}</p>
+            </li>
+          ) : (
+            <li key={step.id} className="flex gap-3">
+              {step.number ? (
+                <span
+                  aria-hidden="true"
+                  className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft font-display text-sm font-bold text-brand"
+                >
+                  {step.number}
+                </span>
+              ) : (
+                <Chip className="mt-0.5 shrink-0">{kindLabel(step.kind)}</Chip>
+              )}
+              <p className={cx('whitespace-pre-line leading-relaxed', !step.number && 'text-text-muted')}>
+                {step.number ? <span className="sr-only">第 {step.number} 步：</span> : null}
+                {step.body}
+              </p>
+            </li>
+          ),
+        )}
       </ol>
     </div>
   ))
+}
+
+// 存成範本: ask for a name, POST it to from-recipe, then say where the new
+// template is. The template list is the only read a new template moves.
+function SaveAsTemplate({ recipe }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [error, setError] = useState(null)
+  const [saved, setSaved] = useState(null)
+  const create = useApiMutation({ method: 'POST', invalidate: [endpoints.templates.list()] })
+
+  function start() {
+    setName(recipe.display_name)
+    setError(null)
+    setSaved(null)
+    setOpen(true)
+  }
+
+  async function submit() {
+    const chosen = blankToNull(name)
+    if (!chosen) {
+      setError(new Error('範本要有名稱。'))
+      return
+    }
+    setError(null)
+    try {
+      setSaved(await create.mutateAsync({ url: endpoints.templates.fromRecipe(recipe.id), body: { name: chosen } }))
+    } catch (caught) {
+      setError(caught)
+    }
+  }
+
+  const close = () => setOpen(false)
+  return (
+    <>
+      <Button onClick={start}>存成範本</Button>
+      {open ? (
+        <Dialog
+          title="存成範本"
+          onClose={close}
+          busy={create.isPending}
+          footer={
+            saved ? (
+              <>
+                <Button onClick={close}>關閉</Button>
+                <LinkButton to={`/edit/templates/${saved.id}`} kind="primary">
+                  開啟範本
+                </LinkButton>
+              </>
+            ) : (
+              <>
+                <Button onClick={close} disabled={create.isPending}>
+                  取消
+                </Button>
+                <Button kind="primary" onClick={submit} disabled={create.isPending}>
+                  {create.isPending ? '儲存中…' : '存成範本'}
+                </Button>
+              </>
+            )
+          }
+        >
+          {saved ? (
+            <p role="status">
+              已存成範本「
+              <Link to={`/edit/templates/${saved.id}`} className="text-brand hover:underline">
+                {saved.name}
+              </Link>
+              」。新增食譜時選「從範本」就能用它開始。
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-text-muted">
+                範本會帶走這份食譜的材料、步驟、做法、器材、份量和時間；料理、名稱、來源、狀態、筆記和圖片不會。
+              </p>
+              <Field label="範本名稱">
+                <Input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      submit()
+                    }
+                  }}
+                  autoFocus
+                />
+              </Field>
+              {error ? <ErrorNote error={error} /> : null}
+            </div>
+          )}
+        </Dialog>
+      ) : null}
+    </>
+  )
 }
 
 export default function Recipe() {
@@ -168,17 +306,15 @@ export default function Recipe() {
     )
   }
 
-  const otherNames = [recipe.name_cn, recipe.name_en, recipe.name_alt].filter(
-    (name) => name && name !== recipe.display_name,
-  )
+  const { dish } = recipe
   const meta = [
     recipe.servings ? `份量 ${recipe.servings}` : null,
     recipe.time ? `時間 ${recipe.time}` : null,
     names(recipe.methods),
     names(recipe.equipment),
   ].filter(Boolean)
-  const versions = otherVersions(recipe)
-  const isBase = recipe.kind === 'base'
+  const lines = lineBlocks(recipe)
+  const steps = stepBlocks(recipe)
 
   return (
     <article className="mx-auto max-w-2xl space-y-8">
@@ -186,48 +322,50 @@ export default function Recipe() {
 
       <header className="space-y-3">
         <p className="flex flex-wrap items-center gap-2 text-sm text-text-muted">
-          {recipe.course ? (
-            <Link to={`/recipes?course=${recipe.course.id}`} className="hover:text-brand">
-              {recipe.course.display_name}
+          <Link to={`/dishes/${dish.id}`} className="font-medium text-brand hover:underline">
+            {dish.display_name}
+          </Link>
+          {dish.kind === 'sauce' ? <Chip tone="brand">{fixedLabel(fixed.data?.dish_kinds, dish.kind)}</Chip> : null}
+          {dish.course ? (
+            <Link to={`/recipes?course=${dish.course.id}`} className="hover:text-brand">
+              {dish.course.display_name}
             </Link>
           ) : null}
-          {isBase ? <Chip tone="brand">{fixedLabel(fixed.data?.recipe_kinds, recipe.kind)}</Chip> : null}
-          {recipe.serves_as.length ? <span>也可以當作 {names(recipe.serves_as)}</span> : null}
+          {dish.region ? <span>{dish.region.display_name}</span> : null}
+          {dish.serves_as.length ? <span>也可以當作 {names(dish.serves_as)}</span> : null}
           {recipe.written_up ? null : <Badge kind="bookmark" />}
         </p>
         <h1 className="text-3xl font-bold leading-tight">{recipe.display_name}</h1>
-        {otherNames.length ? <p className="text-text-muted">{otherNames.join(' · ')}</p> : null}
+        {recipe.name ? <p className="text-text-muted">{dish.display_name} 的一份食譜</p> : null}
         {meta.length ? <p className="text-sm text-text-muted">{meta.join(' · ')}</p> : null}
-        <StatusControl recipe={recipe} statuses={fixed.data?.recipe_statuses} />
-        <LabelLinks labels={recipe.labels} to={(label) => `/recipes?label=${label.id}`} />
+        <StatusControl recipe={recipe} />
+        <LabelLinks labels={dish.labels} to={(label) => `/recipes?label=${label.id}`} />
       </header>
-
-      <Prose>{recipe.description}</Prose>
 
       {recipe.sources.length ? (
         <Section title="來源">
-          <Sources sources={recipe.sources} platforms={fixed.data?.source_platforms} />
+          <Sources sources={recipe.sources} />
         </Section>
       ) : null}
 
-      {versions.length ? (
+      {recipe.other_recipes.length ? (
         <Section title="其他版本">
-          <RecipeLinks recipes={versions} describe={(v) => (v.original ? '原版' : null)} />
+          <RecipeLinks recipes={recipe.other_recipes} />
         </Section>
       ) : null}
 
-      {recipe.lines.length ? (
+      {lines.length ? (
         <Section title="材料">
           <div className="space-y-4">
-            <Lines lines={recipe.lines} />
+            <Lines blocks={lines} />
           </div>
         </Section>
       ) : null}
 
-      {recipe.steps.length ? (
+      {steps.length ? (
         <Section title="步驟">
           <div className="space-y-5">
-            <Steps steps={recipe.steps} />
+            <Steps blocks={steps} kindLabel={(kind) => fixedLabel(fixed.data?.step_kinds, kind)} />
           </div>
         </Section>
       ) : null}
@@ -244,18 +382,14 @@ export default function Recipe() {
         </Section>
       ) : null}
 
-      {recipe.used_in.length ? (
-        <Section title="用在">
-          <RecipeLinks recipes={recipe.used_in} />
-        </Section>
-      ) : null}
-
       <DetailActions
         kind="recipe"
         id={recipe.id}
         name={recipe.display_name}
         editTo={`/edit/recipes/${recipe.id}`}
-      />
+      >
+        <SaveAsTemplate recipe={recipe} />
+      </DetailActions>
     </article>
   )
 }

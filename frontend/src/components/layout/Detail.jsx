@@ -9,7 +9,7 @@
 //                  any other error; renders nothing once there is data
 //   Prose          a block of written notes, line breaks kept
 //   LabelLinks     a row's labels, each a link to its library filtered by it
-//   RecipeLinks    a short list of recipes as links ("used in", versions)
+//   RecipeLinks    a short list of recipes as links ("used in", 其他版本)
 //   DetailActions  編輯 and 刪除, the latter through the one DeleteDialog
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -49,7 +49,7 @@ export function LabelLinks({ labels, to }) {
   )
 }
 
-// `describe(recipe)` adds a faint word after a name, e.g. 原版.
+// `describe(recipe)` adds a faint word after a name.
 export function RecipeLinks({ recipes, describe }) {
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1">

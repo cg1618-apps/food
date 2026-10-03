@@ -1,14 +1,16 @@
 // Frontend: the list operations every sub-row editor shares.
 //
 // media's CastEditor shape - a controlled list the parent owns, edited by
-// whole-list replacement, reordered by Move up / Move down rather than a drag
-// library - with the operations pulled out as one pure reducer so that every
+// whole-list replacement, reordered by dragging (components/ui/Sortable.jsx)
+// - with the operations pulled out as one pure reducer so that every
 // list on every form (lines, steps, sources, storage, heating, links, the
 // gallery) moves, removes and inserts the same way, and is tested once.
 //
 // Each row carries a `_key` that never leaves the browser: React needs a key
 // that survives a reorder, and an index is exactly the key that does not. The
 // payload builders pick their fields by name, so `_key` is never sent.
+
+import { arrayMove } from '@dnd-kit/sortable'
 
 let counter = 0
 
@@ -30,8 +32,9 @@ export function keyed(row) {
  *   { type: 'insert', rows }          append several (the step paste)
  *   { type: 'update', index, patch }  merge `patch` into one row
  *   { type: 'remove', index }
- *   { type: 'move', index, delta }    swap with the neighbour; a move off
- *                                     either end is a no-op, not a wrap
+ *   { type: 'move', from, to }        take the row at `from` and put it at
+ *                                     `to`; an index off either end is a
+ *                                     no-op, not a wrap
  */
 export function rowsReducer(rows, action) {
   switch (action.type) {
@@ -44,11 +47,9 @@ export function rowsReducer(rows, action) {
     case 'remove':
       return rows.filter((_, i) => i !== action.index)
     case 'move': {
-      const j = action.index + action.delta
-      if (j < 0 || j >= rows.length || action.index < 0 || action.index >= rows.length) return rows
-      const next = [...rows]
-      ;[next[action.index], next[j]] = [next[j], next[action.index]]
-      return next
+      const { from, to } = action
+      if (from === to || from < 0 || to < 0 || from >= rows.length || to >= rows.length) return rows
+      return arrayMove(rows, from, to)
     }
     default:
       throw new Error(`Unknown row action: ${action.type}`)

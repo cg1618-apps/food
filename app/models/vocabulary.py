@@ -1,14 +1,16 @@
-"""Small managed vocabularies: recipe courses, cooking methods, equipment.
+"""Small managed vocabularies: courses, regions, recipe statuses, source
+platforms, cooking methods, equipment, authors, and the groups a recipe's
+ingredient lines and steps sit in.
 
-Three tables with one shape, declared once through a mixin. They are tables
+Nine tables with one shape, declared once through a mixin. They are tables
 rather than lists in `app/constants.py` because the owner edits them - renaming
 煮 to 水煮 must be one row, not a deploy. The closed lists in constants are the
-ones the app's own logic branches on (storage state, recipe status); these are
+ones the app's own logic branches on (storage state, dish kind); these are
 the ones it only displays and filters by.
 
 `declared_attr` builds each table's constraints from its own name and its own
 copied columns: `cls.name_cn` inside it is the subclass's column, not the
-mixin's, which is what lets one definition produce three correctly-bound
+mixin's, which is what lets one definition produce nine correctly-bound
 expression indexes.
 """
 
@@ -40,9 +42,31 @@ class VocabularyMixin(NameFallbackMixin):
 
 
 class RecipeCourse(Base, VocabularyMixin):
-    """主食, 配菜, 湯 … - where a dish sits in a meal."""
+    """主食, 配菜, 湯 … - where a dish sits in a meal. Named for the recipe it
+    was first filed on; it files a dish now (`dish.course_id`)."""
 
     __tablename__ = "recipe_course"
+
+
+class Region(Base, VocabularyMixin):
+    """台式, 中式, 日式 … - where a dish comes from. Hand-ordered, as courses
+    are: the order is the one the forms and filters offer them in."""
+
+    __tablename__ = "region"
+
+
+class RecipeStatus(Base, VocabularyMixin):
+    """想試, 可煮, 常煮 … - how far a recipe has got from "saw it somewhere" to
+    "cook it every week". The first in sort order is what a recipe saved
+    without one is given."""
+
+    __tablename__ = "recipe_status"
+
+
+class SourcePlatform(Base, VocabularyMixin):
+    """YouTube, 網站, 書 … - where one recipe source was found."""
+
+    __tablename__ = "source_platform"
 
 
 class CookingMethod(Base, VocabularyMixin):
@@ -55,3 +79,31 @@ class Equipment(Base, VocabularyMixin):
     """鍋子, 平底鍋, 氣炸鍋 …"""
 
     __tablename__ = "equipment"
+
+
+class Author(Base, VocabularyMixin):
+    """阿基師, 詹姆士, Babish … - who made a recipe source.
+
+    Listed by name, never hand-ordered: every author is created with
+    sort_order 0, so the factory's (sort_order, name) order is name order.
+    Grows from the recipe form as much as from 設定 - a name typed into a
+    source that no author answers to is created by the save.
+    """
+
+    __tablename__ = "author"
+
+
+class LineGroup(Base, VocabularyMixin):
+    """主料, 配料, 調味料 … - the 材料分組 a recipe's ingredient lines are
+    grouped under. A recipe may also use a one-off group name that is not one
+    of these (`recipe_line_group.name`)."""
+
+    __tablename__ = "line_group"
+
+
+class StepGroup(Base, VocabularyMixin):
+    """備料, 烹飪, 醬汁 … - the 步驟分組 a recipe's steps are grouped under,
+    a separate list from LineGroup: what groups ingredients is rarely what
+    groups the method. One-off names as LineGroup."""
+
+    __tablename__ = "step_group"
