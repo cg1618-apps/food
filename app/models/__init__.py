@@ -34,6 +34,7 @@ from app.models.recipe import (
     RecipeStepGroup,
 )
 from app.models.recipe_template import RecipeTemplate
+from app.models.schedule import ScheduleDay, ScheduleMeal
 from app.models.tbd import TbdEntry, TbdLink
 from app.models.vocabulary import (
     Author,
@@ -84,6 +85,8 @@ __all__ = [
     "RecipeStepGroup",
     "RecipeTemplate",
     "Region",
+    "ScheduleDay",
+    "ScheduleMeal",
     "SourcePlatform",
     "StepGroup",
     "TbdEntry",

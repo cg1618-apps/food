@@ -79,6 +79,12 @@ from app.schemas.recipe_template import (
     TemplateSummary,
     TemplateUpdate,
 )
+from app.schemas.schedule import (
+    MealIn,
+    MealResponse,
+    ScheduleDayIn,
+    ScheduleDayResponse,
+)
 from app.schemas.tbd import (
     TbdEntryCreate,
     TbdEntryResponse,
@@ -137,6 +143,8 @@ __all__ = [
     "LineResponse",
     "LinkIn",
     "LinkResponse",
+    "MealIn",
+    "MealResponse",
     "MergeIn",
     "MergePreview",
     "NewDishIn",
@@ -150,6 +158,8 @@ __all__ = [
     "RecipeSummary",
     "RecipeUpdate",
     "RelatedIngredient",
+    "ScheduleDayIn",
+    "ScheduleDayResponse",
     "SourceIn",
     "SourceResponse",
     "StepGroupIn",

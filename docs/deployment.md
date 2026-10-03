@@ -136,6 +136,9 @@ restore**, and drops:
 `t2emplates`'s downgrade drops `recipe_template`, and every recipe template
 with it. No recipe, ingredient or vocabulary is touched.
 
+`s3chedule`'s downgrade drops `schedule_meal` and `schedule_day`, and every
+planned day with them. No dish or recipe is touched.
+
 **So there is no route that keeps the data.** The real choice is:
 
 - **roll back**, and lose everything entered since the release, or
@@ -176,7 +179,8 @@ they ever do not, believe the box.
 | 常用食材 | `c1ommon` — thirty-four tables |
 | TBD | `t1bd` — thirty-six tables |
 | Dishes, regions; recipes as ways of making a dish | `d1ishes` — thirty-nine tables |
-| Recipe templates | `t2emplates` — forty tables, the current head |
+| Recipe templates | `t2emplates` — forty tables |
+| The weekly schedule | `s3chedule` — forty-two tables, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

@@ -18,7 +18,9 @@ words:
   base used inside other dishes rather than eaten on its own — and their
   **recipes**, each one specific way of making the dish;
 - a library of **what can be cooked**, with notes;
-- the **cooking schedule**;
+- the **cooking schedule** — a weekly plan, Saturday to Friday as the
+  owner's sheet runs it: per day what to buy, what to thaw, four meals and
+  the fruit;
 - **what is in the kitchen right now**, with notes on each thing;
 - a **dessert library** — cookies, candies, sweets — carrying health
   information;
@@ -35,8 +37,9 @@ reference work.
 
 ## Status
 
-**Modules 1 and 2 are built, with dishes, recipe templates, kitchen notes and
-TBD.** The schema is at revision `t2emplates` (the head).
+**Modules 1 and 2 are built, with dishes, recipe templates, kitchen notes,
+the weekly schedule and TBD.** The schema is at revision `s3chedule` (the
+head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
   parent, rating, labels, storage as a state x method grid with day ranges, a
@@ -45,7 +48,8 @@ TBD.** The schema is at revision `t2emplates` (the head).
 - **Dishes** - a dish (料理) or a sauce (醬料) in general: names and aliases,
   kind, course, region, labels, serves-as, a description and a gallery; its
   recipes, and "used in" - the recipes whose lines name it. A dish with
-  recipes, or one a line names, cannot be deleted.
+  recipes, one a line names, or one a meal on the schedule names cannot be
+  deleted.
 - **Recipes** - each one way of making a dish, with an optional name of its
   own and 其他版本 (the dish's other recipes); lines naming an ingredient, a
   dish, or a new stub or dish made by the save, and steps (each a 步驟, 可省略
@@ -60,10 +64,15 @@ TBD.** The schema is at revision `t2emplates` (the head).
   since deleted is dropped when it is read, and counted.
 - **Kitchen notes** - bookmarks with a title, a kind, a link, a body, labels
   and a gallery.
+- **The weekly schedule (排程)** - per date, 要買?, 早退冰? / 中退冰? /
+  晚退冰?, 水果, 備註 and four meals (早, 中, 下午, 晚), each free text, a
+  dish and optionally one of that dish's recipes; read two weeks at a time
+  at `/schedule` (a table on a desktop, a card per day on a phone) and edited
+  a day at a time at `/edit/schedule`.
 - **TBD** - a standalone page of entries, each an optional name and any
   number of links, in the owner's order; read at `/tbd`, edited in place at
   `/edit/tbd`.
-- **The notebook UI** - 料理 · 食譜 · 食材 · 筆記 · TBD · 設定: the four libraries
+- **The notebook UI** - 料理 · 食譜 · 食材 · 筆記 · 排程 · TBD · 設定: the four libraries
   (search and filters in the URL, a sidebar or a phone drawer, covers or a
   table), their detail pages, their add and edit forms with the gallery
   picker, one delete dialog, ingredient merge, 設定 for every vocabulary

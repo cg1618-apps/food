@@ -110,6 +110,7 @@ CONSTRAINT_MESSAGES = {
     "uq_recipe_image_position": "Two images cannot share one position.",
     "uq_recipe_image_once": "That image is already in this gallery.",
     "uq_recipe_template_name": "Another template already has that name.",
+    "uq_schedule_meal_slot": "A day has one meal per slot.",
     "ck_tbd_link_has_a_url": "A link needs a URL.",
     "ck_recipe_template_has_a_name": "A template needs a name.",
 }

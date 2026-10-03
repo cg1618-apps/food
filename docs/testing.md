@@ -148,6 +148,13 @@ is load-bearing and says so. Some examples worth knowing about:
   the recipe-through-a-sauce is what makes "depth through sub-dishes is zero"
   able to fail; and the lines are what give the delete refusal something to
   refuse.
+- The schedule's refusals (`tests/api/test_schedule.py`) each make the thing
+  they refuse. The dish-delete refusal puts the dish on **two real meals** on
+  two dates - so both the count and the dates list can fail - and clears them
+  as its mirror; `test_an_unscheduled_dish_deletes` has a scheduled dish
+  beside the free one, so "nothing is scheduled at all" cannot pass it. The
+  recipe/dish mismatch has **two dishes**, the recipe belonging to the other
+  one, and its mirror sends the matching dish.
 - **A dish's delete refusals each have a referencing row and a mirror**
   (`tests/api/test_dish_crud.py`). `test_a_dish_with_recipes_cannot_be_deleted`
   makes a recipe of the dish, asserts the 409 lists it under `recipes`, then
@@ -242,6 +249,7 @@ the entire failure.
 | `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, ordering after the target's rows, the fingerprint and its 409, refusals |
 | `tests/api/test_common_ingredients.py` | 常用食材: the whole-list `PUT` and its order, the unknown-id and duplicate 422s that change nothing, the write only under the gated prefix, CASCADE on an ingredient's delete, and a merge moving or dropping the source's entry |
 | `tests/api/test_tbd.py` | TBD: the blank-url CHECK and CASCADE to links, the round trip, the name-or-link 422 on create and on a `PATCH` that would leave neither (with the mirror that keeps a name), a new entry last, `https://` given to a link without a scheme and the 422 for a blank or non-web one, links replaced wholesale or left alone, the delete, the order `PUT` and each of its 422s against three real entries, the writes only under the gated prefix |
+| `tests/api/test_schedule.py` | the schedule: the Saturday a week starts on, the default range from a pinned today, every date answered stored or not, the `days` bounds, the day round trip with its meals, `PUT` replacing the whole day, blanks as null and empty meals and days not stored, unknown slots and fields, a recipe implying its dish and a recipe of another dish refused, unknown ids, a refused `PUT` changing nothing, a dish delete refused while meals name it (with the dates) and its mirrors, a recipe delete leaving the meal its dish, `meal_slots` in the fixed vocabularies |
 | `tests/api/test_recipe_templates.py` | recipe templates: the round trip with every reference resolved, the empty template, a group name stored as its 設定 value, the list's order and counts, the `new_*` 422 that creates nothing (with its mirror), unknown ids, the case-insensitive unique name and blank name, fields a template does not carry, `PATCH` semantics and a refused `PATCH` changing nothing, delete, the order `PUT` and its 422s, stale references dropped and counted (a dropped group's lines kept as ungrouped), a template from a recipe's structure, and an ingredient merge rewriting template lines |
 | `tests/test_seed_migration.py` | the seeds, the storage migration's copy and lossy downgrade, `v2ocabulary`'s string-to-row mapping, `a1uthors`'s creator-to-author mapping, `g1roups`' sections-to-groups move, `s1tepkinds`' default for existing steps and `d1ishes`' grouping of recipes into dishes, each with its downgrade, on a scratch database |
 | `tests/test_ingredient_import.py` | `i3import`: the committed CSV passes validation, each validation refusal with a good mirror, and the load on a scratch database — stubs, aliases, parents, categories, the skip rule, the cycle guard, a second run, the no-op downgrade |
@@ -309,7 +317,23 @@ rename with a refused name explained in the row, delete after asking),
 `pages/detail/details.test.jsx` (存成範本: the name asked for, a refused
 name, the link to the new template), `lib/newRecipe.test.js`,
 `lib/recipeStructure.test.js` and `lib/typeahead.test.js` (recipes as
-options). The recipe form's own tests in `components/forms/forms.test.jsx`
+options).
+
+The schedule is covered in: `pages/library/schedule.test.jsx`, with today
+pinned to a Wednesday by faking `Date` alone (the read page asking for two
+weeks from the Saturday, the tables' columns in the sheet's order, a meal's
+dish and recipe links, today marked, the phone card listing only filled
+fields, `?week=` read as its Saturday and the week links; the edit page
+filled from what is stored with the dish's recipes in the select, one `PUT`
+of the whole day with the exact body, the week buttons disabled while a day
+is unsaved, a dish picked from the search, a typed-but-unpicked dish refused
+with nothing sent, and the server's refusal shown on the card with the
+typing kept), `lib/schedule.test.js` (Saturday weeks across months, years and
+a leap day, `?week=` parsing, ranges, the phone card's fields, the payload),
+`pages/detail/details.test.jsx` (a dish delete refused with `meals`, each
+date linked to its week), `lib/nav.test.js` and `routes.test.jsx`.
+
+The recipe form's own tests in `components/forms/forms.test.jsx`
 open it at `/edit/recipes/new?blank=1` and are otherwise unchanged by the
 move of 材料, 步驟 and 做法、器材 into shared sections.
 

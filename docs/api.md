@@ -298,18 +298,21 @@ list (null included), the same alias twice, and an id that names nothing
 (`course_id`, `region_id`, either id list), the detail naming it. Unknown
 fields are refused.
 
-**`GET .../cascade` answers `{aliases, recipes, used_in}`.** `aliases` is what
-the delete removes and is echoed back; `recipes` (the dish's own) and
-`used_in` (recipes whose lines name it) block the delete.
+**`GET .../cascade` answers `{aliases, recipes, used_in, meals}`.** `aliases`
+is what the delete removes and is echoed back; `recipes` (the dish's own),
+`used_in` (recipes whose lines name it) and `meals` (meals on the schedule
+naming it) block the delete.
 
 **`DELETE` takes `aliases` as a required query parameter.** A dish with
-recipes, or one a recipe's line names, is refused with 409 first, before the
-database is asked:
+recipes, one a recipe's line names, or one a meal on the schedule names is
+refused with 409 first, before the database is asked. `meals` is the dates of
+those meals, earliest first, each once:
 
 ```json
-{"detail": "This dish still has recipes, or recipes use it, so it cannot be removed.",
+{"detail": "This dish still has recipes, recipes use it, or the schedule names it, so it cannot be removed.",
  "recipes": [{"id": 5, "display_name": "阿基師版"}],
- "used_in": [{"id": 8, "display_name": "照燒雞腿飯"}]}
+ "used_in": [{"id": 8, "display_name": "照燒雞腿飯"}],
+ "meals": ["2026-10-05", "2026-10-13"]}
 ```
 
 A moved alias count is the 409 with `field`, `expected` and `actual`. Serves-as
@@ -668,8 +671,9 @@ counts for no value. Renaming a value renames every recipe group using it.
 
 **`GET /api/vocabularies/fixed`** serves every closed list the interface
 renders, as `{value, label}` pairs under `preservation_methods`,
-`preservation_states`, `ratings`, `dish_kinds` (料理, 醬料), `kitchen_note_kinds` and
-`step_kinds` (步驟, 可省略, 備註),
+`preservation_states`, `ratings`, `dish_kinds` (料理, 醬料), `kitchen_note_kinds`,
+`step_kinds` (步驟, 可省略, 備註) and `meal_slots` (`breakfast` 早, `lunch`
+中, `afternoon` 下午, `dinner` 晚),
 so no component keeps its own copy. These lists are constants in the code and
 are not editable through the API; recipe statuses and source platforms are not
 among them — they are managed vocabularies, above.
@@ -754,6 +758,66 @@ nothing.
 
 Deleting an ingredient takes it off the list (`CASCADE`); merging one moves
 its entry to the target (see Ingredients).
+
+## Schedule
+
+| Route | |
+| --- | --- |
+| `GET /api/schedule` | every date in a range, stored or not |
+| `PUT /api/edit/schedule/{date}` | replaces one whole day |
+
+The weekly schedule (排程): per calendar date, what to buy, what to take out of
+the freezer to thaw in the morning, at noon and in the evening, the fruit, a
+note, and four meals. **A week runs Saturday to Friday**, as the owner's sheet
+does.
+
+**`GET /api/schedule?start=YYYY-MM-DD&days=N`** answers a bare array with one
+entry per date from `start`, in order, **whether or not anything is stored
+for it** - an unplanned date has every field null and every meal null. `days`
+is 1 to 62 (default 14, this week and next); outside that is a 422. Without
+`start` the range begins on the Saturday on or before today, where today is
+the date in Asia/Taipei - the box and the one person using it are in that
+timezone, as every timestamp here assumes. The pages always send `start`, so
+the default only serves a bare request.
+
+```json
+[{"date": "2026-10-05", "weekday": 0,
+  "to_buy": "雞腿", "thaw_morning": "雞腿", "thaw_noon": null,
+  "thaw_evening": null, "fruit": "芭樂", "note": null,
+  "meals": {"breakfast": {"text": "吐司", "dish": null, "recipe": null},
+            "lunch": null, "afternoon": null,
+            "dinner": {"text": "配白飯",
+                       "dish": {"id": 4, "display_name": "咖哩", "kind": "dish"},
+                       "recipe": {"id": 9, "display_name": "日式咖哩",
+                                  "dish": {"id": 4, "display_name": "咖哩", "kind": "dish"}}}}}]
+```
+
+`weekday` is Monday 0 … Sunday 6. `meals` always carries the four slots, in
+that order; a meal is `{text, dish, recipe}` with `dish` a dish ref and
+`recipe` a recipe ref, or null when nothing is planned.
+
+**`PUT /api/edit/schedule/{date}` replaces the day with its body**:
+
+```json
+{"to_buy": "雞腿", "thaw_morning": null, "thaw_noon": null,
+ "thaw_evening": null, "fruit": null, "note": null,
+ "meals": {"breakfast": {"text": "吐司"},
+           "dinner": {"text": "配白飯", "dish_id": 4, "recipe_id": 9}}}
+```
+
+Every field is optional, and **what the body leaves out is cleared** - a slot
+left out of `meals`, or sent as null, is an empty meal. A blank string is
+null. A meal with no text, dish or recipe is not stored, and a day left with
+no field and no meal is deleted rather than stored empty. The answer is the
+day, as the `GET` gives it.
+
+**A recipe sent without a dish takes the recipe's dish; a recipe of a
+different dish than the one sent is a 422.** A `dish_id` or `recipe_id` that
+names nothing is a 422 naming it; an unknown slot, an unknown field or a
+`{date}` that is not a date is a 422. A refused `PUT` changes nothing.
+
+A dish a meal names cannot be deleted (above, under Dishes). Deleting a
+recipe a meal names leaves the meal its dish and nulls only the recipe.
 
 ## TBD
 

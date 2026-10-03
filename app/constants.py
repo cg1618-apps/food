@@ -40,6 +40,11 @@ KITCHEN_NOTE_KINDS = {"compilation": "合輯", "technique": "技巧", "reference
 # is shown, which is why it is a fixed list rather than a 設定 vocabulary.
 STEP_KINDS = {"step": "步驟", "optional": "可省略", "note": "備註"}
 
+# The four meals of a day on the schedule, in the owner's sheet's order. A
+# slot is a column of the schedule, not something the owner files things in,
+# which is why it is a fixed list rather than a 設定 vocabulary.
+MEAL_SLOTS = {"breakfast": "早", "lunch": "中", "afternoon": "下午", "dinner": "晚"}
+
 # Every closed list the frontend renders, with its display label, served by
 # GET /api/vocabularies/fixed so no list is copied into a component.
 FIXED_VOCABULARIES = {
@@ -49,4 +54,5 @@ FIXED_VOCABULARIES = {
     "dish_kinds": [{"value": k, "label": v} for k, v in DISH_KINDS.items()],
     "kitchen_note_kinds": [{"value": k, "label": v} for k, v in KITCHEN_NOTE_KINDS.items()],
     "step_kinds": [{"value": k, "label": v} for k, v in STEP_KINDS.items()],
+    "meal_slots": [{"value": k, "label": v} for k, v in MEAL_SLOTS.items()],
 }

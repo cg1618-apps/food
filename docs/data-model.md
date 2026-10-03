@@ -1,6 +1,6 @@
 # Data model
 
-What the database holds today: forty tables, at revision `t2emplates`.
+What the database holds today: forty-two tables, at revision `s3chedule`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the nine managed
 vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
@@ -9,8 +9,8 @@ its four galleries (`image`, `ingredient_image`, `dish_image`, `recipe_image`,
 `dish_serves_as`, `dish_label`), the recipe family's eight (`recipe`,
 `recipe_method`, `recipe_equipment`, `recipe_source`, `recipe_line_group`,
 `recipe_line`, `recipe_step_group`, `recipe_step`), `recipe_template`, kitchen notes' two (`kitchen_note`, `kitchen_note_label`),
-`common_ingredient`, the 常用食材 list, and TBD's two (`tbd_entry`,
-`tbd_link`).
+`common_ingredient`, the 常用食材 list, TBD's two (`tbd_entry`,
+`tbd_link`), and the schedule's two (`schedule_day`, `schedule_meal`).
 
 ## Conventions shared by every table
 
@@ -474,6 +474,37 @@ out when it reads the template, and counts it. An ingredient merge rewrites the
 merged ingredient's id to the target's in every body. Why JSONB rather than
 tables mirroring the recipe's is in `notes/decisions.md`.
 
+## `schedule_day` and `schedule_meal`
+
+The weekly schedule (排程), from the owner's Plan sheet: per calendar date,
+the day's plain fields and its four meals.
+
+`schedule_day` is keyed by its `date` (DATE, the primary key) and holds six
+nullable Text fields, in the sheet's words: `to_buy` (要買?), `thaw_morning`
+(早退冰?), `thaw_noon` (中退冰?), `thaw_evening` (晚退冰?), `fruit` (水果) and
+`note` (備註).
+
+| `schedule_meal` column | Notes |
+| --- | --- |
+| `id` | |
+| `date` | → `schedule_day.date`, `CASCADE` |
+| `slot` | `breakfast` 早 / `lunch` 中 / `afternoon` 下午 / `dinner` 晚 (`MEAL_SLOTS`), checked by the API |
+| `text` | nullable free text |
+| `dish_id` | optional, → `dish`, `RESTRICT`, indexed |
+| `recipe_id` | optional, → `recipe`, `SET NULL`, indexed |
+
+One meal per slot per date (`uq_schedule_meal_slot`). **A date with nothing
+planned has no row, and neither does an empty meal**: the API answers every
+date in a range and fills the missing ones, and a save that empties a meal or
+a whole day deletes the row. So neither table ever holds an all-null row.
+
+**A meal's recipe is one of its dish's recipes.** That rule spans two tables,
+which a CHECK cannot see; the service enforces it, and fills the dish from the
+recipe when only the recipe is sent. A meal names a dish and a recipe, it owns
+neither: the dish is `RESTRICT`, so a scheduled dish cannot be deleted from
+under the plan, and the recipe is `SET NULL`, so deleting one way of making
+the dish leaves the meal saying which dish was planned.
+
 ## `kitchen_note`
 
 A bookmark to something worth keeping that is not a recipe: a compilation video
@@ -517,6 +548,9 @@ Labels have two name slots, not three; a tag has no formal alternative form.
 | dish → the recipe lines that name it | `RESTRICT` |
 | recipe → its sources, line and step groups, lines, steps, gallery rows, and method and equipment links | `CASCADE` |
 | recipe → its dish | none — deleting a recipe leaves the dish |
+| schedule day → its meals | `CASCADE` |
+| dish → the meals on the schedule that name it | `RESTRICT` |
+| recipe → the meals on the schedule that name it | `SET NULL` — the meal keeps its dish |
 | recipe template → what its body names | none — not a foreign key; a missing reference is left out when the template is read |
 | line or step group → the lines or steps in it | `SET NULL` — they become ungrouped |
 | kitchen note → its label links and gallery rows | `CASCADE` |
@@ -546,8 +580,8 @@ through raw SQL.
 The owner kept recipes in a Google Doc and kitchen knowledge in Google Sheets
 before this app existed. Every column in those references has a home here, so
 entering them is typing, not designing. Columns that were empty in every row
-are not listed. Nutrition (the 零食 sheet) and the weekly schedule (the Plan
-sheet) are later modules and are not modelled yet.
+are not listed. Nutrition (the 零食 sheet) is a later module and is not
+modelled yet.
 
 Only the ingredient names were imported (`i3import`, above); recipes and the
 sheets' storage, selection, heating and fruit rows are entered through the
@@ -585,4 +619,8 @@ pages.
 | Fruit sheet | Item / Specific Item | parent / child ingredient |
 | Fruit sheet | Rating (S / A / B) | `ingredient.rating` |
 | Fruit sheet | Buy Source, Remark | `ingredient.sourcing_notes`, `ingredient.description` |
+| Plan sheet | 星期幾 (星期六 … 星期五, this week and 下星期 next) | `schedule_day.date` — a real date; weeks run Saturday to Friday |
+| Plan sheet | 要買?, 早退冰?, 中退冰?, 晚退冰?, 水果, 備註 | `schedule_day.to_buy`, `thaw_morning`, `thaw_noon`, `thaw_evening`, `fruit`, `note` |
+| Plan sheet | 早, 中, 下午, 晚 | `schedule_meal` (one row per slot: text, a dish, a recipe of it) |
+| Plan sheet | `-` (nothing planned) | no row |
 | — | photographs | image library + per-owner galleries |

@@ -485,16 +485,19 @@ describe('the dish page', () => {
     expect(within(usedIn).getByRole('link', { name: '麻婆豆腐' }).getAttribute('href')).toBe('/recipes/5')
   })
 
-  it('lists the recipes and the recipes using it when a delete is refused', async () => {
+  it('lists the recipes, the recipes using it and its meals when a delete is refused', async () => {
     handler = ({ url, method }) => {
       if (method === 'GET' && url === '/api/dishes/40') return json(DISH)
-      if (method === 'GET' && url === '/api/dishes/40/cascade') return json({ aliases: 0, recipes: 2, used_in: 1 })
+      if (method === 'GET' && url === '/api/dishes/40/cascade') {
+        return json({ aliases: 0, recipes: 2, used_in: 1, meals: 2 })
+      }
       if (method === 'DELETE') {
         return json(
           {
-            detail: 'This dish still has recipes, or recipes use it, so it cannot be removed.',
+            detail: 'This dish still has recipes, recipes use it, or the schedule names it, so it cannot be removed.',
             recipes: [{ id: 5, display_name: '麻婆豆腐' }],
             used_in: [{ id: 8, display_name: '燴飯' }],
+            meals: ['2026-10-05', '2026-10-13'],
           },
           409,
         )
@@ -507,12 +510,16 @@ describe('the dish page', () => {
     // Said up front, from the counts.
     expect(await within(dialog).findByText(/底下還有 2 份食譜/)).toBeTruthy()
     expect(within(dialog).getByText(/有 1 份食譜把它當材料用/)).toBeTruthy()
+    expect(within(dialog).getByText(/排程裡有 2 餐排了它/)).toBeTruthy()
     fireEvent.click(within(dialog).getByRole('button', { name: '刪除' }))
     await waitFor(() =>
       expect(calls.find((c) => c.method === 'DELETE').url).toBe('/api/edit/dishes/40?aliases=0'),
     )
     expect(await within(dialog).findByText('它的食譜：')).toBeTruthy()
     expect(within(dialog).getByRole('link', { name: '燴飯' }).getAttribute('href')).toBe('/recipes/8')
+    // Each date links to its week, by that week's Saturday.
+    expect(within(dialog).getByRole('link', { name: '10/5' }).getAttribute('href')).toBe('/schedule?week=2026-10-03')
+    expect(within(dialog).getByRole('link', { name: '10/13' }).getAttribute('href')).toBe('/schedule?week=2026-10-10')
     expect(location()).toBe('/dishes/40')
   })
 })

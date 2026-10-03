@@ -18,6 +18,8 @@ describe('activeSection', () => {
     ['/edit/notes/new', 'notes'],
     ['/edit/settings', 'settings'],
     ['/edit/images', 'settings'],
+    ['/schedule', 'schedule'],
+    ['/edit/schedule', 'schedule'],
     ['/tbd', 'tbd'],
     ['/edit/tbd', 'tbd'],
   ])('%s is in %s', (path, key) => {
@@ -30,7 +32,7 @@ describe('activeSection', () => {
     expect(activeSection('/')).toBeNull()
   })
 
-  it('has the six sections, in navigation order, 料理 first', () => {
-    expect(SECTIONS.map((s) => s.label)).toEqual(['料理', '食譜', '食材', '筆記', 'TBD', '設定'])
+  it('has the seven sections, in navigation order, 料理 first', () => {
+    expect(SECTIONS.map((s) => s.label)).toEqual(['料理', '食譜', '食材', '筆記', '排程', 'TBD', '設定'])
   })
 })

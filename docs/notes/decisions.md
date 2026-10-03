@@ -166,7 +166,8 @@ than now — a spec written months ahead describes a system that was imagined.
   quantity, notes, an optional use-by date.
 - **Snack** — names, brand, category, the nutrition printed on the package,
   where it was bought, rating, notes.
-- **ScheduledCook** — a date, a recipe, notes.
+- **Schedule** — built, and not the `ScheduledCook` this list once planned
+  (a date, a recipe, notes); see "The weekly schedule" below.
 - **ShoppingItem** — links an ingredient or a snack, or is free text; free-text
   quantity, a `bought` flag, and where the suggestion came from.
 
@@ -304,7 +305,7 @@ so a later reader can tell a decision from an accident. These are food's.
 - **A bar fixed to the bottom of the screen on a phone**, where media's
   navigation folds below `lg` into a menu button that opens a full-screen
   drawer. media has a catalogue of sections and sub-pages to fold away;
-  food has a handful of destinations - 料理 · 食譜 · 食材 · 筆記 · TBD · 設定 -
+  food has a handful of destinations - 料理 · 食譜 · 食材 · 筆記 · 排程 · TBD · 設定 -
   which fit in one row under a thumb, and the app is opened one-handed in a shop or at the
   stove, where a menu button and a drawer are two taps and a screen covered
   for every move. Pages are padded at the bottom so the bar never covers
@@ -872,6 +873,51 @@ What the branch after module 1 chose, and what it turned down.
   an edit to one entry never rewrites another; the order is one `PUT` of
   every id, which must be exactly the current entries - a stale tab's order
   is refused rather than merged, as 常用食材's duplicate is.
+
+## The weekly schedule
+
+- **Shaped by the owner's sheet, not by the plan above.** The plan had
+  `ScheduledCook`: a date, a recipe, notes. The owner's Plan sheet is a
+  different thing - per day, what to buy, what to take out of the freezer in
+  the morning, at noon and in the evening, four meals (早, 中, 下午, 晚), the
+  fruit and a note - and the sheet is what is actually used, so the tables
+  are its columns. A meal is not always a recipe ("外食", "吐司"), so each
+  meal is free text first, with a dish and a recipe optional.
+- **Weeks run Saturday to Friday**, because the sheet's do, and a page shows
+  two of them - this week and next - as the sheet does. `?week=` is the
+  Saturday, so a week is a link.
+- **One row per meal slot, not four column groups on the day.** Four meals ×
+  text, dish and recipe would be twelve columns on `schedule_day` and four
+  copies of every rule about them; `schedule_meal` keyed by `(date, slot)`
+  states them once, and a fifth slot would be a constant, not a migration.
+  The slot is a fixed list (`MEAL_SLOTS`) rather than a 設定 vocabulary: it
+  is a column of the schedule, not something the owner files things in.
+- **The date is the key**, not a surrogate id: there is one day per date by
+  definition, and the PUT addresses a day by it. A date with nothing planned
+  has no row, and a save that empties a day deletes it - so the sheet's `-`
+  is no row, and the table never fills with blank days.
+- **A recipe implies its dish.** A meal names a dish ("咖哩") and, when it
+  matters, which way of making it; a recipe sent alone takes its dish, and a
+  recipe of another dish is a 422. The rule spans two tables, so the service
+  enforces it. The edit page picks the dish by search and the recipe from a
+  select of that dish's recipes, which cannot produce the mismatch at all; a
+  second search over every recipe would have needed the dish filled back in
+  and a way to show the two disagreeing.
+- **The dish is RESTRICT, the recipe SET NULL.** A plan naming a dish should
+  not lose it silently, so deleting a scheduled dish is refused with the
+  dates, as a dish with recipes is refused with them. A recipe is one way of
+  making the dish; deleting it leaves the meal its dish.
+- **A day is written whole.** One PUT per day replaces it, the TBD card's
+  shape: a day is small, and replace semantics make "clear this field" and
+  "clear this meal" the same as leaving them out.
+- **Saved by a button, not on blur.** A phone does not reliably blur a field
+  when the thumb taps elsewhere, and a save that silently did not happen is
+  the one failure the page must not have. A changed day says 未儲存, the week
+  buttons are disabled while any is, and closing the tab asks.
+- **Dates are local calendar dates, with no zone.** The box and the owner are
+  both in Asia/Taipei, as every timestamp here assumes; the pages send the
+  range from the browser's own date, and only a bare `GET` falls back to the
+  server's today in Asia/Taipei.
 
 ## The starting ingredient list
 
