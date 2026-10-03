@@ -20,6 +20,7 @@ import IngredientDetail from './pages/detail/Ingredient'
 import NoteDetail from './pages/detail/Note'
 import RecipeDetail from './pages/detail/Recipe'
 import DishForm from './pages/edit/DishForm'
+import HeatingForm from './pages/edit/HeatingForm'
 import ImageLibrary from './pages/edit/ImageLibrary'
 import IngredientForm from './pages/edit/IngredientForm'
 import NoteForm from './pages/edit/NoteForm'
@@ -29,6 +30,7 @@ import Settings from './pages/edit/Settings'
 import TbdForm from './pages/edit/TbdForm'
 import TemplateForm from './pages/edit/TemplateForm'
 import DishLibrary from './pages/library/DishLibrary'
+import Heating from './pages/library/Heating'
 import IngredientLibrary from './pages/library/IngredientLibrary'
 import NoteLibrary from './pages/library/NoteLibrary'
 import RecipeLibrary from './pages/library/RecipeLibrary'
@@ -51,6 +53,7 @@ export default function AppRoutes() {
         <Route path="/ingredients/:id" element={<IngredientDetail />} />
         <Route path="/notes" element={<NoteLibrary />} />
         <Route path="/notes/:id" element={<NoteDetail />} />
+        <Route path="/heating" element={<Heating />} />
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/tbd" element={<Tbd />} />
 
@@ -68,6 +71,7 @@ export default function AppRoutes() {
           <Route path="/edit/notes/:id" element={<NoteForm />} />
           <Route path="/edit/settings" element={<Settings />} />
           <Route path="/edit/images" element={<ImageLibrary />} />
+          <Route path="/edit/heating" element={<HeatingForm />} />
           <Route path="/edit/schedule" element={<ScheduleForm />} />
           <Route path="/edit/tbd" element={<TbdForm />} />
         </Route>
