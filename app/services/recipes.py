@@ -644,7 +644,7 @@ def _apply_steps(db: Session, recipe: Recipe, lists: dict, resolved) -> None:
     """Replace the steps and their groups."""
 
     def step(index, e, group):
-        return RecipeStep(position=index, group=group, body=e.body)
+        return RecipeStep(position=index, group=group, kind=e.kind, body=e.body)
 
     _apply_pair(db, recipe, lists, "steps", resolved, step)
 

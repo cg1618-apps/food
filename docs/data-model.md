@@ -1,6 +1,6 @@
 # Data model
 
-What the database holds today: thirty-three tables, at revision `g1roups`.
+What the database holds today: thirty-three tables, at revision `s1tepkinds`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the eight managed
 vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
@@ -376,9 +376,16 @@ composite one could not be `SET NULL` without nulling `recipe_id` with it.
 ## `recipe_step`
 
 One step of the method: `position` (unique per recipe,
-`uq_recipe_step_position`, running through the recipe as a line's does, so a
-step's number is its position plus one), `group_id` (→ `recipe_step_group`,
-`SET NULL`, null is ungrouped), and a required `body`.
+`uq_recipe_step_position`, running through the recipe as a line's does),
+`group_id` (→ `recipe_step_group`, `SET NULL`, null is ungrouped), `kind`
+and a required `body`.
+
+`kind` is a `String NOT NULL`, server default `'step'`, validated by the API
+against `STEP_KINDS` in `app/constants.py` rather than by a Postgres enum:
+`step` (步驟, an ordinary step), `optional` (可省略, one that may be skipped)
+or `note` (備註, a note among the steps). Only a `step` is numbered, so a
+step's number is not its position plus one; it is counted by whoever draws
+the steps and never stored (`s1tepkinds`).
 
 ## `kitchen_note`
 

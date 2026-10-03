@@ -34,6 +34,12 @@ RECIPE_KINDS = {"dish": "料理", "base": "基底"}
 # something to look up. How the notes library files a note, not a rule.
 KITCHEN_NOTE_KINDS = {"compilation": "合輯", "technique": "技巧", "reference": "參考"}
 
+# What one step of a method is. Only a `step` is numbered: an optional step
+# may be skipped and a note is advice among the steps, so neither takes a
+# number, and the page draws a note differently. The kind changes how a row
+# is shown, which is why it is a fixed list rather than a 設定 vocabulary.
+STEP_KINDS = {"step": "步驟", "optional": "可省略", "note": "備註"}
+
 # Every closed list the frontend renders, with its display label, served by
 # GET /api/vocabularies/fixed so no list is copied into a component.
 FIXED_VOCABULARIES = {
@@ -42,4 +48,5 @@ FIXED_VOCABULARIES = {
     "ratings": [{"value": r, "label": r} for r in RATINGS],
     "recipe_kinds": [{"value": k, "label": v} for k, v in RECIPE_KINDS.items()],
     "kitchen_note_kinds": [{"value": k, "label": v} for k, v in KITCHEN_NOTE_KINDS.items()],
+    "step_kinds": [{"value": k, "label": v} for k, v in STEP_KINDS.items()],
 }

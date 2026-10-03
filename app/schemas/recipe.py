@@ -19,7 +19,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-from app.constants import RECIPE_KINDS
+from app.constants import RECIPE_KINDS, STEP_KINDS
 from app.schemas.image import AttachedImage, CoverRef
 from app.schemas.ingredient import _blank_to_none, _check_url, _clean_aliases
 from app.schemas.vocabulary import VocabRef
@@ -157,6 +157,8 @@ class StepIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     body: str
+    # Left out, an ordinary numbered step.
+    kind: str = "step"
 
     @field_validator("body")
     @classmethod
@@ -165,6 +167,11 @@ class StepIn(BaseModel):
         if not value:
             raise ValueError("A step needs some text")
         return value
+
+    @field_validator("kind")
+    @classmethod
+    def kind_is_known(cls, value):
+        return _check_choice(value, STEP_KINDS, "step kind")
 
 
 def _one_group_name(group, value_field: str):
@@ -245,6 +252,7 @@ class StepResponse(BaseModel):
 
     id: int
     position: int
+    kind: str
     body: str
 
 

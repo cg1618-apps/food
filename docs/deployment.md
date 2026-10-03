@@ -88,6 +88,9 @@ into `section` and drops the four group tables. A recipe's empty groups have
 no row to carry their name and are lost; a section that was a later spelling
 of a group's name comes back as the first spelling.
 
+`s1tepkinds`'s downgrade drops `recipe_step.kind`: every step stays, and an
+optional step or a note comes back as an ordinary step.
+
 **So there is no route that keeps the data.** The real choice is:
 
 - **roll back**, and lose everything entered since the release, or
@@ -123,7 +126,8 @@ they ever do not, believe the box.
 | The starting ingredient list | `i3import` — no new table |
 | Statuses and source platforms as vocabularies | `v2ocabulary` — twenty-eight tables |
 | Authors as a vocabulary | `a1uthors` — twenty-nine tables |
-| Line and step groups | `g1roups` — thirty-three tables, the current head |
+| Line and step groups | `g1roups` — thirty-three tables |
+| Step kinds | `s1tepkinds` — no new table, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

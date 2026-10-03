@@ -300,7 +300,9 @@ ingredient's does, and answers the full recipe.
   display_name}`) or null, `name` the one-off name or null — exactly one is
   set — `display_name` is whichever it is, and `lines` the group's lines, as
   above. An empty group is listed with `lines: []`;
-- `steps` — the steps in no group, `{id, position, body}`;
+- `steps` — the steps in no group, `{id, position, kind, body}`: `kind` is
+  `step` (an ordinary step), `optional` (one that may be skipped) or `note`
+  (a note among the steps);
 - `step_groups` — the 步驟分組, `{id, position, group, name, display_name,
   steps}`, as `line_groups`;
 - `serves_as`, `labels`, `methods`, `equipment` — `{id, display_name}` lists;
@@ -315,8 +317,10 @@ ingredient's does, and answers the full recipe.
   Derived, never sent.
 
 A line's or step's `position` runs through the whole recipe in the order the
-page shows it — the ungrouped rows, then group by group — so a step's number
-is its position plus one. A group's `position` is its place among the groups.
+page shows it — the ungrouped rows, then group by group. A group's `position`
+is its place among the groups. A step's number is not stored: the page counts
+only `step`-kind steps, through every group, so an optional step or a note
+takes a place in the order and no number.
 
 **`POST` takes the whole recipe; `PATCH` takes any subset.** A recipe is
 filed under a course by `course_id` and a status by `status_id`. Defaults on
@@ -343,8 +347,9 @@ author, `url` and `title`; `url` must be `http` or `https`. `new_author`
 save resolves: an author whose `name_cn` or `name_en` equals a typed name,
 ignoring case, is reused, and otherwise one is created (with `sort_order` 0,
 as every author). Names resolved earlier in the same save count, so one new
-name on two sources is one author. A step is `{body}` with a non-blank
-`body`.
+name on two sources is one author. A step is `{body, kind}` with a non-blank
+`body`; `kind` is one of `step`, `optional` or `note` and defaults to `step`
+when left out — any other value, null included, is a 422.
 
 A group is `{line_group_id, name, lines}` (or `{step_group_id, name, steps}`):
 exactly one of the 設定 value's id and a one-off `name`, and its rows, which
@@ -482,7 +487,8 @@ counts for no value. Renaming a value renames every recipe group using it.
 
 **`GET /api/vocabularies/fixed`** serves every closed list the interface
 renders, as `{value, label}` pairs under `preservation_methods`,
-`preservation_states`, `ratings`, `recipe_kinds` and `kitchen_note_kinds`,
+`preservation_states`, `ratings`, `recipe_kinds`, `kitchen_note_kinds` and
+`step_kinds` (步驟, 可省略, 備註),
 so no component keeps its own copy. These lists are constants in the code and
 are not editable through the API; recipe statuses and source platforms are not
 among them — they are managed vocabularies, above.

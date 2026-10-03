@@ -21,6 +21,11 @@ const FIXED = {
     { value: 'base', label: '基底' },
   ],
   kitchen_note_kinds: [{ value: 'technique', label: '技巧' }],
+  step_kinds: [
+    { value: 'step', label: '步驟' },
+    { value: 'optional', label: '可省略' },
+    { value: 'note', label: '備註' },
+  ],
 }
 
 const STATUSES = [
@@ -209,6 +214,41 @@ describe('the recipe page', () => {
       '3第 3 步：炒香辣油',
       '4第 4 步：下豆腐',
     ])
+  })
+
+  it('numbers only ordinary steps, marks an optional step and draws a note as a callout', async () => {
+    const recipe = {
+      ...RECIPE,
+      steps: [
+        { id: 1, position: 0, kind: 'step', body: '看一遍' },
+        { id: 2, position: 1, kind: 'note', body: '豆腐先泡鹽水' },
+      ],
+      step_groups: [
+        {
+          ...RECIPE.step_groups[0],
+          steps: [
+            { id: 3, position: 2, kind: 'optional', body: '撒蔥花' },
+            { id: 4, position: 3, kind: 'step', body: '切豆腐' },
+          ],
+        },
+      ],
+    }
+    handler = ({ url, method }) => (method === 'GET' && url === '/api/recipes/5' ? json(recipe) : null)
+    renderAt('/recipes/5')
+    expect(await screen.findByRole('heading', { level: 1, name: '麻婆豆腐' })).toBeTruthy()
+
+    const steps = screen.getByRole('heading', { name: '步驟' }).closest('section')
+    expect(within(steps).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      '1第 1 步：看一遍',
+      '備註豆腐先泡鹽水',
+      '可省略撒蔥花',
+      '2第 2 步：切豆腐',
+    ])
+    const note = within(steps).getByText('豆腐先泡鹽水').closest('li')
+    expect(note.className).toContain('border-l-4')
+    expect(note.className).toContain('bg-surface-2')
+    const optional = within(steps).getByText('撒蔥花')
+    expect(optional.className).toContain('text-text-muted')
   })
 
   it('shows the original as another version and hides empty sections', async () => {

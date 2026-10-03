@@ -15,7 +15,14 @@
 // the author on save, and a name the server already knows is reused.
 // Steps take a pasted block too: 「貼上多行」 splits it into one step per line,
 // strips the numbering (lib/steps.js) and adds them to the group chosen in
-// the dialog, or to the ungrouped steps.
+// the dialog, or to the ungrouped steps, each an ordinary step.
+//
+// Each step row has a kind switch - 步驟 / 可省略 / 備註, the fixed
+// `step_kinds` list - beside its number. Only an ordinary step shows a
+// number, counted through every group as the recipe's page counts them; a
+// 備註 row's box is ruled and tinted the way the page draws a note. The rows'
+// accessible names (「步驟 3」) keep a running index, so every row has a
+// unique one whatever its kind.
 //
 // 材料 and 步驟 each sit in groups (components/forms/GroupedRowEditor.jsx):
 // the ungrouped rows first, then a box per group, picked from 設定's
@@ -38,7 +45,7 @@ import GroupedRowEditor from '../../components/forms/GroupedRowEditor'
 import RowEditor from '../../components/forms/RowEditor'
 import Typeahead, { Picked } from '../../components/forms/Typeahead'
 import Dialog from '../../components/ui/Dialog'
-import { Button, Field, Input, Section, Select, TextArea } from '../../components/ui/primitives'
+import { Button, Field, Input, Section, Select, TextArea, Toggle } from '../../components/ui/primitives'
 import { ErrorNote, Loading } from '../../components/ui/states'
 import { useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
 import { useOwnerSave } from '../../hooks/useOwnerSave'
@@ -46,6 +53,7 @@ import { galleryChanged, galleryFromImages } from '../../lib/gallery'
 import {
   UNGROUPED,
   emptyGrouped,
+  flatRows,
   groupsFromResponse,
   groupsPayload,
   rowsOf,
@@ -55,7 +63,7 @@ import {
 import { emptyLine, isStub, lineFromResponse, linesPayload, targetFromOption } from '../../lib/recipeLines'
 import { authorFromOption, sourceRow, sourcesPayload } from '../../lib/recipeSources'
 import { blankToNull, keyed, splitAliases } from '../../lib/rowList'
-import { splitSteps } from '../../lib/steps'
+import { NOTE, STEP, splitSteps, stepNumbers } from '../../lib/steps'
 
 // A recipe save moves its own reads, the authors list, the ingredient
 // library (a 新增 line makes a stub; used-in counts move), the category tree
@@ -103,11 +111,11 @@ const EMPTY = {
   gallery: [],
 }
 
-const stepRow = (entry = {}) => keyed({ body: entry.body ?? '' })
+const stepRow = (entry = {}) => keyed({ body: entry.body ?? '', kind: entry.kind ?? STEP })
 
 // A step left blank is an "add" pressed once too often, not a step.
 const stepsPayload = (rows) =>
-  rows.filter((row) => blankToNull(row.body)).map((row) => ({ body: row.body.trim() }))
+  rows.filter((row) => blankToNull(row.body)).map((row) => ({ body: row.body.trim(), kind: row.kind }))
 
 const ids = (refs) => (refs ?? []).map((ref) => ref.id)
 
@@ -159,6 +167,7 @@ export default function RecipeForm() {
   const lineGroups = useApiQuery(endpoints.lineGroups.list())
   const stepGroups = useApiQuery(endpoints.stepGroups.list())
   const fixed = useFixedVocabularies()
+  const stepKinds = fixed.data?.step_kinds ?? []
   const { save, saving } = useOwnerSave({ group: endpoints.recipes, invalidate: INVALIDATE })
 
   const [form, setForm] = useState(EMPTY)
@@ -179,6 +188,15 @@ export default function RecipeForm() {
 
   const setField = (field, value) => setForm((previous) => ({ ...previous, [field]: value }))
   const set = (field) => (event) => setField(field, event.target.value)
+
+  // The number each ordinary step row shows, by its key, counted through
+  // every group as the page counts them; an optional step or a note has none.
+  const stepRows = flatRows(form.steps)
+  const stepNumber = new Map(
+    stepNumbers(stepRows)
+      .map((value, index) => [stepRows[index]._key, value])
+      .filter(([, value]) => value !== null),
+  )
   // A line's typed-but-unpicked text, by the row's key and from the latest
   // state: a pick calls onSelect and then reports '' in the same tick, and
   // RowEditor's update() would build the second change from the rows the
@@ -486,20 +504,35 @@ export default function RecipeForm() {
                 </Button>
               }
             >
-              {(row, { update, number }) => (
-                <div className="flex gap-2">
-                  <span className="w-6 shrink-0 pt-1.5 text-right font-display font-bold text-text-faint">
-                    {number}
-                  </span>
-                  <TextArea
-                    aria-label={`步驟 ${number}`}
-                    rows={2}
-                    value={row.body}
-                    onChange={(event) => update({ body: event.target.value })}
-                    className="min-w-0 flex-1"
-                  />
-                </div>
-              )}
+              {(row, { update, number }) => {
+                const note = row.kind === NOTE
+                return (
+                  <div className="flex gap-2">
+                    <span className="w-6 shrink-0 pt-1 text-right font-display font-bold text-text-faint">
+                      {stepNumber.has(row._key) ? <span data-testid="step-number">{stepNumber.get(row._key)}</span> : null}
+                    </span>
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      {stepKinds.length ? (
+                        <Toggle
+                          label={`步驟 ${number} 的種類`}
+                          options={stepKinds}
+                          value={row.kind}
+                          onChange={(kind) => update({ kind })}
+                        />
+                      ) : null}
+                      <div className={note ? 'rounded-md border-l-4 border-border-strong bg-surface-2 p-1.5' : undefined}>
+                        <TextArea
+                          aria-label={`步驟 ${number}`}
+                          rows={2}
+                          placeholder={note ? '備註：火候、替換、提醒' : undefined}
+                          value={row.body}
+                          onChange={(event) => update({ body: event.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )
+              }}
             </GroupedRowEditor>
           </Section>
 

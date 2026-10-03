@@ -422,7 +422,11 @@ describe('RecipeForm', () => {
       { amount: null, note: null, is_optional: false, sub_recipe_id: 7 },
     ])
     expect(body.line_groups).toEqual([])
-    expect(body.steps).toEqual([{ body: '醃肉' }, { body: '煎香' }])
+    // Pasted steps are ordinary steps.
+    expect(body.steps).toEqual([
+      { body: '醃肉', kind: 'step' },
+      { body: '煎香', kind: 'step' },
+    ])
     expect(body.step_groups).toEqual([])
     expect(writes[1].body).toEqual([{ image_id: 31, focus: null }])
   })
@@ -645,10 +649,72 @@ describe('RecipeForm groups', () => {
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
     const body = postBody()
-    expect(body.steps).toEqual([{ body: '看' }, { body: '切' }])
+    expect(body.steps).toEqual([
+      { body: '看', kind: 'step' },
+      { body: '切', kind: 'step' },
+    ])
     expect(body.step_groups).toEqual([
-      { name: '收尾', steps: [{ body: '醃' }] },
-      { step_group_id: 1, steps: [{ body: '擺盤' }] },
+      { name: '收尾', steps: [{ body: '醃', kind: 'step' }] },
+      { step_group_id: 1, steps: [{ body: '擺盤', kind: 'step' }] },
+    ])
+  })
+
+  it('gives each step a kind, numbers only ordinary steps through every group, and saves the kinds', async () => {
+    handler = (call) =>
+      call.url === '/api/vocabularies/fixed'
+        ? json({
+            recipe_kinds: [{ value: 'dish', label: '料理' }],
+            step_kinds: [
+              { value: 'step', label: '步驟' },
+              { value: 'optional', label: '可省略' },
+              { value: 'note', label: '備註' },
+            ],
+          })
+        : groupData(call)
+    wrap(<AppRoutes />, '/edit/recipes/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '麻婆豆腐' } })
+    const steps = area('步驟')
+
+    fireEvent.click(within(steps).getByRole('button', { name: '＋ 加分組' }))
+    fireEvent.click(await within(steps).findByRole('button', { name: '＋ 備料' }))
+    fireEvent.click(within(steps).getByRole('button', { name: '＋ 加一個步驟' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '步驟 1' }), { target: { value: '看' } })
+    fireEvent.click(within(steps).getByRole('button', { name: '＋ 加一個步驟' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '步驟 2' }), { target: { value: '可加蔥' } })
+    fireEvent.click(within(steps).getByRole('button', { name: '＋ 加一個步驟到「備料」' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '步驟 3' }), { target: { value: '小心油' } })
+    fireEvent.click(within(steps).getByRole('button', { name: '＋ 加一個步驟到「備料」' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '步驟 4' }), { target: { value: '切' } })
+
+    // A new row is an ordinary step.
+    const kind = (n) => screen.getByRole('group', { name: `步驟 ${n} 的種類` })
+    expect(within(kind(2)).getByRole('button', { name: '步驟' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(within(kind(2)).getByRole('button', { name: '可省略' }))
+    fireEvent.click(within(kind(3)).getByRole('button', { name: '備註' }))
+    expect(within(kind(2)).getByRole('button', { name: '可省略' }).getAttribute('aria-pressed')).toBe('true')
+
+    // The visible number skips the optional step and the note, across the
+    // group's edge; the accessible names keep their running index.
+    const shown = [1, 2, 3, 4].map(
+      (n) => within(screen.getByRole('group', { name: `步驟 ${n}` })).queryByTestId('step-number')?.textContent ?? '',
+    )
+    expect(shown).toEqual(['1', '', '', '2'])
+
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+    const body = postBody()
+    expect(body.steps).toEqual([
+      { body: '看', kind: 'step' },
+      { body: '可加蔥', kind: 'optional' },
+    ])
+    expect(body.step_groups).toEqual([
+      {
+        step_group_id: 1,
+        steps: [
+          { body: '小心油', kind: 'note' },
+          { body: '切', kind: 'step' },
+        ],
+      },
     ])
   })
 

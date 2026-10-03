@@ -35,3 +35,24 @@ describe('stepBlocks', () => {
     ])
   })
 })
+
+describe('stepBlocks with kinds', () => {
+  it('numbers only ordinary steps, skipping optional steps and notes across groups', () => {
+    const recipe = {
+      steps: [{ id: 1, kind: 'note' }, { id: 2, kind: 'step' }],
+      step_groups: [
+        group(5, '備料', 'steps', [{ id: 3, kind: 'optional' }, { id: 4, kind: 'step' }]),
+        group(6, '烹飪', 'steps', [{ id: 5 }, { id: 6, kind: 'note' }, { id: 7, kind: 'step' }]),
+      ],
+    }
+    expect(stepBlocks(recipe).flatMap((b) => b.rows.map((s) => [s.id, s.number]))).toEqual([
+      [1, null],
+      [2, 1],
+      [3, null],
+      [4, 2],
+      [5, 3],
+      [6, null],
+      [7, 4],
+    ])
+  })
+})

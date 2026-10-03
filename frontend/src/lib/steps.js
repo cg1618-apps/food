@@ -36,3 +36,22 @@ export function splitSteps(text) {
     .map(stripNumbering)
     .filter(Boolean)
 }
+
+// A step's kind (STEP_KINDS on the server, served as `step_kinds`): an
+// ordinary `step`, an `optional` one, or a `note` among the steps. Only an
+// ordinary step is numbered - a step with no kind is one - so the number
+// counts the steps a cook must do, and an optional step or a note sits in the
+// order without one.
+export const STEP = 'step'
+export const NOTE = 'note'
+export const OPTIONAL = 'optional'
+
+/** Whether a step takes a number. */
+export const isNumbered = (step) => (step.kind ?? STEP) === STEP
+
+/** The numbers a list of steps is shown with, in order: 1..n over the
+ * ordinary steps, null for the rest. */
+export function stepNumbers(steps) {
+  let number = 0
+  return steps.map((step) => (isNumbered(step) ? ++number : null))
+}

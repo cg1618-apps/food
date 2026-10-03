@@ -68,7 +68,9 @@ def _line(line) -> schemas.LineResponse:
 
 
 def _step(step) -> schemas.StepResponse:
-    return schemas.StepResponse(id=step.id, position=step.position, body=step.body)
+    return schemas.StepResponse(
+        id=step.id, position=step.position, kind=step.kind, body=step.body
+    )
 
 
 def _grouped(rows, groups, build_row, build_group):

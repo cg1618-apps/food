@@ -622,8 +622,8 @@ What the branch after module 1 chose, and what it turned down.
   rows first, then group by group. Keeping the per-recipe unique on position
   means `recipe.lines` and `recipe.steps` are still the whole list in reading
   order for every reader that does not care about groups - "written up", the
-  delete counts, used-in, merge - and a step's number is its position plus
-  one.
+  delete counts, used-in, merge. (A step's number was its position plus one
+  until step kinds; now only ordinary steps are counted.)
 - **The wire keeps `lines` and `steps` as the ungrouped rows**, with
   `line_groups` and `step_groups` beside them carrying their own. Nesting
   every row in a group would have needed a synthetic "no group" group, which
@@ -645,6 +645,30 @@ What the branch after module 1 chose, and what it turned down.
   matching a seeded value's name becomes that value. Rows keep their relative
   order and are re-positioned ungrouped-first, which is also how the old page
   showed them.
+
+### Step kinds
+
+- **A step is a 步驟, a 可省略 or a 備註, and only a 步驟 is numbered.** The
+  owner wanted an optional step to stand outside the count and a note to
+  read differently from a step on the page. The number counts what a cook
+  must do; an optional step or a note takes a place in the order and no
+  number. So the number is counted where the steps are drawn - the page and
+  the form, through every group - and never stored, since storing it would
+  have to be renumbered on every reorder and kind change.
+- **The kind is a fixed list (`STEP_KINDS`), not a 設定 vocabulary.** Each
+  kind changes behaviour - whether the row is numbered, how it is drawn - so
+  a kind the owner added in 設定 would have no behaviour to give it. It is a
+  `String` validated by the API, as every closed list here is, not a
+  Postgres enum.
+- **A note is a step row, not a separate list.** A note belongs at a point in
+  the method - "the oil should be smoking before this" - so it needs the
+  step's position, its group and its drag, all of which a step row already
+  has. A separate notes list would need its own position scheme interleaved
+  with the steps'. The recipe's own 筆記 (`recipe.notes`) remains for notes
+  about the whole dish.
+- **`s1tepkinds` guesses nothing.** Every existing step becomes a `step`; a
+  note written as a step stays a step until the owner switches it, because
+  reading step text to decide what it is would be a guess.
 
 ## Kitchen notes
 
