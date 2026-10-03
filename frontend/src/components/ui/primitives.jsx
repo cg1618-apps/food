@@ -9,6 +9,7 @@
 //   - `className` EXTENDS the base classes, it never replaces them. A layout
 //     class like `sm:col-span-2` passed to an Input must not cost it its
 //     border - the defect the first version of this file had.
+import { useId, useRef } from 'react'
 import { Link } from 'react-router-dom'
 
 import { cx } from '../../lib/cx'
@@ -218,6 +219,83 @@ export function Toggle({ label, options, value, onChange, className }) {
           </button>
         )
       })}
+    </div>
+  )
+}
+
+// A row of tabs over one panel - 設定's vocabularies. The WAI-ARIA tabs
+// pattern: a tablist of tabs, each naming the panel it controls; only the
+// selected tab is in the Tab order, and the arrow keys, Home and End move
+// between tabs, selecting as they go. `children` is the selected tab's panel
+// and nothing else, so a tab's content is mounted only while it is chosen.
+//
+// Drawn as media's AdminTabBar is - labels underlined in the brand hue on a
+// rule, not pills - and the row wraps rather than scrolling sideways, so on a
+// phone no tab is hidden off-screen.
+//
+//   label     what the tablist is called, for a screen reader
+//   tabs      [{ id, label }], in order
+//   selected  the id of the selected tab
+//   onSelect  (id) => choose a tab
+const TAB_KEYS = {
+  ArrowRight: (index, count) => (index + 1) % count,
+  ArrowLeft: (index, count) => (index - 1 + count) % count,
+  Home: () => 0,
+  End: (_index, count) => count - 1,
+}
+
+export function Tabs({ label, tabs, selected, onSelect, className, children }) {
+  const prefix = useId()
+  const refs = useRef({})
+  const tabId = (id) => `${prefix}-tab-${id}`
+  const panelId = (id) => `${prefix}-panel-${id}`
+
+  function onKeyDown(event, index) {
+    const move = TAB_KEYS[event.key]
+    if (!move) return
+    event.preventDefault()
+    const next = tabs[move(index, tabs.length)]
+    onSelect(next.id)
+    refs.current[next.id]?.focus()
+  }
+
+  return (
+    <div className={cx('space-y-6', className)}>
+      <div role="tablist" aria-label={label} className="flex flex-wrap gap-x-1 border-b border-border">
+        {tabs.map((tab, index) => {
+          const isSelected = tab.id === selected
+          return (
+            <button
+              key={tab.id}
+              ref={(node) => {
+                refs.current[tab.id] = node
+              }}
+              type="button"
+              role="tab"
+              id={tabId(tab.id)}
+              aria-selected={isSelected}
+              aria-controls={panelId(tab.id)}
+              tabIndex={isSelected ? 0 : -1}
+              onClick={() => {
+                if (!isSelected) onSelect(tab.id)
+              }}
+              onKeyDown={(event) => onKeyDown(event, index)}
+              className={cx(
+                '-mb-px whitespace-nowrap rounded-t-sm border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                FOCUS_RING,
+                isSelected
+                  ? 'border-brand text-text'
+                  : 'border-transparent text-text-muted hover:text-text',
+              )}
+            >
+              {tab.label}
+            </button>
+          )
+        })}
+      </div>
+      <div role="tabpanel" id={panelId(selected)} aria-labelledby={tabId(selected)}>
+        {children}
+      </div>
     </div>
   )
 }

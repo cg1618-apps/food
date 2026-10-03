@@ -336,6 +336,17 @@ so a later reader can tell a decision from an accident. These are food's.
   (`lib/deleteTargets.js`), where media has a dialog per page. Every delete
   here has the same contract - cascade counts echoed back, `field`/`actual` on
   a stale 409, `used_in` on a refusal - so the differences are data, not code.
+- **設定's tab is in the URL and the bar is ARIA tabs**, where media's admin
+  pages hold the active tab in component state and mark it with
+  `aria-current`. A tab in the URL can be linked to and survives a reload,
+  which state cannot; food's library filters are in the URL for the same
+  reason. The tab click **replaces** the history entry where a filter click
+  pushes: a filtered list is a result you may want to come back to, a tab is a
+  view of one page, and Back should leave 設定 rather than replay every tab
+  opened on the way. `role="tablist"`/`"tab"`/`"tabpanel"` with the arrow
+  keys is the standard pattern for a tab bar, which `aria-current` (a link in
+  a set of links) is not. The look and the wrapping row are media's
+  `AdminTabBar`'s.
 
 ### Reordering is a drag, as it now is in `media`
 

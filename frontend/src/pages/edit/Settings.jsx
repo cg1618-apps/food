@@ -1,19 +1,26 @@
 // Frontend: 設定, /edit/settings - every vocabulary the rest of the app is
-// filed by, on one page, and the way into the image library.
+// filed by, a tab each, and the way into the image library.
 //
-// One page rather than one per vocabulary: each is a short list maintained
-// the same way, and five screens with six rows each would be five places to
-// look for the one you meant. Each section is its own query with its own
-// loading, error and empty state, so one vocabulary failing to load does not
-// blank the others.
+// One page with tabs rather than one page per vocabulary: each is a short
+// list maintained the same way, and a route each would be a page per handful
+// of rows. Tabs rather than one long column, because the column grows with
+// every vocabulary added and the one you meant ends up a long scroll away.
+// The tab is in the URL (`?tab=courses`, hooks/useUrlTab.js); a missing or
+// unknown one is the first. Only the selected tab's editor is mounted, so
+// only its query runs, and one vocabulary failing to load blanks nothing
+// else.
 //
-// What a change here makes stale is named per section: a renamed course is
+// TABS is the whole list: a new vocabulary is one entry there - an id for the
+// URL, the label, and what its panel renders.
+//
+// What a change here makes stale is named per vocabulary: a renamed course is
 // shown on every recipe, a renamed method on recipes and on ingredient
 // heating rows, a renamed label on all three kinds of owner.
 import { endpoints } from '../../api/endpoints'
 import CategoryEditor from '../../components/settings/CategoryEditor'
 import VocabularyEditor from '../../components/settings/VocabularyEditor'
-import { LinkButton } from '../../components/ui/primitives'
+import { LinkButton, Tabs } from '../../components/ui/primitives'
+import { useUrlTab } from '../../hooks/useUrlTab'
 import { inUseMessage } from '../../lib/vocabulary'
 
 const RECIPES = endpoints.recipes.list()
@@ -48,9 +55,64 @@ const FACTORY = [
 
 const usageMeta = (row) => (row.usage_count ? `用在 ${row.usage_count} 個地方` : '沒有使用')
 
-export default function Settings() {
+function LabelEditor() {
   return (
-    <div className="space-y-10">
+    <VocabularyEditor
+      title="標籤"
+      endpoints={endpoints.labels}
+      invalidate={[endpoints.labels.list(), INGREDIENTS, RECIPES, NOTES]}
+      ordered={false}
+      hint="跨分類的標記，食材、食譜和筆記都可以貼。依名稱排列。"
+      addLabel="新增標籤"
+      meta={(row) =>
+        row.usage_count
+          ? `食材 ${row.ingredient_count} · 食譜 ${row.recipe_count} · 筆記 ${row.note_count}`
+          : '沒有使用'
+      }
+      confirmText={(row) =>
+        row.usage_count
+          ? `它會從 ${row.usage_count} 個項目上拿掉；那些項目本身不受影響。`
+          : '沒有任何項目貼著它。'
+      }
+      refusal={(_row, error) => error?.message}
+    />
+  )
+}
+
+function FactoryEditor({ vocabulary, ...section }) {
+  return (
+    <VocabularyEditor
+      endpoints={endpoints[vocabulary]}
+      {...section}
+      meta={usageMeta}
+      confirmText={(row) =>
+        row.usage_count
+          ? `「${row.display_name}」還用在 ${row.usage_count} 個地方，刪除會被拒絕；先把那些改掉。`
+          : '沒有任何地方使用它。'
+      }
+      refusal={(row, error) => inUseMessage(row.display_name, error)}
+    />
+  )
+}
+
+// The tabs, in order. `id` is what `?tab=` carries and must not change once
+// links to it exist; the first entry is the default.
+const TABS = [
+  { id: 'categories', label: '食材分類', render: () => <CategoryEditor /> },
+  { id: 'labels', label: '標籤', render: () => <LabelEditor /> },
+  ...FACTORY.map(({ key, ...section }) => ({
+    id: key,
+    label: section.title,
+    render: () => <FactoryEditor vocabulary={key} {...section} />,
+  })),
+]
+
+export default function Settings() {
+  const [selected, select] = useUrlTab(TABS)
+  const tab = TABS.find(({ id }) => id === selected)
+
+  return (
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold">設定</h1>
         <LinkButton to="/edit/images" size="sm">
@@ -58,42 +120,11 @@ export default function Settings() {
         </LinkButton>
       </div>
 
-      <CategoryEditor />
-
-      <VocabularyEditor
-        title="標籤"
-        endpoints={endpoints.labels}
-        invalidate={[endpoints.labels.list(), INGREDIENTS, RECIPES, NOTES]}
-        ordered={false}
-        hint="跨分類的標記，食材、食譜和筆記都可以貼。依名稱排列。"
-        addLabel="新增標籤"
-        meta={(row) =>
-          row.usage_count
-            ? `食材 ${row.ingredient_count} · 食譜 ${row.recipe_count} · 筆記 ${row.note_count}`
-            : '沒有使用'
-        }
-        confirmText={(row) =>
-          row.usage_count
-            ? `它會從 ${row.usage_count} 個項目上拿掉；那些項目本身不受影響。`
-            : '沒有任何項目貼著它。'
-        }
-        refusal={(_row, error) => error?.message}
-      />
-
-      {FACTORY.map(({ key, ...section }) => (
-        <VocabularyEditor
-          key={key}
-          endpoints={endpoints[key]}
-          {...section}
-          meta={usageMeta}
-          confirmText={(row) =>
-            row.usage_count
-              ? `「${row.display_name}」還用在 ${row.usage_count} 個地方，刪除會被拒絕；先把那些改掉。`
-              : '沒有任何地方使用它。'
-          }
-          refusal={(row, error) => inUseMessage(row.display_name, error)}
-        />
-      ))}
+      <Tabs label="設定" tabs={TABS} selected={selected} onSelect={select}>
+        {/* Keyed by tab, so switching tabs never carries an editor's local
+            state - an open rename, a half-typed add - into another. */}
+        <div key={tab.id}>{tab.render()}</div>
+      </Tabs>
     </div>
   )
 }

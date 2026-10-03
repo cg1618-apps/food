@@ -1,7 +1,7 @@
-// 設定 and 圖片 through the real routes: what each section sends for add,
-// rename, reorder and delete, the refusals explained inline with their
-// counts, the error state, and the image library's owners, filter, paging
-// and delete.
+// 設定 and 圖片 through the real routes: 設定's tabs and the URL that picks
+// one, what each vocabulary sends for add, rename, reorder and delete, the
+// refusals explained inline with their counts, the error state, and the image
+// library's owners, filter, paging and delete.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
@@ -127,10 +127,74 @@ describe('設定', () => {
     handler = settingsData
   })
 
-  it('shows each vocabulary with its counts, and labels with every owner', async () => {
+  it('opens on the first tab, and shows only its panel', async () => {
     renderAt('/edit/settings')
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['食材分類', '標籤', '類別', '做法', '器材'])
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true')
+    const panel = screen.getByRole('tabpanel')
+    expect(panel.getAttribute('aria-labelledby')).toBe(tabs[0].id)
+    expect(tabs[0].getAttribute('aria-controls')).toBe(panel.id)
+    expect(await within(panel).findByRole('list', { name: '食材分類' })).toBeTruthy()
+    // Only the selected tab's editor is mounted, so only its query runs.
+    expect(screen.queryByRole('list', { name: '類別' })).toBeNull()
+    expect(calls.some(({ url }) => url === '/api/recipe-courses')).toBe(false)
+    expect(screen.getByRole('link', { name: '圖片庫' }).getAttribute('href')).toBe('/edit/images')
+  })
+
+  it('selects the panel the URL names', async () => {
+    renderAt('/edit/settings?tab=courses')
+    expect(screen.getByRole('tab', { name: '類別' }).getAttribute('aria-selected')).toBe('true')
+    expect(await within(screen.getByRole('tabpanel')).findByRole('list', { name: '類別' })).toBeTruthy()
+    expect(screen.queryByRole('list', { name: '食材分類' })).toBeNull()
+  })
+
+  it('falls back to the first tab for an unknown one', async () => {
+    renderAt('/edit/settings?tab=nonsense')
+    expect(screen.getByRole('tab', { name: '食材分類' }).getAttribute('aria-selected')).toBe('true')
+    expect(await screen.findByRole('list', { name: '食材分類' })).toBeTruthy()
+  })
+
+  it('puts a clicked tab in the URL and shows its panel', async () => {
+    renderAt('/edit/settings')
+    fireEvent.click(screen.getByRole('tab', { name: '標籤' }))
+    expect(location()).toBe('/edit/settings?tab=labels')
+    expect(screen.getByRole('tab', { name: '標籤' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: '食材分類' }).getAttribute('aria-selected')).toBe('false')
+    expect(await screen.findByRole('list', { name: '標籤' })).toBeTruthy()
+    expect(screen.queryByRole('list', { name: '食材分類' })).toBeNull()
+  })
+
+  it('moves between tabs with the arrow keys, Home and End, wrapping at the ends', () => {
+    renderAt('/edit/settings')
+    const tab = (name) => screen.getByRole('tab', { name })
+    // Only the selected tab is in the Tab order; the arrows move within the bar.
+    expect(tab('食材分類').tabIndex).toBe(0)
+    expect(tab('標籤').tabIndex).toBe(-1)
+
+    fireEvent.keyDown(tab('食材分類'), { key: 'ArrowRight' })
+    expect(location()).toBe('/edit/settings?tab=labels')
+    expect(document.activeElement).toBe(tab('標籤'))
+
+    fireEvent.keyDown(tab('標籤'), { key: 'ArrowLeft' })
+    fireEvent.keyDown(tab('食材分類'), { key: 'ArrowLeft' })
+    expect(location()).toBe('/edit/settings?tab=equipment')
+    expect(document.activeElement).toBe(tab('器材'))
+
+    fireEvent.keyDown(tab('器材'), { key: 'ArrowRight' })
+    expect(location()).toBe('/edit/settings?tab=categories')
+    fireEvent.keyDown(tab('食材分類'), { key: 'End' })
+    expect(location()).toBe('/edit/settings?tab=equipment')
+    fireEvent.keyDown(tab('器材'), { key: 'Home' })
+    expect(location()).toBe('/edit/settings?tab=categories')
+    expect(document.activeElement).toBe(tab('食材分類'))
+  })
+
+  it('shows each vocabulary with its counts, and labels with every owner', async () => {
+    renderAt('/edit/settings?tab=courses')
     const courses = await screen.findByRole('list', { name: '類別' })
     expect(within(courses).getByRole('listitem', { name: '主菜' }).textContent).toContain('用在 3 個地方')
+    fireEvent.click(screen.getByRole('tab', { name: '標籤' }))
     const labels = await screen.findByRole('list', { name: '標籤' })
     expect(labels.textContent).toContain('食材 1 · 食譜 2 · 筆記 0')
     // Labels have no order to move by.
@@ -140,7 +204,7 @@ describe('設定', () => {
   it('renames in place', async () => {
     handler = (call) =>
       call.method === 'PATCH' ? json({ ...COURSES[1], name_en: 'soup' }) : settingsData(call)
-    renderAt('/edit/settings')
+    renderAt('/edit/settings?tab=courses')
     fireEvent.click(await screen.findByRole('button', { name: '改名「湯」' }))
     fireEvent.change(screen.getByRole('textbox', { name: '湯 的英文名' }), { target: { value: 'soup' } })
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
@@ -153,7 +217,7 @@ describe('設定', () => {
 
   it('moves a value by swapping sort_order with its neighbour', async () => {
     handler = (call) => (call.method === 'PATCH' ? json({}) : settingsData(call))
-    renderAt('/edit/settings')
+    renderAt('/edit/settings?tab=courses')
     // The first row has nowhere to go up to: nothing is sent.
     fireEvent.keyDown(await screen.findByRole('button', { name: '排序 「主菜」' }), { key: 'ArrowUp' })
     expect(writes()).toEqual([])
@@ -179,7 +243,7 @@ describe('設定', () => {
   it('puts the stored order back and says why when a move is refused', async () => {
     handler = (call) =>
       call.method === 'PATCH' ? json({ detail: '資料庫連不上' }, 503) : settingsData(call)
-    renderAt('/edit/settings')
+    renderAt('/edit/settings?tab=courses')
     fireEvent.keyDown(await screen.findByRole('button', { name: '排序 「甜點」' }), { key: 'ArrowUp' })
     await waitFor(() =>
       expect(within(section('類別').parentElement).getByRole('alert').textContent).toBe('資料庫連不上'),
@@ -215,7 +279,7 @@ describe('設定', () => {
 
   it('adds a value after the last one', async () => {
     handler = (call) => (call.method === 'POST' ? json({}, 201) : settingsData(call))
-    renderAt('/edit/settings')
+    renderAt('/edit/settings?tab=courses')
     const add = await screen.findByRole('form', { name: '新增類別' })
     fireEvent.change(within(add).getByRole('textbox', { name: '新增類別：中文名' }), {
       target: { value: '前菜' },
@@ -238,7 +302,7 @@ describe('設定', () => {
       call.method === 'DELETE'
         ? json({ detail: 'still used', usage_count: 5 }, 409)
         : settingsData(call)
-    renderAt('/edit/settings')
+    renderAt('/edit/settings?tab=courses')
     fireEvent.click(await screen.findByRole('button', { name: '刪除「主菜」' }))
     const dialog = screen.getByRole('dialog')
     expect(dialog.textContent).toContain('還用在 3 個地方')
@@ -282,12 +346,14 @@ describe('設定', () => {
     )
   })
 
-  it('shows an error state per section, leaving the others', async () => {
+  it('shows an error state in its own tab, leaving the others', async () => {
     handler = (call) =>
       call.url === '/api/equipment' ? json({ detail: '資料庫連不上' }, 503) : settingsData(call)
-    renderAt('/edit/settings')
+    renderAt('/edit/settings?tab=equipment')
     expect((await screen.findByRole('alert')).textContent).toBe('資料庫連不上')
+    fireEvent.click(screen.getByRole('tab', { name: '類別' }))
     expect(await screen.findByRole('list', { name: '類別' })).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 })
 
