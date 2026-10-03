@@ -41,7 +41,7 @@ second id went with the integer-primary-key decision, so ours is
 phone in a shop, signed out: selection notes, the preservation methods with
 their durations, where to get the thing. Everything else is a list or a form.
 
-**Every vocabulary shares one page**, 設定, a section each. They are the
+**Every vocabulary shares one page**, 設定, a tab each. They are the
 same kind of work — maintaining a short list — and a page each would be five
 screens with a handful of rows on them.
 
@@ -312,10 +312,30 @@ cover and a thumbnail) and 移除.
 
 ## 設定 and 圖片
 
-`/edit/settings` is `pages/edit/Settings.jsx`: 食材分類, 標籤, 類別, 做法 and
-器材, top to bottom, each its own query with its own loading, error and empty
-state, so one vocabulary failing to load leaves the others usable. Each value
-is a `components/settings/NameRow.jsx`:
+`/edit/settings` is `pages/edit/Settings.jsx`: a tab each for 食材分類, 標籤,
+類別, 做法 and 器材, with 圖片庫 - the way into `/edit/images` - beside the
+heading.
+
+- **The tab is in the URL**, `?tab=` with `categories`, `labels`, `courses`,
+  `methods` or `equipment` (`hooks/useUrlTab.js`), so a tab can be linked to
+  and survives a reload. A missing or unknown tab is the first, 食材分類, and
+  the URL is left as it is. Choosing a tab **replaces** the history entry
+  rather than pushing one: Back leaves 設定 instead of walking back through
+  the tabs looked at on the way.
+- **The bar is the `Tabs` primitive** (`components/ui/primitives.jsx`), the
+  WAI-ARIA tabs pattern: a `tablist` of `tab`s, each `aria-controls` its
+  `tabpanel`; only the selected tab is in the Tab order, and ←/→ (wrapping at
+  the ends), Home and End move between tabs and select as they go. The row
+  wraps on a phone rather than scrolling sideways, as media's `AdminTabBar`
+  does, so no tab is off-screen.
+- **Only the selected tab's editor is mounted**, so only its query runs. Each
+  has its own loading, error and empty state, and one vocabulary failing to
+  load leaves every other tab usable. Switching tabs drops an editor's local
+  state - an open rename, a half-typed add.
+- **A new vocabulary is one entry in `TABS`** in `Settings.jsx`: its id, its
+  label and what its panel renders.
+
+Each value is a `components/settings/NameRow.jsx`:
 
 - **改名** turns the row into its two name slots in place; Enter saves,
   Escape puts the row back. A 409 (a duplicate name) or 422 is said under
@@ -343,7 +363,7 @@ is a `components/settings/NameRow.jsx`:
   `RESTRICT`. The button stays even when the page already knows the delete
   will be refused: the refusal is the server's. The fallback category (預設)
   has no delete.
-- **Add** is the line under each section (`AddNameForm.jsx`); a new value
+- **Add** is the line under each vocabulary (`AddNameForm.jsx`); a new value
   goes after the last one. A category row's ＋子分類 opens the same line
   under that node; renaming a category also offers 上層, its parent (never
   itself or anything beneath it).
