@@ -10,7 +10,19 @@ import { endpoints, WRITE } from './endpoints'
 // Every endpoint is found by walking the object rather than listed by hand,
 // and every key must be classified as a read or a write below - so a new
 // endpoint cannot be added without this test deciding which side it is on.
-const WRITE_KEYS = new Set(['create', 'update', 'remove', 'images', 'merge', 'label', 'upload'])
+// `session` is a GET, but it is classified with the writes because what is
+// asserted of them is the point of it: it must sit under the gated prefix, or
+// it answers 204 to everyone and never sends anybody to the Access login.
+const WRITE_KEYS = new Set([
+  'create',
+  'update',
+  'remove',
+  'images',
+  'merge',
+  'label',
+  'upload',
+  'session',
+])
 const READ_KEYS = new Set([
   'list',
   'detail',

@@ -16,6 +16,25 @@
 //   re-implement fetch by hand, and a documented 409 contract becomes
 //   unreachable without anything saying so.
 
+import { WRITE } from './endpoints'
+
+// Thrown, with status 401, when Access asked for a sign-in instead of letting
+// a write through. The edit pages sign the browser in as they open
+// (components/layout/EditSignIn.jsx), so reaching this means the session ran
+// out on an open page - and reloading it would throw away the form.
+export const SIGN_IN_MESSAGE =
+  '登入已過期，這次沒有存到。請在新分頁打開任一個編輯頁重新登入，再回來重按一次。'
+
+// What Access's login redirect looks like to a fetch made with
+// `redirect: 'manual'`. See api/session.js.
+function isSignInRedirect(response) {
+  return response?.type === 'opaqueredirect'
+}
+
+function isGated(url) {
+  return typeof url === 'string' && (url === WRITE || url.startsWith(`${WRITE}/`))
+}
+
 // An array value repeats its key - `{ course_id: [1, 2] }` is
 // `course_id=1&course_id=2` - which is how FastAPI reads a `list[int]` query
 // parameter, and what the recipe and note lists mean by "any of". Joining it
@@ -64,9 +83,20 @@ function requestHeaders(body, headers) {
 
 export async function fetchJson(url, options = {}) {
   const response = await fetch(url, {
+    // Under the gated prefix a redirect can only be Access asking for a
+    // sign-in, and following it is what fails as "Failed to fetch". See
+    // api/session.js.
+    ...(isGated(url) ? { redirect: 'manual' } : {}),
     ...options,
     headers: requestHeaders(options.body, options.headers),
   })
+
+  if (isSignInRedirect(response)) {
+    const error = new Error(SIGN_IN_MESSAGE)
+    error.status = 401
+    error.signInRequired = true
+    throw error
+  }
 
   if (response.status === 204) return null
 

@@ -1,4 +1,4 @@
-"""Where a route lives, and the one definition of the gated prefix.
+"""Where a route lives, and the one definition of each gated prefix.
 
 This app has no authentication code and will have none. The gate on writes is
 Cloudflare Access, which is all-or-nothing per PATH - so the read/write split
@@ -24,11 +24,14 @@ from fastapi import APIRouter
 WRITE_PREFIX = "/api/edit"
 READ_PREFIX = "/api"
 
+# The pages that create, update and delete. Gating them is not what protects
+# the data - WRITE_PREFIX does that - but it puts the Access login in front of
+# the page a person opens, rather than behind the first save they make on it.
+EDIT_PAGES_PREFIX = "/edit"
+
 # What `deploy/gated-paths` contains, and what `apps.yml` must agree with.
-# A list rather than a bare string because the registry key is plural and the
-# day this app needs a second gated prefix should not be the day the file
-# format changes.
-GATED_PATHS = [WRITE_PREFIX]
+# A list rather than a bare string because the registry key is plural.
+GATED_PATHS = [WRITE_PREFIX, EDIT_PAGES_PREFIX]
 
 
 def read_router(resource: str, tag: str) -> APIRouter:

@@ -288,8 +288,11 @@ describe('圖片', () => {
     expect(location()).toBe('/edit/images?unused=1')
     fireEvent.click(await screen.findByRole('button', { name: '下一頁' }))
     expect(location()).toBe('/edit/images?unused=1&page=2')
+    // The last IMAGES request: the edit pages also ask the session probe as
+    // the URL changes (components/layout/EditSignIn.jsx).
+    const lastImages = () => calls.filter(({ url }) => url.startsWith('/api/images')).at(-1)
     await waitFor(() =>
-      expect(calls.at(-1).url).toBe(`/api/images?unused=true&limit=${PAGE_SIZE + 1}&offset=${PAGE_SIZE}`),
+      expect(lastImages().url).toBe(`/api/images?unused=true&limit=${PAGE_SIZE + 1}&offset=${PAGE_SIZE}`),
     )
     expect(await screen.findAllByRole('listitem', { name: /^photo-/ })).toHaveLength(PAGE_SIZE)
   })

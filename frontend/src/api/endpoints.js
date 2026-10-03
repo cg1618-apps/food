@@ -90,6 +90,10 @@ export const endpoints = {
     // states, ratings, recipe kinds and statuses, source platforms, note kinds.
     fixed: () => `${API}/vocabularies/fixed`,
   },
+  // GET under the gated prefix: 204 when Access let the request through, and
+  // with ?next=/edit/... a redirect back to that page after a sign-in. See
+  // api/session.js.
+  session: () => `${WRITE}/session`,
   health: () => '/health',
 }
 

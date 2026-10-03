@@ -51,6 +51,27 @@ suggest the gate lives in this application, and the day someone believes that
 is the day it moves. For the same reason the edit links are visible to
 everyone: hiding them protects nothing.
 
+**The edit pages do send a signed-out browser through the Access login.**
+Access only sees document loads, and a click from 食譜 to 設定 is not one, so
+the page would open unchallenged and its first save — a background request —
+would be the first thing Access saw. A background request cannot follow
+Access's redirect to its login on another origin; it failed as a bare "Failed
+to fetch". So:
+
+- **`components/layout/EditSignIn.jsx`** wraps every `/edit` route. Each time
+  an edit page opens it asks `GET /api/edit/session` (`api/session.js`); when
+  Access answers with a redirect, it sends the whole window to
+  `/api/edit/session?next=<this page>`, which Access *can* take through the
+  login, and which returns it to the page. That happens as the page opens,
+  before anything is typed. It renders its page whatever the answer and
+  refuses nothing — it is not a guard. A second redirect within a minute of
+  the first is skipped, so a sign-in that does not stick cannot loop.
+- **`api/client.js`** sends every request under `/api/edit` with
+  `redirect: 'manual'`, and turns Access's redirect into an error with status
+  401, `signInRequired`, and a message saying the save did not happen and to
+  sign in again in another tab. That is the session running out on an open
+  page; reloading would throw the form away, so it does not.
+
 ## Libraries
 
 The three libraries - recipes, ingredients, kitchen notes - are one scaffold,
