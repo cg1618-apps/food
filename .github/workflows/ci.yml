@@ -38,7 +38,7 @@ jobs:
       POSTGRES_DB: food
       APP_ENV: development
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # `git ls-files` reads the index and has twice reported 100755 while the
       # COMMIT held 100644. core.fileMode is false on both development
@@ -63,7 +63,7 @@ jobs:
           test "$mode" = "100644"
           ! grep -qP '\r' deploy/gated-paths
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           # Same interpreter as the runtime image (dockerfile: python:3.13-slim).
           python-version: "3.13"
@@ -81,7 +81,7 @@ jobs:
       - name: Run the tests
         run: python -m pytest tests/ -q
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: npm
