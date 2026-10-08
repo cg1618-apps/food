@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ThemeProvider } from '../../contexts/ThemeContext'
 import AppRoutes from '../../routes'
 import Dialog from '../ui/Dialog'
 import DeleteDialog from './DeleteDialog'
@@ -52,12 +53,14 @@ function LocationProbe() {
 
 function wrap(ui, path = '/', client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
-        {ui}
-        <LocationProbe />
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <ThemeProvider>
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[path]}>
+          {ui}
+          <LocationProbe />
+        </MemoryRouter>
+      </QueryClientProvider>
+    </ThemeProvider>,
   )
 }
 

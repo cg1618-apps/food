@@ -9,6 +9,8 @@ is specific to food.
 Navigation is 料理 · 食譜 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定 - 料理 first, since a dish
 is what you look for and its recipes hang off it: a top bar on a desktop, a bar
 fixed to the bottom of the screen on a phone (`components/layout/Layout.jsx`).
+On a phone the top bar stays, slim and scrolling away with the page, holding
+only 食 (home) and the theme toggle.
 The section a page belongs to - its edit pages included - is marked with
 `aria-current="page"`; `lib/nav.js` holds that match.
 
@@ -796,6 +798,21 @@ runtime `--c-*` variable and the light and dark palettes in `index.css`
 redefine only those. A numbered grey or a raw hex in a component fails
 `theme-tokens.test.js`, which is what keeps dark mode from rotting one
 component at a time and keeps the four apps looking like one product.
+
+**Light, dark, or the device's setting.** The theme follows
+`prefers-color-scheme` - live, as the OS changes - until the toggle at the
+right end of the top bar is pressed (a moon while the page is light, a sun
+while it is dark; `aria-label` 切換為深色模式 / 切換為淺色模式). The choice is
+kept in `localStorage` under `cg1618:food:theme` (`light` or `dark`; nothing
+stored means follow the device), per device like the 封面 / 清單 choice, and
+every read and write is guarded, so blocked storage keeps it for the session.
+`contexts/ThemeContext.jsx` is media's provider with food's key: it stamps
+`<html data-theme>`, which `index.css` keys both palettes off, and points the
+`theme-color` metas at the canvas colour on screen; `contexts/theme.js` holds
+the key, the context and `useTheme()`. An inline script in `index.html` stamps
+the same attribute before first paint, so a stored dark choice never flashes
+paper on load. Anything that renders `Layout` - every page test - needs a
+`ThemeProvider` around it, as `App.jsx` has.
 
 ## Primitives
 
