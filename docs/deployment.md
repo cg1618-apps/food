@@ -17,6 +17,15 @@ The platform's `bin/deploy food` does it, from `~/cg1618` on the box:
 4. Probes `/health`, which answers 200 only when the database is reachable *and*
    its Alembic revision matches the one the running code expects.
 
+**A release that adds or modifies a revision under `alembic/versions/` waits
+for the owner after the merge.** The platform's workflow sends it down the
+gated lane, which holds the deploy until it is approved in this repository's
+`production` environment; any other release deploys unattended.
+`./deploy/migrations added origin/main origin/dev` answers which lane a
+release will take before it is opened — any output means gated — and the
+release PR says so when its text is proposed and again when it is opened (the
+platform's `CLAUDE.md`, "Git Branches").
+
 `apps.yml` declares `gated_paths: ["/api/edit", "/edit"]`, and `bin/deploy`
 refuses when that disagrees with this repository's `deploy/gated-paths` in
 either direction. Both must name the same prefixes, and `deploy/gated-paths` is
