@@ -129,15 +129,109 @@ describe('the ingredient library', () => {
     expect(node).toBeTruthy()
   })
 
+  // Branches start closed: 葉菜 is reached by opening 蔬菜.
   it('writes a filter click to the URL and refetches with it', async () => {
     responses['/api/ingredient-categories'] = CATEGORIES
     renderAt('/ingredients')
     const sidebar = screen.getByRole('complementary', { name: '篩選' })
-    fireEvent.click(await within(sidebar).findByRole('button', { name: /葉菜/ }))
+    expect(within(sidebar).queryByRole('button', { name: /葉菜/ })).toBeNull()
+    fireEvent.click(await within(sidebar).findByRole('button', { name: '展開 蔬菜' }))
+    fireEvent.click(within(sidebar).getByRole('button', { name: /葉菜/ }))
     expect(location()).toBe('/ingredients?category=9')
     await waitFor(() =>
       expect(listRequests('/api/ingredients')).toContain('/api/ingredients?category_id=9'),
     )
+  })
+
+  describe('groups', () => {
+    const MEAT = [{ id: 3, display_name: '肉類', parent_id: null, children: [], ingredient_count: 3 }]
+    const meat = (id, name, parent_id = null) => ({
+      ...CABBAGE,
+      id,
+      display_name: name,
+      name_en: null,
+      category_id: 3,
+      parent_id,
+      needs_detail: false,
+      rating: null,
+      fridge: null,
+      used_in_count: 0,
+    })
+    const CHICKEN = meat(20, '雞肉')
+    const THIGH = meat(21, '雞腿', 20)
+    const BACON = meat(22, '培根')
+
+    beforeEach(() => {
+      responses['/api/ingredient-categories'] = MEAT
+      responses['/api/ingredients'] = [BACON, CHICKEN, THIGH]
+    })
+
+    it('files a group under its category in the tree, and choosing it lists the group', async () => {
+      renderAt('/ingredients?category=3')
+      const sidebar = screen.getByRole('complementary', { name: '篩選' })
+      fireEvent.click(await within(sidebar).findByRole('button', { name: '展開 肉類' }))
+      fireEvent.click(await within(sidebar).findByRole('button', { name: /雞肉/ }))
+      // The category is cleared in the same step: never both.
+      expect(location()).toBe('/ingredients?group=20')
+      await waitFor(() =>
+        expect(listRequests('/api/ingredients')).toContain('/api/ingredients?group_id=20'),
+      )
+    })
+
+    // The categories answer before the ingredient list that holds the groups,
+    // so the path to 雞肉 does not exist on the first draw. Delaying the list
+    // is what makes this bite: answered together, it passed while the real
+    // page left 肉類 closed.
+    it('opens the path to a group chosen in the URL, once the groups arrive', async () => {
+      let release
+      const gate = new Promise((resolve) => (release = resolve))
+      const fetchNow = globalThis.fetch
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url) => {
+          if (url.startsWith('/api/ingredients')) await gate
+          return fetchNow(url)
+        }),
+      )
+      renderAt('/ingredients?group=20')
+      const sidebar = screen.getByRole('complementary', { name: '篩選' })
+      await within(sidebar).findByRole('button', { name: /肉類/ })
+      release()
+      expect(await within(sidebar).findByRole('button', { name: /雞肉/, pressed: true })).toBeTruthy()
+    })
+
+    it('sections the list by category, the group first with its variety inside it', async () => {
+      renderAt('/ingredients')
+      const section = await screen.findByRole('region', { name: '肉類' })
+      const names = within(section)
+        .getAllByRole('link')
+        .map((link) => link.textContent.replace('└', ''))
+      expect(names[0]).toContain('雞肉')
+      expect(names.at(-1)).toContain('培根')
+      const varieties = within(section).getByRole('list', { name: '雞肉 的品種' })
+      expect(within(varieties).getByText('雞腿')).toBeTruthy()
+      expect(within(section).getByText('1 個品種')).toBeTruthy()
+    })
+
+    // 只看主項 sends has_parent=false; a bool key could never send false.
+    it('sends 只看主項 and 只看品種 as has_parent', async () => {
+      renderAt('/ingredients')
+      const sidebar = screen.getByRole('complementary', { name: '篩選' })
+      fireEvent.click(within(sidebar).getByRole('button', { name: '只看主項' }))
+      expect(location()).toBe('/ingredients?variety=top')
+      await waitFor(() =>
+        expect(listRequests('/api/ingredients')).toContain('/api/ingredients?has_parent=false'),
+      )
+    })
+
+    it('still reads the old 只看品種 switch from a link', async () => {
+      renderAt('/ingredients?variety=1')
+      await waitFor(() =>
+        expect(listRequests('/api/ingredients')).toContain('/api/ingredients?has_parent=true'),
+      )
+      const sidebar = screen.getByRole('complementary', { name: '篩選' })
+      expect(within(sidebar).getByRole('button', { name: '只看品種', pressed: true })).toBeTruthy()
+    })
   })
 
   it('shows the stub backlog count before the filter is on', async () => {

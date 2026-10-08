@@ -976,6 +976,32 @@ What the branch after module 1 chose, and what it turned down.
   range from the browser's own date, and only a bare `GET` falls back to the
   server's today in Asia/Taipei.
 
+## Ingredient groups in the library
+
+**The group filter is the API's; the arrangement is the page's.** Choosing
+雞肉 in the tree has to list 雞肉 and everything below it at any depth, which
+is a recursive query over `parent_id` - `group_id` on `GET /api/ingredients`,
+next to the other filters, so the count, the search and the other filters
+compose with it the way they do with `category_id`. Sectioning and nesting
+the result is presentation, done in `lib/ingredientGroups.js` from two lists
+the page already loads (the filtered result and the whole library), so the
+API's list stays one flat, sorted shape that the typeahead also reads.
+
+**What makes a row a group is read from the whole library.** Read from the
+result, 只看主項 would empty every group and the "groups on top" order would
+vanish exactly when someone asked to see only the groups.
+
+**A block sits in its parent's section.** A variety may be filed in another
+category than its parent (乾辣椒 is 乾貨, 辣椒 is 蔬菜). Splitting the block
+across two sections would undo the point of the block, so the variety stays
+with its parent and names its own category there. The category filter stays
+exact, so choosing 乾貨 still lists 乾辣椒 - alone, as 「辣椒 的品種」.
+
+**品種 became a three-way choice, not a second switch.** 只看主項 and 只看品種
+contradict each other; two switches would allow both on and list nothing.
+The URL word for the old switch (`?variety=1`) is kept as an alias of
+`only`, so a link written before the change still lands.
+
 ## The starting ingredient list
 
 - **Loaded by a migration, not by a script or the API.** Production receives

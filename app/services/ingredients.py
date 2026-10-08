@@ -64,6 +64,21 @@ def get(db: Session, ingredient_id: int) -> Ingredient:
     return row
 
 
+def group_member_ids(group_id: int):
+    """A group: the ingredient itself and its varieties at any depth.
+
+    A recursive CTE over `parent_id`. The write path refuses a parent cycle, and
+    UNION (not UNION ALL) stops the recursion even if one existed.
+    """
+    members = (
+        select(Ingredient.id).where(Ingredient.id == group_id).cte("group_members", recursive=True)
+    )
+    members = members.union(
+        select(Ingredient.id).where(Ingredient.parent_id == members.c.id)
+    )
+    return select(members.c.id)
+
+
 def search(
     db: Session,
     q: str | None = None,
@@ -73,6 +88,7 @@ def search(
     parent_id: int | None = None,
     rating: str | None = None,
     has_parent: bool | None = None,
+    group_id: int | None = None,
 ) -> list[Ingredient]:
     query = _loaded(db.query(Ingredient))
 
@@ -100,6 +116,8 @@ def search(
         query = query.filter(Ingredient.category_id == category_id)
     if parent_id is not None:
         query = query.filter(Ingredient.parent_id == parent_id)
+    if group_id is not None:
+        query = query.filter(Ingredient.id.in_(group_member_ids(group_id)))
     if needs_detail is not None:
         query = query.filter(Ingredient.needs_detail.is_(needs_detail))
     if rating is not None:

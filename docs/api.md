@@ -113,8 +113,10 @@ discipline was never tested.
 **`GET /api/ingredients` is also module 2's typeahead.** The library search box
 and recipe-line completion ask the same question, and two implementations would
 answer differently within a month. Query parameters: `q`, `category_id`,
-`label_id`, `parent_id`, `needs_detail`, `rating` (one grade), and `has_parent`
-(`true` for varieties, `false` for top-level ingredients).
+`label_id`, `parent_id`, `needs_detail`, `rating` (one grade), `has_parent`
+(`true` for varieties, `false` for top-level ingredients), and `group_id` (that
+ingredient and every variety below it, at any depth of `parent_id` - the
+library's group filter).
 
 A list row is a summary: names, `category_id`, `parent_id`, `needs_detail`,
 `rating`, `cover` (the first gallery image's `thumb_url` and `focus`, or null)
