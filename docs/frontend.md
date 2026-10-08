@@ -104,8 +104,9 @@ words and its filters:
 - **Filters in a sidebar on a desktop and a drawer on a phone.** The sidebar
   is built from `components/layout/FilterPanel.jsx` - `FilterGroup`,
   `FilterOptions` (toggle chips), `FilterSwitch` (a checkbox with a count) and
-  `FilterTree` (the category tree). Below `lg` the same controls open in the
-  shared `Dialog`, which a phone draws as a bottom sheet; the 篩選 button
+  `FilterTree` (a single-choice tree whose branches open and close). Below
+  `lg` the same controls open in the shared `Dialog`, which a phone draws as
+  a bottom sheet; the 篩選 button
   carries the number of filters that are on.
 - **Every filter and the search term live in the URL query**
   (`hooks/useUrlFilters.js`, pure parsing in `lib/urlFilters.js`). A library
@@ -123,7 +124,12 @@ words and its filters:
 - **The cover view** (`CoverGrid.jsx`): the cover cropped at its focus, or the
   name's first character in the serif when there is no photograph; the name,
   one line of metadata, badges. **The list view** (`LibraryTable.jsx`): the
-  name as a link with its badges, then the page's columns.
+  name as a link with its badges, then the page's columns. A library may pass
+  `arrange(items)` to cut the list into titled sections (`sections`, each
+  headed with its count); both views then draw a section's `group` entries as
+  a parent with its varieties - an outlined block, or rows indented behind a
+  └ - and `card(item, place)` is told where a tile sits, `{ depth, root }`
+  inside a group.
 - **Two empties, two directions**: an empty library offers the add button; a
   filter or search that matches nothing offers 清除搜尋與篩選.
 - **A label chip carries its own library's count** - `ingredient_count`,
@@ -136,7 +142,7 @@ words and its filters:
 | --- | --- | --- | --- |
 | 料理 `/dishes` | `kind`, `course`, `region`, `label` (all "any of") | 種類, 類別, 地區, 食譜 (how many) | - |
 | 食譜 `/recipes` | `dish` (ids, sent as `dish_id`), `kind`, `course`, `status` (ids, sent as `status_id`), `method`, `equipment`, `author` (ids, sent as `author_id`), `label` (all "any of"); `written` = `true` / `false`. `kind`, `course` and `label` are the dish's | 類別, 做法, 時間, 作者, 狀態 | 書籤 when not written up |
-| 食材 `/ingredients` | `category`, `label`, `rating` (one each); `stub`, `variety` (switches) | 分類 / 品種, 冷藏, 用於, 評等 | 待補, rating |
+| 食材 `/ingredients` | `category`, `group` (an ingredient id, sent as `group_id`), `label`, `rating` (one each); `variety` = `top` / `only` (sent as `has_parent` = `false` / `true`; the old `?variety=1` still means `only`); `stub` (switch) | 品種, 冷藏, 用於, 評等 | 待補, rating |
 | 筆記 `/notes` | `kind`, `label` (both "any of") | 種類, 連結 (host only) | - |
 
 **A dish card** (`pages/library/DishLibrary.jsx`) is the dish's cover - its
@@ -154,6 +160,32 @@ category the ingredient page links to (`/ingredients?category=<id>`). The
 tree says so under itself. The stub backlog's count (`只看待補`) shows whether
 or not the switch is on, read from the unfiltered list - which also names a
 variety's parent when the filtered list does not include it.
+
+**A group is an ingredient with varieties** (`lib/ingredientGroups.js`), and
+whether a row is one is read from the unfiltered list, never the filtered
+one - under 只看主項 the varieties are gone and 雞肉 is still a group.
+
+- **The 分類 tree carries the groups.** Under each category come its child
+  categories, then the groups filed in it, marked with a ring; a group that is
+  itself a variety (雞腿 under 雞肉) nests under its parent. A group's count is
+  its size including itself. Choosing a group sets `group` and clears
+  `category` in one history entry, and the other way round - the two are
+  never both on. Branches start closed, except the path to the chosen node,
+  which opens when the choice changes or when the groups arrive after the
+  categories.
+- **品種** is 全部 / 只看主項 / 只看品種: no filter, top-level ingredients
+  only, varieties only.
+- **The list is sectioned by category**, in the tree's order, a child category
+  titled with its path (蔬菜 › 葉菜) and anything outside the tree last under
+  其他. Inside a section: groups with varieties in the result, as a block
+  with those varieties depth-first; then groups whose varieties are filtered
+  out; then the rest. A block sits in its parent's section even when a
+  variety is filed elsewhere, and that variety names its own category in the
+  block (乾辣椒 is 乾貨 inside 辣椒's 蔬菜 block); a variety whose parent is
+  not in the result stands alone, as 「X 的品種」.
+- **A row says what its section does not**: 「X 的品種」 for a variety
+  outside its parent's block or two levels down, 「N 個品種」 for a group.
+  That is the 品種 column in 清單.
 
 ## Two things that are not pages
 

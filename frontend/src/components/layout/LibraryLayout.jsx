@@ -23,8 +23,10 @@
 //   filters       - the useUrlFilters(spec) result
 //   sidebar       - the filter controls (components/layout/FilterPanel)
 //   query         - the list's useApiQuery result
-//   card(item)    - { cover, title, subtitle?, meta?, badges?, listBadges? }
+//   card(item, place) - { cover, title, subtitle?, meta?, badges?, listBadges? }
 //   columns       - the table's columns after the name (LibraryTable)
+//   arrange(items) - optional: cuts the list into titled sections (see
+//                   CoverGrid); without it the list is drawn flat
 //   itemTo(item)  - the item's detail path
 //   searchPlaceholder, emptyText, noMatchText
 import { useState } from 'react'
@@ -60,6 +62,7 @@ export default function LibraryLayout({
   card,
   columns,
   itemTo,
+  arrange,
   searchPlaceholder = '搜尋…',
   emptyText = '這裡還沒有東西。',
   noMatchText = '沒有符合條件的項目。',
@@ -67,6 +70,7 @@ export default function LibraryLayout({
   const [view, setView] = useLibraryView(library)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const items = query.data ?? []
+  const sections = arrange && items.length ? arrange(items) : undefined
 
   const addButton = add ? (
     <LinkButton kind="primary" to={add.to}>
@@ -82,8 +86,8 @@ export default function LibraryLayout({
   else if (items.length === 0 && filters.isFiltered) body = <Empty action={clearButton}>{noMatchText}</Empty>
   else if (items.length === 0) body = <Empty action={addButton}>{emptyText}</Empty>
   else if (view === 'list')
-    body = <LibraryTable items={items} itemTo={itemTo} card={card} columns={columns} />
-  else body = <CoverGrid items={items} itemTo={itemTo} card={card} />
+    body = <LibraryTable items={items} sections={sections} itemTo={itemTo} card={card} columns={columns} />
+  else body = <CoverGrid items={items} sections={sections} itemTo={itemTo} card={card} />
 
   return (
     <div className="space-y-5">

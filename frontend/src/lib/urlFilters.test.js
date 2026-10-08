@@ -144,3 +144,26 @@ describe('toApiParams', () => {
     expect(toApiParams({ category: '', course: [], stub: false }, SPEC)).toEqual({})
   })
 })
+
+// A single key whose URL words are not the API's values: the ingredient
+// library's 品種 choice is `?variety=top` or `?variety=only`, sent as
+// has_parent=false or true. Here `false` IS meant - 只看主項 - which is why
+// the mapping is explicit rather than a bool key.
+describe('a single key with mapped values', () => {
+  const MAPPED = {
+    variety: { type: 'single', api: 'has_parent', values: { top: false, only: true }, aliases: { 1: 'only' } },
+  }
+
+  it('reads only a known word, and an alias as the word it stands for', () => {
+    expect(parseFilters(params('variety=top'), MAPPED).variety).toBe('top')
+    expect(parseFilters(params('variety=sideways'), MAPPED).variety).toBe('')
+    // The switch this replaced wrote `?variety=1`; an old link still works.
+    expect(parseFilters(params('variety=1'), MAPPED).variety).toBe('only')
+  })
+
+  it('sends the mapped value, false included', () => {
+    expect(toApiParams({ variety: 'top' }, MAPPED)).toEqual({ has_parent: false })
+    expect(toApiParams({ variety: 'only' }, MAPPED)).toEqual({ has_parent: true })
+    expect(toApiParams({ variety: '' }, MAPPED)).toEqual({})
+  })
+})

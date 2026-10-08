@@ -131,6 +131,9 @@ def list_ingredients(
     needs_detail: bool | None = None,
     rating: str | None = None,
     has_parent: bool | None = None,
+    group_id: int | None = Query(
+        default=None, description="An ingredient and its varieties at any depth"
+    ),
     db: Session = Depends(get_db),
 ):
     """The library, the search box, and module 2's typeahead - one endpoint.
@@ -148,6 +151,7 @@ def list_ingredients(
         needs_detail=needs_detail,
         rating=rating,
         has_parent=has_parent,
+        group_id=group_id,
     )
     return _summaries(db, rows)
 

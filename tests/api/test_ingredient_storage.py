@@ -198,6 +198,23 @@ def test_the_library_filters_by_rating_and_by_having_a_parent(client, fallback_c
     assert [row["name_cn"] for row in roots] == ["芒果"]
 
 
+def test_the_library_filters_by_group_at_any_depth(client, fallback_category):
+    # 牛肉 and its variety are outside the group: without them the filter
+    # would have nothing to leave out, and a group_id ignored outright would
+    # still pass.
+    chicken = _create(client, fallback_category.id, name_cn="雞肉")
+    thigh = _create(client, fallback_category.id, name_cn="雞腿", parent_id=chicken["id"])
+    _create(client, fallback_category.id, name_cn="去骨雞腿", parent_id=thigh["id"])
+    beef = _create(client, fallback_category.id, name_cn="牛肉")
+    _create(client, fallback_category.id, name_cn="牛腱", parent_id=beef["id"])
+
+    group = client.get("/api/ingredients", params={"group_id": chicken["id"]}).json()
+    assert {row["name_cn"] for row in group} == {"雞肉", "雞腿", "去骨雞腿"}
+
+    inner = client.get("/api/ingredients", params={"group_id": thigh["id"]}).json()
+    assert {row["name_cn"] for row in inner} == {"雞腿", "去骨雞腿"}
+
+
 def test_the_summary_carries_the_unused_fridge_range(client, fallback_category):
     _create(
         client,

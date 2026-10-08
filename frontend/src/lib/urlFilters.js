@@ -16,6 +16,12 @@
 //            the ABSENCE of the filter, never `false`: `needs_detail=false`
 //            would mean "only the finished ones", a different filter.
 //
+// `values` on a single key maps its URL words to the API's values, for a
+// choice whose words are not the API's: the ingredient library's 品種 is
+// `?variety=top` or `?variety=only`, sent as has_parent=false or true. Only a
+// listed word is read; `aliases` maps an old word to a current one, so a link
+// written before the key changed still lands.
+//
 // `id: true` on a single or multi key whose API parameter is an integer id
 // keeps only whole numbers: a hand-edited `?category=abc` is ignored rather
 // than sent, where the API would refuse the whole list with a 422.
@@ -43,6 +49,10 @@ export function parseFilters(searchParams, spec) {
     } else if (def.type === 'bool') {
       const raw = searchParams.get(key)
       values[key] = raw !== null && raw !== '' && raw !== '0' && raw !== 'false'
+    } else if (def.values) {
+      const raw = searchParams.get(key) ?? ''
+      const value = def.aliases?.[raw] ?? raw
+      values[key] = Object.hasOwn(def.values, value) ? value : ''
     } else {
       const value = searchParams.get(key) ?? ''
       values[key] = valid(value) ? value : ''
@@ -127,6 +137,8 @@ export function toApiParams(values, spec, search = '') {
       if (value?.length) params[name] = value
     } else if (def.type === 'bool') {
       if (value) params[name] = true
+    } else if (value && def.values) {
+      params[name] = def.values[value]
     } else if (value) {
       params[name] = value
     }

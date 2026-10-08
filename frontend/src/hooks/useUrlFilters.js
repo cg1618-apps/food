@@ -28,7 +28,7 @@ export const SEARCH_DEBOUNCE_MS = 300
  * `spec` is a module-level constant (see lib/urlFilters.js for its shape);
  * a spec built during render would change identity every render.
  *
- * Returns { values, toggle(key, value), setValue(key, value), clear(),
+ * Returns { values, toggle(key, value), setValue(key, value), setValues(patch), clear(),
  * clearAll(), activeCount, search, setSearch, isFiltered, apiParams }.
  */
 export function useUrlFilters(spec) {
@@ -71,6 +71,13 @@ export function useUrlFilters(spec) {
     [values, writeValues],
   )
 
+  // Several keys in one history entry: choosing a group clears the category,
+  // and two writes would leave a Back step that holds both.
+  const setValues = useCallback(
+    (patch) => writeValues({ ...values, ...patch }),
+    [values, writeValues],
+  )
+
   // `clear` empties the filters and keeps the search term - the sidebar's
   // button. `clearAll` empties both - an empty result's button, where "clear"
   // means "show me everything" and a lingering term would leave it empty.
@@ -93,6 +100,7 @@ export function useUrlFilters(spec) {
     values,
     toggle,
     setValue,
+    setValues,
     clear,
     clearAll,
     activeCount,
