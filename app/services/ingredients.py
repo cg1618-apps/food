@@ -33,6 +33,7 @@ from app.models import (
 )
 from app.services import recipe_templates
 from app.services.hierarchy import check_parent, is_descendant
+from app.services.lookup import fetch_labels
 from app.services.search import ESCAPE, contains
 
 
@@ -144,17 +145,6 @@ def search(
     return rows
 
 
-def _apply_labels(db: Session, ingredient: Ingredient, label_ids: list[int]) -> None:
-    if not label_ids:
-        ingredient.labels = []
-        return
-    labels = db.query(Label).filter(Label.id.in_(label_ids)).all()
-    missing = set(label_ids) - {label.id for label in labels}
-    if missing:
-        raise AppError(422, f"No such label: {sorted(missing)[0]}.")
-    ingredient.labels = labels
-
-
 def _apply_aliases(ingredient: Ingredient, values: list[str]) -> None:
     """Make the alias rows match `values`, keeping the rows already there.
 
@@ -221,6 +211,8 @@ def _apply_links(ingredient: Ingredient, entries) -> None:
 
 def create(db: Session, payload) -> Ingredient:
     check_parent(db, Ingredient, None, payload.parent_id, "ingredient")
+    # Resolved before anything is added, so a refused label writes nothing.
+    labels = fetch_labels(db, payload.label_ids, "ingredient")
 
     ingredient = Ingredient(
         name_cn=payload.name_cn,
@@ -241,7 +233,7 @@ def create(db: Session, payload) -> Ingredient:
     _apply_links(ingredient, payload.links)
     db.add(ingredient)
     db.flush()
-    _apply_labels(db, ingredient, payload.label_ids)
+    ingredient.labels = labels
     db.commit()
     return get(db, ingredient.id)
 
@@ -260,6 +252,7 @@ def update(db: Session, ingredient_id: int, payload) -> Ingredient:
     heating = changes.pop("heating", None)
     links = changes.pop("links", None)
     label_ids = changes.pop("label_ids", None)
+    labels = None if label_ids is None else fetch_labels(db, label_ids, "ingredient")
 
     for field, value in changes.items():
         setattr(ingredient, field, value)
@@ -281,8 +274,8 @@ def update(db: Session, ingredient_id: int, payload) -> Ingredient:
         _apply_heating(db, ingredient, _as_entries(heating, schemas.HeatingIn))
     if links is not None:
         _apply_links(ingredient, _as_entries(links, schemas.LinkIn))
-    if label_ids is not None:
-        _apply_labels(db, ingredient, label_ids)
+    if labels is not None:
+        ingredient.labels = labels
 
     db.commit()
     return get(db, ingredient_id)

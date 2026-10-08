@@ -156,7 +156,7 @@ def test_a_region_with_dishes_cannot_be_deleted_and_an_unused_one_can(db):
 
 def test_a_label_on_a_dish_can_be_deleted(db):
     """Labels CASCADE on every owner."""
-    label = Label(name_cn="辣")
+    label = Label(name_cn="辣", scope="dish")
     db.add(label)
     db.flush()
     dish = make_dish(db)
@@ -181,7 +181,7 @@ def test_a_dish_with_a_recipe_cannot_be_deleted(db):
 
 def test_a_dish_without_recipes_deletes_with_what_it_owns(db):
     """The mirror: aliases, links and gallery rows go; the picture stays."""
-    label = Label(name_cn="蛋")
+    label = Label(name_cn="蛋", scope="dish")
     db.add(label)
     db.flush()
     dish = make_dish(db)

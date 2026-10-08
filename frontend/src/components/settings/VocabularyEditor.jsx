@@ -1,12 +1,13 @@
-// Frontend: one flat vocabulary on 設定 - labels, courses, recipe statuses,
-// source platforms, cooking methods, equipment. Add, rename, reorder and
-// delete, each in place.
+// Frontend: one flat vocabulary on 設定 - courses, regions, recipe statuses,
+// source platforms, authors, 材料分組 / 步驟分組, cooking methods, equipment.
+// Add, rename, reorder and delete, each in place. Labels are not one of
+// these: they are grouped by library, in LabelEditor.jsx.
 //
-// The five factory vocabularies (app/routers/vocabulary.py) carry a
-// sort_order and are reordered by dragging (lib/vocabulary.js decides the
-// PATCHes, hooks/useSortOrderMove.js holds the list still while they land);
-// labels have none and are listed by name, so `ordered` is off for them. A
-// new value goes after the last one.
+// The factory vocabularies (app/routers/vocabulary.py) carry a sort_order and
+// are reordered by dragging (lib/vocabulary.js decides the PATCHes,
+// hooks/useSortOrderMove.js holds the list still while they land); authors
+// are listed by name, so `ordered` is off for them. A new value goes after
+// the last one.
 //
 //   title       the section heading
 //   endpoints   the resource's group in api/endpoints.js

@@ -127,17 +127,31 @@ const REGIONS = [
   { id: 2, display_name: '日式', name_cn: '日式', name_en: null, sort_order: 30, usage_count: 0 },
 ]
 
+// One label per library, so each section has a row; 常備 is in use and
+// 影片 is not, so the move select is off on one and on on the other.
+const label = (id, name, scope, counts = {}) => ({
+  id,
+  display_name: name,
+  name_cn: name,
+  name_en: null,
+  scope,
+  ingredient_count: 0,
+  dish_count: 0,
+  note_count: 0,
+  usage_count: 0,
+  ...counts,
+})
+
 const LABELS = [
-  {
-    id: 7,
-    display_name: '常備',
-    name_cn: '常備',
-    name_en: null,
-    ingredient_count: 1,
-    dish_count: 2,
-    note_count: 0,
-    usage_count: 3,
-  },
+  label(7, '常備', 'ingredient', { ingredient_count: 2, usage_count: 2 }),
+  label(8, '下飯', 'dish', { dish_count: 1, usage_count: 1 }),
+  label(9, '影片', 'note'),
+]
+
+const LABEL_SCOPES = [
+  { value: 'ingredient', label: '食材' },
+  { value: 'dish', label: '料理' },
+  { value: 'note', label: '筆記' },
 ]
 
 const common = (id, name, needsDetail = false) => ({
@@ -169,6 +183,7 @@ function settingsData({ url, method }) {
   if (url === '/api/step-groups') return json(STEP_GROUPS)
   if (url === '/api/ingredient-categories') return json(TREE)
   if (url === '/api/labels') return json(LABELS)
+  if (url === '/api/vocabularies/fixed') return json({ label_scopes: LABEL_SCOPES })
   if (url === '/api/common-ingredients') return json(COMMON)
   if (url === '/api/recipe-templates') return json(TEMPLATES)
   if (url.startsWith('/api/ingredients?')) return json(INGREDIENT_SEARCH)
@@ -230,7 +245,7 @@ describe('設定', () => {
     expect(location()).toBe('/edit/settings?tab=labels')
     expect(screen.getByRole('tab', { name: '標籤' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByRole('tab', { name: '食材分類' }).getAttribute('aria-selected')).toBe('false')
-    expect(await screen.findByRole('list', { name: '標籤' })).toBeTruthy()
+    expect(await screen.findByRole('list', { name: '食材標籤' })).toBeTruthy()
     expect(screen.queryByRole('list', { name: '食材分類' })).toBeNull()
   })
 
@@ -271,15 +286,71 @@ describe('設定', () => {
     expect(calls.some(({ url }) => url === '/api/regions')).toBe(true)
   })
 
-  it('shows each vocabulary with its counts, and labels with every owner', async () => {
+  it('shows each vocabulary with its counts, and labels grouped by library', async () => {
     renderAt('/edit/settings?tab=courses')
     const courses = await screen.findByRole('list', { name: '類別' })
     expect(within(courses).getByRole('listitem', { name: '主菜' }).textContent).toContain('用在 3 個地方')
     fireEvent.click(screen.getByRole('tab', { name: '標籤' }))
-    const labels = await screen.findByRole('list', { name: '標籤' })
-    expect(labels.textContent).toContain('食材 1 · 料理 2 · 筆記 0')
+
+    const ingredient = await screen.findByRole('list', { name: '食材標籤' })
+    expect(within(ingredient).getAllByRole('listitem').map((row) => row.getAttribute('aria-label'))).toEqual([
+      '常備',
+    ])
+    expect(ingredient.textContent).toContain('貼在 2 個食材上')
+    const dish = screen.getByRole('list', { name: '料理標籤' })
+    expect(within(dish).getAllByRole('listitem').map((row) => row.getAttribute('aria-label'))).toEqual(['下飯'])
+    const note = screen.getByRole('list', { name: '筆記標籤' })
+    expect(note.textContent).toContain('沒有使用')
+    // The sections come in the API's order of the scopes.
+    expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
+      '食材標籤',
+      '料理標籤',
+      '筆記標籤',
+    ])
     // Labels have no order to move by.
-    expect(within(labels).queryByRole('button', { name: /^排序/ })).toBeNull()
+    expect(within(ingredient).queryByRole('button', { name: /^排序/ })).toBeNull()
+  })
+
+  it('adds a label inside the library it belongs to', async () => {
+    handler = (call) => (call.method === 'POST' ? json({}, 201) : settingsData(call))
+    renderAt('/edit/settings?tab=labels')
+    const name = await screen.findByRole('textbox', { name: '新增料理標籤：中文名' })
+    fireEvent.change(name, { target: { value: '辣' } })
+    fireEvent.click(screen.getByRole('button', { name: '＋ 新增料理標籤' }))
+    await waitFor(() =>
+      expect(writes()).toEqual([
+        { url: '/api/edit/labels', method: 'POST', body: { name_cn: '辣', name_en: null, scope: 'dish' } },
+      ]),
+    )
+  })
+
+  it('moves an unused label to another library, and not one in use', async () => {
+    handler = (call) => (call.method === 'PATCH' ? json({}) : settingsData(call))
+    renderAt('/edit/settings?tab=labels')
+    const unused = await screen.findByRole('combobox', { name: '把「影片」移到' })
+    // The mirror: 常備 is on two ingredients, so its select is off.
+    expect(screen.getByRole('combobox', { name: '把「常備」移到' }).disabled).toBe(true)
+    expect(unused.disabled).toBe(false)
+    // A label's own library is not offered as a destination.
+    expect(within(unused).getAllByRole('option').map((o) => o.value)).toEqual(['', 'ingredient', 'dish'])
+
+    fireEvent.change(unused, { target: { value: 'dish' } })
+    await waitFor(() =>
+      expect(writes()).toEqual([{ url: '/api/edit/labels/9', method: 'PATCH', body: { scope: 'dish' } }]),
+    )
+  })
+
+  it('says a refused move in the row', async () => {
+    handler = (call) =>
+      call.method === 'PATCH'
+        ? json({ detail: '影片 is still used in 1 place(s).', usage_count: 1 }, 409)
+        : settingsData(call)
+    renderAt('/edit/settings?tab=labels')
+    fireEvent.change(await screen.findByRole('combobox', { name: '把「影片」移到' }), {
+      target: { value: 'ingredient' },
+    })
+    const row = screen.getByRole('listitem', { name: '影片' })
+    expect((await within(row).findByRole('alert')).textContent).toContain('still used')
   })
 
   it('renames in place', async () => {

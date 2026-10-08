@@ -22,7 +22,7 @@ import { endpoints } from '../../api/endpoints'
 import { FilterGroup, FilterOptions, FilterSwitch, FilterTree } from '../../components/layout/FilterPanel'
 import LibraryLayout from '../../components/layout/LibraryLayout'
 import { Badge, Toggle } from '../../components/ui/primitives'
-import { useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
+import { useApiQuery, useFixedVocabularies, useLabels } from '../../hooks/useApi'
 import { useUrlFilters } from '../../hooks/useUrlFilters'
 import { formatDays } from '../../lib/format'
 import { arrangeIngredients, categoryGroupTree, groupSizes } from '../../lib/ingredientGroups'
@@ -59,7 +59,7 @@ export default function IngredientLibrary() {
   // ingredients.
   const everything = useApiQuery(endpoints.ingredients.list())
   const categories = useApiQuery(endpoints.categories.tree())
-  const labels = useApiQuery(endpoints.labels.list())
+  const labels = useLabels('ingredient')
   const fixed = useFixedVocabularies()
 
   const categoryNames = useMemo(
@@ -185,6 +185,7 @@ export default function IngredientLibrary() {
           }))}
           selected={values.label}
           onToggle={(value) => toggle('label', value)}
+          empty="還沒有食材標籤。"
         />
       </FilterGroup>
     </>

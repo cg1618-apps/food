@@ -100,6 +100,14 @@ TBD page with them. Nothing else is touched.
 `h1eating`'s downgrade drops `heating_note`, and every note on the 加熱 page
 with it. Nothing else is touched.
 
+`l1abels`'s downgrade drops `label.scope` and restores the global
+case-insensitive name indexes. The labels its upgrade deleted (every label
+nothing carried) are not restored. Two labels of one name in different
+libraries cannot both fit the global index, so the downgrade stops, naming
+them, until all but one of each is renamed or deleted. Its upgrade stops
+likewise, before changing anything, on a label more than one library
+carries.
+
 **`d1ishes` restructures every recipe**, so its two directions are worth
 reading before either runs.
 
@@ -191,7 +199,8 @@ they ever do not, believe the box.
 | Recipe templates | `t2emplates` — forty tables |
 | The weekly schedule | `s3chedule` — forty-two tables |
 | Schedule marks as booleans, several dishes per meal | `s4chedule` — forty-three tables |
-| 加熱 | `h1eating` — forty-four tables, the current head |
+| 加熱 | `h1eating` — forty-four tables |
+| Every label in one library | `l1abels` — no new table, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

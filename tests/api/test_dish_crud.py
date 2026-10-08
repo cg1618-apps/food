@@ -18,7 +18,7 @@ def vocab(db):
         "course": RecipeCourse(name_cn="主菜"),
         "side": RecipeCourse(name_cn="配菜"),
         "region": Region(name_cn="日式"),
-        "label": Label(name_cn="下飯"),
+        "label": Label(name_cn="下飯", scope="dish"),
     }
     db.add_all(rows.values())
     db.flush()

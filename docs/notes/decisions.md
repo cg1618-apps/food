@@ -1002,6 +1002,56 @@ contradict each other; two switches would allow both on and list nothing.
 The URL word for the old switch (`?variety=1`) is kept as an alias of
 `only`, so a link written before the change still lands.
 
+## Every label in one library
+
+**A label belongs to exactly one library: ingredient, dish or note.** Labels
+began as one vocabulary across all three owners, so 辣 on a chilli and 辣 on
+麻婆豆腐 were one row. That made every form and every sidebar offer every
+label - an ingredient form offering 下飯, a note sidebar offering 常備 - and
+a label's count was three numbers that meant different things. What a tag
+says depends on what it is on, so the owner ruled each label into one
+library: two libraries wanting 辣 have a 辣 each, and names are unique per
+scope rather than across the table. Recipes have no labels of their own and
+show their dish's, so they follow `dish` rather than being a fourth scope.
+
+**The scope is a String plus `LABEL_SCOPES`, not an enum and not three
+tables.** The house shape for a closed list. Three label tables would have
+been the database enforcing the split, at the cost of three copies of every
+label route, form and settings editor for what is one concept with one
+behaviour.
+
+**The API, not the database, keeps a link inside its scope.** A composite
+foreign key carrying the scope onto each link table would make a wrong-scope
+link unrepresentable, but it is four columns and four constraints to guard
+two code paths. Instead: every write that links a label to an owner goes
+through `services/lookup.fetch_labels` or `check_label_scope` (ingredient,
+dish and note saves, and the ingredient attach route), which refuse another
+library's label with 422 - the payload is wrong, as for an id naming
+nothing - and a label in use cannot change scope (409 with `usage_count`, the
+in-use refusal deleting a vocabulary value answers). Between them no route
+can produce a wrong-scope link. Ingredient merge needs no check of its own:
+it moves labels from one ingredient to another, and both carry only
+ingredient labels.
+
+**A move is refused while the label is in use, rather than detaching it.**
+Moving a used label would either leave its owners carrying another library's
+label, or silently strip it from them. Deleting is the explicit way to strip
+a label, and it says how many things it is on first.
+
+**`l1abels` deletes the labels nothing carries.** A label linked from
+nothing has no library to be scoped into, and guessing one would put it in
+front of the owner in a library where it may mean nothing. The eight seeded
+by `v1ocabulary` (飯 麵 肉 麵包 馬鈴薯 地瓜 沙拉 鍋) were unused and the
+owner had already removed them; production held none.
+
+**`l1abels` refuses a label more than one library carries**, before
+changing anything, naming each such label and its libraries. Which library
+keeps it, and whether the other gets its own copy, is the owner's call; a
+migration that split or picked would be making it for them. The downgrade
+refuses two labels of one name in different libraries for the same reason:
+the global index it restores cannot hold both, and deleting one is not the
+migration's to decide.
+
 ## The starting ingredient list
 
 - **Loaded by a migration, not by a script or the API.** Production receives

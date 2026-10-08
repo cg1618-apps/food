@@ -251,16 +251,26 @@ def test_a_preservation_row_may_leave_the_time_unknown(db, fallback_category):
     db.flush()
 
 
-def test_two_labels_may_not_share_a_name(db):
-    db.add(Label(name_cn="常備"))
+def test_two_labels_of_one_library_may_not_share_a_name(db):
+    db.add(Label(name_cn="常備", scope="ingredient"))
     db.flush()
-    db.add(Label(name_cn="常備"))
-    with pytest.raises(IntegrityError):
+    db.add(Label(name_cn="常備", scope="ingredient"))
+    with pytest.raises(IntegrityError) as excinfo:
         db.flush()
+    assert "uq_label_name_cn" in str(excinfo.value)
+
+
+def test_two_libraries_may_each_have_a_label_of_one_name(db):
+    """The mirror: uniqueness is per scope, so 辣 may be an ingredient label
+    and a dish label at once - in English as well as in Chinese."""
+    db.add(Label(name_cn="辣", name_en="Spicy", scope="ingredient"))
+    db.flush()
+    db.add(Label(name_cn="辣", name_en="spicy", scope="dish"))
+    db.flush()
 
 
 def test_a_label_with_no_name_is_refused(db):
-    db.add(Label())
+    db.add(Label(scope="ingredient"))
     with pytest.raises(IntegrityError) as excinfo:
         db.flush()
     assert "ck_label_has_a_name" in str(excinfo.value)

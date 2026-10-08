@@ -29,7 +29,7 @@ def vocab(db):
     """One of each vocabulary a recipe names, so the id lists are non-empty."""
     rows = {
         "course": RecipeCourse(name_cn="主菜"),
-        "label": Label(name_cn="下飯"),
+        "label": Label(name_cn="下飯", scope="dish"),
         "method": CookingMethod(name_cn="炒"),
         "equipment": Equipment(name_cn="炒鍋"),
         "author": Author(name_cn="阿基師"),

@@ -101,8 +101,9 @@ def test_a_duplicate_name_differing_only_in_case_is_409(client, ingredient, fall
 
 
 def test_a_duplicate_label_name_is_409(client):
-    assert client.post("/api/edit/labels", json={"name_cn": "常備"}).status_code == 201
-    response = client.post("/api/edit/labels", json={"name_cn": "常備"})
+    label = {"name_cn": "常備", "scope": "ingredient"}
+    assert client.post("/api/edit/labels", json=label).status_code == 201
+    response = client.post("/api/edit/labels", json=label)
     assert response.status_code == 409, response.text
 
 
