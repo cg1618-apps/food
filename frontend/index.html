@@ -5,8 +5,21 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The OS's choice until the app loads; ThemeProvider then sets both to
+         the canvas colour actually on screen, so a manual choice wins. -->
     <meta name="theme-color" content="#f2ece1" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#1f1813" media="(prefers-color-scheme: dark)" />
+    <script>
+      // Stamp the theme before any CSS paints, so a dark-mode reader never sees
+      // a flash of paper. Mirrors ThemeProvider's rule: stored choice, else OS.
+      try {
+        var t = localStorage.getItem('cg1618:food:theme')
+        if (t !== 'light' && t !== 'dark') {
+          t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        }
+        document.documentElement.dataset.theme = t
+      } catch (e) {}
+    </script>
     <title>food</title>
     <!-- Headings are Noto Serif TC. display=swap: a phone in a shop reads the
          page in the system serif first rather than waiting on a font. Only the
