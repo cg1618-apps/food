@@ -7,6 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ThemeProvider } from '../../contexts/ThemeContext'
 import AppRoutes from '../../routes'
 import { PAGE_SIZE } from './ImageLibrary'
 
@@ -25,12 +26,14 @@ function LocationProbe() {
 function renderAt(path) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
-        <AppRoutes />
-        <LocationProbe />
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <ThemeProvider>
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[path]}>
+          <AppRoutes />
+          <LocationProbe />
+        </MemoryRouter>
+      </QueryClientProvider>
+    </ThemeProvider>,
   )
 }
 
@@ -465,11 +468,13 @@ describe('設定', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     client.setQueryData(['/api/recipes', null], [])
     render(
-      <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={['/edit/settings?tab=statuses']}>
-          <AppRoutes />
-        </MemoryRouter>
-      </QueryClientProvider>,
+      <ThemeProvider>
+        <QueryClientProvider client={client}>
+          <MemoryRouter initialEntries={['/edit/settings?tab=statuses']}>
+            <AppRoutes />
+          </MemoryRouter>
+        </QueryClientProvider>
+      </ThemeProvider>,
     )
     const statuses = await screen.findByRole('list', { name: '狀態' })
     expect(within(statuses).getByRole('listitem', { name: '想試' }).textContent).toContain('用在 2 個地方')

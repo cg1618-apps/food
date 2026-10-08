@@ -6,6 +6,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ThemeProvider } from '../../contexts/ThemeContext'
 import AppRoutes from '../../routes'
 
 const ENTRIES = [
@@ -27,11 +28,13 @@ let entries
 function renderAt(path) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
-        <AppRoutes />
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <ThemeProvider>
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[path]}>
+          <AppRoutes />
+        </MemoryRouter>
+      </QueryClientProvider>
+    </ThemeProvider>,
   )
 }
 

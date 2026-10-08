@@ -70,7 +70,9 @@
   --c-scrim: rgb(43 33 25 / 0.5);
 }
 
-/* Dark palette: the OS preference, unless a page stamps data-theme="light". */
+/* Dark palette: the OS preference, unless the theme toggle has stamped
+   data-theme="light" (contexts/ThemeContext.jsx); data-theme="dark" below is
+   the toggle's dark choice on a light OS. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
