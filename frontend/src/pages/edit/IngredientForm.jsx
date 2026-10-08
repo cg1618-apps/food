@@ -22,7 +22,7 @@ import RowEditor from '../../components/forms/RowEditor'
 import Typeahead, { Picked } from '../../components/forms/Typeahead'
 import { Field, Input, Section, Select, TextArea } from '../../components/ui/primitives'
 import { ErrorNote, Loading } from '../../components/ui/states'
-import { useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
+import { useApiQuery, useFixedVocabularies, useLabels } from '../../hooks/useApi'
 import { useOwnerSave } from '../../hooks/useOwnerSave'
 import { galleryChanged, galleryFromImages } from '../../lib/gallery'
 import { blankToNull, integerOrNull, keyed, splitAliases } from '../../lib/rowList'
@@ -123,7 +123,7 @@ export default function IngredientForm() {
 
   const existing = useApiQuery(endpoints.ingredients.detail(id), null, { enabled: !isNew })
   const categories = useApiQuery(endpoints.categories.tree())
-  const labels = useApiQuery(endpoints.labels.list())
+  const labels = useLabels('ingredient')
   const methods = useApiQuery(endpoints.methods.list())
   const fixed = useFixedVocabularies()
   const { save, saving } = useOwnerSave({ group: endpoints.ingredients, invalidate: INVALIDATE })

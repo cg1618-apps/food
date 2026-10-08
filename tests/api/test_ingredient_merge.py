@@ -38,7 +38,7 @@ def _image(db, n):
 
 @pytest.fixture
 def pair(client, db, fallback_category, recipe_statuses):
-    shared_label, own_label = Label(name_cn="共"), Label(name_cn="獨")
+    shared_label, own_label = Label(name_cn="共", scope="ingredient"), Label(name_cn="獨", scope="ingredient")
     method = CookingMethod(name_cn="氣炸")
     db.add_all([shared_label, own_label, method])
     db.flush()

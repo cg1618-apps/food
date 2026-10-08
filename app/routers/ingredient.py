@@ -21,6 +21,7 @@ from app.models import Ingredient, IngredientImage
 from app.routers.recipe import recipe_ref
 from app.routing import read_router, write_router
 from app.services import images, ingredients, recipes
+from app.services.lookup import check_label_scope
 
 router = read_router("ingredients", "Ingredients")
 edit = write_router("ingredients", "Ingredients")
@@ -308,12 +309,14 @@ def merge_ingredient(ingredient_id: int, payload: schemas.MergeIn, db: Session =
 
 @edit.post("/{ingredient_id}/labels/{label_id}", status_code=204)
 def attach_label(ingredient_id: int, label_id: int, db: Session = Depends(get_db)):
+    """A label of another library is 422, as it is in `label_ids`."""
     from app.models import Label
 
     ingredient = ingredients.get(db, ingredient_id)
     label = db.query(Label).filter(Label.id == label_id).one_or_none()
     if label is None:
         raise AppError(404, "No such label.")
+    check_label_scope([label], "ingredient")
     if label not in ingredient.labels:
         ingredient.labels.append(label)
         db.commit()

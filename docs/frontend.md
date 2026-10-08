@@ -134,9 +134,11 @@ words and its filters:
   inside a group.
 - **Two empties, two directions**: an empty library offers the add button; a
   filter or search that matches nothing offers 清除搜尋與篩選.
-- **A label chip carries its own library's count** - `ingredient_count`,
-  `dish_count` or `note_count` from `GET /api/labels` - not the total. The
-  recipe library shows `dish_count`: a recipe's labels are its dish's.
+- **The 標籤 group offers only its library's labels**, read with
+  `useLabels(scope)` (`hooks/useApi.js`, `GET /api/labels?scope=`); the
+  recipe library asks for `dish`, since a recipe's labels are its dish's. A
+  library with none says so (還沒有食材標籤。). Each chip carries its own
+  library's count - `ingredient_count`, `dish_count` or `note_count`.
 - The list keeps the previous result on screen while a new filter loads
   (`keepPreviousData`), so the grid does not blank on every click.
 
@@ -367,6 +369,10 @@ if the categories fail to load.
   by its id.
 - **Choosing from a short vocabulary** - a dish's labels and serves-as, a
   recipe's methods and equipment - is `ChipPicker.jsx`, toggle chips with `aria-pressed`.
+  **A form offers only its own library's labels**: the ingredient, dish and
+  note forms read `useLabels('ingredient' | 'dish' | 'note')`, the same
+  server-side filter the sidebars use, so a form cannot offer a label its
+  save would refuse. With none, the picker says 還沒有標籤，可以在設定裡新增。
 - **Aliases are one box**, split on any comma or 、 (`splitAliases`): they are
   unordered and never displayed, so a row editor's ordering would be noise.
 
@@ -639,11 +645,22 @@ rule: shown immediately, the handles off until it has landed and the list has
 been read again, the stored order back with the server's sentence on a
 refusal.
 
-Label rows show where each label is used - 食材, 料理 and 筆記 separately; the
-other vocabularies show `usage_count`. A change invalidates the vocabulary
-and every owner that shows its names (a label: ingredients, dishes, recipes -
-which show their dish's - and notes; a course or region: dishes and recipes;
-a method: recipes and ingredients).
+**標籤** (`components/settings/LabelEditor.jsx`) is three sections, 食材標籤,
+料理標籤 and 筆記標籤, in the order `label_scopes` comes in
+(`GET /api/vocabularies/fixed`), from one read of every label grouped by
+`scope`. Each section lists its labels by name, each a `NameRow` (改名,
+刪除) saying how many of that library's things carry it, and ends with its
+own add line, which sends the section's `scope`. **「移到」** is a select on
+each row naming the other two libraries; it is off while the label is in
+use, and the row's count line says it has to be taken off first. A refusal
+from the server (the label was put on something since the page read it) is
+said in the row.
+
+A change invalidates the vocabulary and every owner that shows its names (a
+label: ingredients, dishes, recipes - which show their dish's - and notes,
+and so every `?scope=` read of labels too, since they sit under
+`GET /api/labels`; a course or region: dishes and recipes; a method: recipes
+and ingredients). The other vocabularies show `usage_count`.
 
 `/edit/images` is `pages/edit/ImageLibrary.jsx`, media's admin image page
 without what food lacks: a grid of thumbnails (centred, `data-focus="none"` -

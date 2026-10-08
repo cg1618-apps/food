@@ -1,6 +1,6 @@
 # Data model
 
-What the database holds today: forty-four tables, at revision `h1eating`.
+What the database holds today: forty-four tables, at revision `l1abels`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the nine managed
 vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
@@ -241,7 +241,7 @@ them:**
 | `cooking_method` | 煮, 壓力鍋煮, 煎, 炒, 炸, 氣炸, 烤, 蒸, 川燙, 涼拌, 微波, 混合 |
 | `equipment` | 鍋子, 壓力鍋, 平底鍋, 氣炸鍋, 烤箱, 油鍋, 果汁機, 電鍋, 微波爐, 保鮮盒, 碗 |
 | `ingredient_category` | 肉類, 海鮮, 蔬菜, 菇類, 水果, 蛋豆製品, 主食穀物, 調味料, 乳製品, 乾貨 (top level) |
-| `label` | 飯, 麵, 肉, 麵包, 馬鈴薯, 地瓜, 沙拉, 鍋 |
+| `label` | 飯, 麵, 肉, 麵包, 馬鈴薯, 地瓜, 沙拉, 鍋 — deleted again by `l1abels`, which deletes every label nothing carries |
 
 Seeded rows are ordinary rows. Every seed insert is `ON CONFLICT DO NOTHING`, so
 a database where the owner already typed 肉類 or 飯 keeps that row untouched.
@@ -557,6 +557,22 @@ label says something that cuts across the tree and an ingredient may carry any
 number or none. A recipe has no labels of its own: it shows its dish's.
 
 Labels have two name slots, not three; a tag has no formal alternative form.
+
+**Every label belongs to exactly one library**: `label.scope`, a NOT NULL
+String holding one of `LABEL_SCOPES` in `app/constants.py` - `ingredient`,
+`dish` or `note` - with no default, since a label is always added inside the
+library it is for. It is a String validated by the API, not a Postgres enum,
+as every closed list here. **`uq_label_name_cn` and `uq_label_name_en` are
+unique on `(scope, lower(name))`**, so 辣 may be an ingredient label and a
+dish label at once, and not two ingredient labels. Like every name index
+here they are NULLS DISTINCT: any number of labels may have no English name.
+
+The database does not know which link table goes with which scope. The API
+keeps a link inside its label's library: an owner refuses a label of another
+scope, and a label in use cannot change scope (`docs/api.md`, "Labels").
+`l1abels` scoped the labels that existed by the one library linking each,
+deleted the ones nothing linked, and refused to run on a label two libraries
+shared.
 
 ## Deletion, and why it differs per relationship
 

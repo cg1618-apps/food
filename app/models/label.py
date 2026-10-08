@@ -8,6 +8,13 @@ categories, and both were rejected.
 
 Its own table rather than free strings on the ingredient, so that renaming 常備
 to 常備品 is one row rather than a search-and-replace that misses the typos.
+
+**Every label belongs to exactly one library** - `scope`, one of
+`LABEL_SCOPES`: ingredient, dish or note. A recipe shows its dish's labels, so
+it has no scope of its own. Two libraries wanting 辣 means two labels, which is
+why names are unique per scope rather than across the table. The API is what
+keeps a link inside its scope; the database stores whatever it is given, as
+for every closed list here.
 """
 
 from sqlalchemy import CheckConstraint, Column, ForeignKey, Index, Integer, String, func
@@ -25,6 +32,8 @@ class Label(Base, NameFallbackMixin):
     id = Column(Integer, primary_key=True)
     name_cn = Column(String, nullable=True)
     name_en = Column(String, nullable=True)
+    # No default: a label is always added inside the library it belongs to.
+    scope = Column(String, nullable=False)
 
     ingredients = relationship(
         "Ingredient", secondary="ingredient_label", back_populates="labels"
@@ -34,9 +43,9 @@ class Label(Base, NameFallbackMixin):
         CheckConstraint("num_nonnulls(name_cn, name_en) >= 1", name="ck_label_has_a_name"),
         # Default NULLS DISTINCT, deliberately - see the long note in
         # app/models/ingredient.py. Any number of labels may have no English
-        # name; no two may share one.
-        Index("uq_label_name_cn", func.lower(name_cn), unique=True),
-        Index("uq_label_name_en", func.lower(name_en), unique=True),
+        # name; no two in one library may share one.
+        Index("uq_label_name_cn", scope, func.lower(name_cn), unique=True),
+        Index("uq_label_name_en", scope, func.lower(name_en), unique=True),
     )
 
 

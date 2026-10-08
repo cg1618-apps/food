@@ -84,6 +84,17 @@ export function invalidateResources(queryClient, prefixes, options) {
 }
 
 /**
+ * The labels of one library - `ingredient`, `dish` or `note` - for a form's
+ * chips or a sidebar's 標籤 filter. Filtered by the API (`?scope=`), so a form
+ * can never offer a label the save would refuse. The query sits under
+ * `endpoints.labels.list()`, so every write that invalidates labels refreshes
+ * it. The recipe library asks for `dish`: a recipe shows its dish's labels.
+ */
+export function useLabels(scope) {
+  return useApiQuery(endpoints.labels.list(), { scope })
+}
+
+/**
  * Every closed list (preservation methods and states, ratings, recipe kinds,
  * note kinds, step kinds), each `[{value, label}]`.
  *

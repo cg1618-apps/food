@@ -8,7 +8,7 @@ import { keepPreviousData } from '@tanstack/react-query'
 import { endpoints } from '../../api/endpoints'
 import { FilterGroup, FilterOptions } from '../../components/layout/FilterPanel'
 import LibraryLayout from '../../components/layout/LibraryLayout'
-import { fixedLabel, useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
+import { fixedLabel, useApiQuery, useFixedVocabularies, useLabels } from '../../hooks/useApi'
 import { useUrlFilters } from '../../hooks/useUrlFilters'
 import { linkHost } from '../../lib/format'
 
@@ -24,7 +24,7 @@ export default function NoteLibrary() {
   const notes = useApiQuery(endpoints.notes.list(), filters.apiParams, {
     placeholderData: keepPreviousData,
   })
-  const labels = useApiQuery(endpoints.labels.list())
+  const labels = useLabels('note')
   const fixed = useFixedVocabularies()
 
   const kindLabel = (value) => fixedLabel(fixed.data?.kitchen_note_kinds, value)
@@ -58,6 +58,7 @@ export default function NoteLibrary() {
           }))}
           selected={values.label}
           onToggle={(value) => toggle('label', value)}
+          empty="還沒有筆記標籤。"
         />
       </FilterGroup>
     </>

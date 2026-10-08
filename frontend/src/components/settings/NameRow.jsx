@@ -19,7 +19,7 @@
 //   onDelete      async () => void, or absent when the row cannot be deleted
 //   confirmText   what the delete question says
 //   refusal       (error) => the inline sentence for a failed delete
-//   children      extra row actions (新增子分類)
+//   children      extra row actions (新增子分類, a label's 移到)
 //   nested        drawn under the row, inside it - the category tree's
 //                 children, which a drag carries along with their parent
 import { useState } from 'react'

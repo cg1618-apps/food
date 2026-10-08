@@ -413,3 +413,28 @@ describe('the note library', () => {
     )
   })
 })
+
+describe('the label filter', () => {
+  // Each library asks for its own scope; the recipe library asks for the
+  // dish's, since a recipe shows its dish's labels. The server answers only
+  // `dish` here, so a sidebar that asked without the scope - or for the
+  // wrong one - would show the wrong thing.
+  it.each([
+    ['/ingredients', 'ingredient', null],
+    ['/dishes', 'dish', '下飯'],
+    ['/recipes', 'dish', '下飯'],
+    ['/notes', 'note', null],
+  ])('on %s offers only %s labels', async (path, scope, shown) => {
+    responses['/api/labels'] = (url) =>
+      url.includes('scope=dish') ? [{ id: 9, display_name: '下飯', scope: 'dish', dish_count: 2 }] : []
+    renderAt(path)
+    await waitFor(() => expect(listRequests('/api/labels')).toEqual([`/api/labels?scope=${scope}`]))
+    const sidebar = screen.getByRole('complementary', { name: '篩選' })
+    if (shown) {
+      expect(await within(sidebar).findByRole('button', { name: new RegExp(shown) })).toBeTruthy()
+    } else {
+      const word = { ingredient: '食材', note: '筆記' }[scope]
+      expect(await within(sidebar).findByText(`還沒有${word}標籤。`)).toBeTruthy()
+    }
+  })
+})

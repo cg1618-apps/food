@@ -13,7 +13,7 @@ import FormActions from '../../components/forms/FormActions'
 import GalleryPicker from '../../components/forms/GalleryPicker'
 import { Field, Input, Section, Select, TextArea } from '../../components/ui/primitives'
 import { ErrorNote, Loading } from '../../components/ui/states'
-import { useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
+import { useApiQuery, useFixedVocabularies, useLabels } from '../../hooks/useApi'
 import { useOwnerSave } from '../../hooks/useOwnerSave'
 import { galleryChanged, galleryFromImages } from '../../lib/gallery'
 import { blankToNull } from '../../lib/rowList'
@@ -39,7 +39,7 @@ export default function NoteForm() {
   const navigate = useNavigate()
 
   const existing = useApiQuery(endpoints.notes.detail(id), null, { enabled: !isNew })
-  const labels = useApiQuery(endpoints.labels.list())
+  const labels = useLabels('note')
   const fixed = useFixedVocabularies()
   const { save, saving } = useOwnerSave({ group: endpoints.notes, invalidate: INVALIDATE })
 

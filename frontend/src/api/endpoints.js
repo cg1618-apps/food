@@ -148,7 +148,8 @@ export const endpoints = {
   stepGroups: vocabulary('step-groups'),
   vocabularies: {
     // Every closed list with its display label: preservation methods and
-    // states, ratings, dish kinds, note kinds, step kinds, meal slots.
+    // states, ratings, dish kinds, note kinds, step kinds, meal slots, label
+    // scopes.
     fixed: () => `${API}/vocabularies/fixed`,
   },
   // GET under the gated prefix: 204 when Access let the request through, and

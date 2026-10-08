@@ -70,6 +70,12 @@ course, a recipe's dish, a line's ingredient or dish, a gallery's
 `image_id`. The URL resolved; it is the payload that is wrong. The detail
 names the id.
 
+**A label of another library is 422 too.** Every label belongs to one
+library (`scope`, see "Labels"): an ingredient takes only `ingredient`
+labels, a dish only `dish` labels, a kitchen note only `note` labels - in
+`label_ids` on create and update, and on the ingredient attach route. The
+detail names the label and both libraries.
+
 ### Which status a constraint violation answers
 
 Classified by SQLSTATE, not by constraint name, and decided once with every
@@ -153,7 +159,9 @@ has changes nothing instead of colliding with its own unique key.
 Refused with 422: a `rating` outside S to D, an unknown `state` or `method`, a
 duration that is not positive, a minimum above the maximum, the same
 `(state, method)` twice, a link that is not `http` or `https`, and a heating
-entry naming no cooking method. A preservation row with only a maximum is valid.
+entry naming no cooking method, and a label that is not an `ingredient`
+label (see "A label of another library is 422 too"). A preservation row with
+only a maximum is valid.
 
 `q` matches any of the three name slots or any alias, case-insensitively, as a
 substring. It is literal text: `%`, `_` and `\` match themselves, not any
@@ -218,7 +226,8 @@ The target wins every collision:
 
 - recipe lines naming the source, its children, links and heating rows all
   move; links and heating are numbered after the target's own;
-- labels are the union — `moves.labels` counts those the target lacked;
+- labels are the union — `moves.labels` counts those the target lacked.
+  Both sides carry only `ingredient` labels, so the union is one too;
 - images are appended after the target's gallery, skipping any the target
   already carries;
 - the source's name slots and aliases become target **aliases**, never names,
@@ -297,8 +306,8 @@ and different parameters narrow each other.
 one and each absent left alone. Names are not unique - two dishes may share
 one. Refused with 422: no name left on the merged row, a `kind` outside its
 list (null included), the same alias twice, and an id that names nothing
-(`course_id`, `region_id`, either id list), the detail naming it. Unknown
-fields are refused.
+(`course_id`, `region_id`, either id list), the detail naming it, and a
+label that is not a `dish` label. Unknown fields are refused.
 
 **`GET .../cascade` answers `{aliases, recipes, used_in, meals}`.** `aliases`
 is what the delete removes and is echoed back; `recipes` (the dish's own),
@@ -626,6 +635,7 @@ null. Refused with 422, and a refused save writes nothing:
 - a `kind` outside its list, including an explicit null;
 - a `url` that is not `http` or `https`;
 - an id in `label_ids` that names nothing; the detail names the id;
+- a label that is not a `note` label;
 - any other field.
 
 **`DELETE` takes no counts and answers 204.** Nothing a note owns is something
@@ -940,17 +950,33 @@ so nothing cascades and the answer is a refusal rather than a number.
 
 | Route | |
 | --- | --- |
-| `GET /api/labels` | every label, by name, with its counts |
-| `POST /api/edit/labels` | |
-| `PATCH /api/edit/labels/{id}` | |
+| `GET /api/labels` | every label, by name, with its scope and counts; `?scope=` for one library's |
+| `POST /api/edit/labels` | `name_cn`, `name_en`, `scope` (required) |
+| `PATCH /api/edit/labels/{id}` | any of the three; `scope` moves it |
 | `DELETE /api/edit/labels/{id}` | |
 
-**A label counts every owner that carries it**: `ingredient_count`,
+**Every label belongs to exactly one library**: `scope` is `ingredient`,
+`dish` or `note` (`LABEL_SCOPES`, served as `label_scopes` by
+`GET /api/vocabularies/fixed`). A recipe has no labels of its own and shows
+its dish's, so recipes follow `dish`. Two libraries wanting 辣 have a 辣
+each: **names are unique per scope**, case-insensitively and per slot, and a
+second 辣 in one library is a 409. `POST` without a `scope`, or with one
+outside the list, is a 422; so is `?scope=` with an unknown value, and a
+`PATCH` sending `scope: null`.
+
+**A label moves to another library only while nothing carries it.** A
+`PATCH` whose `scope` differs from the stored one, for a label in use, is a
+**409 carrying `usage_count`** - the shape deleting an in-use vocabulary value
+answers - and changes nothing. Sending the label's own scope is not a move
+and is accepted whatever the count. Owners refuse a label of another library
+(see "A label of another library is 422 too"), so together the two keep every
+link inside its label's library.
+
+**A label counts the owners that carry it**: `ingredient_count`,
 `dish_count` and `note_count` (kitchen notes), and `usage_count`, their sum —
-the name the other vocabularies use for the same question. A library's label
-filter shows its owner's count - the dish and recipe libraries both show
-`dish_count`, since a recipe's labels are its dish's; the settings page shows
-the total.
+the name the other vocabularies use for the same question. Only the field of
+the label's own scope is ever non-zero. A library's label filter shows its
+owner's count - the dish and recipe libraries both show `dish_count`.
 
 Labels have no `sort_order`: they are listed by name, case-insensitively.
 

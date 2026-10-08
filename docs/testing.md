@@ -220,6 +220,17 @@ is load-bearing and says so. Some examples worth knowing about:
   the 409 for the same reason - the `RESTRICT` alone answers 409 too, with no
   owners on the body. Both were proved to fail with their service check
   removed.
+- `labels` (`tests/api/test_label_scope.py`) makes a 辣 in **every**
+  library, so each owner's wrong-scope refusal has a real label of another
+  library to send, and each has its mirror sending its own library's label
+  through the same route; without the other scopes' labels a check that
+  refused nothing would pass. The move refusal puts the label on a dish
+  first - an unused label moves - and its mirror renames the same in-use
+  label and sends its own scope back. `tests/test_label_scope_migration.py`
+  seeds labels at `h1eating` before running `l1abels`: one per library, one
+  carried by nothing (and the eight seeded ones), and separately one carried
+  by two libraries. On an empty `label` table the backfill, the deletion and
+  the refusal all pass by doing nothing.
 - `body_refs` (`tests/api/test_recipe_templates.py`) gives a template one of
   everything its body can name - an ingredient, a dish, a 材料分組 value, a
   method, a piece of equipment - so the stale-reference test has something to
@@ -243,6 +254,8 @@ the entire failure.
 | --- | --- |
 | `tests/api/test_ingredient_crud.py` | create, read, update, delete and search over HTTP; re-sending existing aliases and storage rows on `PATCH` |
 | `tests/api/test_category_crud.py`, `test_label_crud.py` | the same round trip for categories and labels |
+| `tests/api/test_label_scope.py` | every label in one library: `scope` required and known, names unique per scope, `?scope=`, a move allowed while unused and the in-use 409, and each owner (ingredient create, update and attach; dish; note) refusing another library's label, each with its mirror |
+| `tests/test_label_scope_migration.py` | `l1abels` on a scratch database: used labels scoped by their one library, unused ones deleted, uniqueness per scope, the refusal on a label two libraries carry (changing nothing), and the downgrade with its own refusal |
 | `tests/api/test_ingredient_storage.py` | storage state and range, heating, links, rating, the new list filters, the delete counts and the 409 that names the moved one, `/api/vocabularies/fixed` |
 | `tests/api/test_vocabularies.py` | the nine vocabularies, parametrised over one factory, the in-use 409 for each (a course or region a dish is filed in), and authors in name order |
 | `tests/api/test_images.py` | upload, re-encode, deduplication, ingredient, dish and recipe galleries (kitchen-note galleries are in `test_kitchen_notes.py`), a dish's cover falling back to its first recipe's, an image's owners, deletion, serving |
@@ -311,10 +324,17 @@ its read-only dish fields and 其他版本), `components/forms/forms.test.jsx`
 (the recipe form's dish picker - an existing dish, a new one as 料理 or
 醬料, the `?dish=` preset, the refusal with none - a line's 新增料理 sent as
 a sauce `new_dish`, and the dish form's payload), `pages/edit/settings.test.jsx`
-(the 地區 tab after 類別, label counts by 料理), `routes.test.jsx` (the dish
+(the 地區 tab after 類別), `routes.test.jsx` (the dish
 routes and the `/edit/dishes/:id/edit` redirect), `lib/nav.test.js` (料理
 first), `lib/typeahead.test.js`, `lib/recipeLines.test.js` and
 `lib/imageOwners.test.js`.
+
+Labels' libraries are covered in: `pages/edit/settings.test.jsx` (the three
+sections in order, an add sending its section's scope, 移到 off for a label in
+use and on for an unused one, and a refused move said in the row),
+`pages/library/libraries.test.jsx` (each sidebar asking for its own scope,
+the recipe library for `dish`, against a server answering only `dish`) and
+`components/forms/forms.test.jsx` (the dish form reading `?scope=dish`).
 
 Recipe templates are covered in: `pages/edit/templates.test.jsx` (the
 new-recipe chooser's three ways in and the URL each writes, `?dish=` kept

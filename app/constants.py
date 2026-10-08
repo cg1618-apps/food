@@ -45,6 +45,12 @@ STEP_KINDS = {"step": "步驟", "optional": "可省略", "note": "備註"}
 # which is why it is a fixed list rather than a 設定 vocabulary.
 MEAL_SLOTS = {"breakfast": "早", "lunch": "中", "afternoon": "下午", "dinner": "晚"}
 
+# The library a label belongs to. A label has exactly one: an ingredient
+# offers only ingredient labels, a dish only dish labels, a note only note
+# labels, and a recipe shows its dish's. Two libraries wanting 辣 means two
+# labels, so a library's labels say what is true of that library's things.
+LABEL_SCOPES = {"ingredient": "食材", "dish": "料理", "note": "筆記"}
+
 # Every closed list the frontend renders, with its display label, served by
 # GET /api/vocabularies/fixed so no list is copied into a component.
 FIXED_VOCABULARIES = {
@@ -55,4 +61,5 @@ FIXED_VOCABULARIES = {
     "kitchen_note_kinds": [{"value": k, "label": v} for k, v in KITCHEN_NOTE_KINDS.items()],
     "step_kinds": [{"value": k, "label": v} for k, v in STEP_KINDS.items()],
     "meal_slots": [{"value": k, "label": v} for k, v in MEAL_SLOTS.items()],
+    "label_scopes": [{"value": k, "label": v} for k, v in LABEL_SCOPES.items()],
 }

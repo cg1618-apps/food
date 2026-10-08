@@ -5,7 +5,7 @@ from app.models import IngredientCategory, Label
 
 def test_an_ingredient_round_trips_through_create_read_update_delete(client, fallback_category, db):
     meat = IngredientCategory(name_cn="肉類")
-    spicy = Label(name_cn="辣")
+    spicy = Label(name_cn="辣", scope="ingredient")
     db.add_all([meat, spicy])
     db.flush()
 
