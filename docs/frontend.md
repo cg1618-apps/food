@@ -9,6 +9,8 @@ is specific to food.
 Navigation is 料理 · 食譜 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定 - 料理 first, since a dish
 is what you look for and its recipes hang off it: a top bar on a desktop, a bar
 fixed to the bottom of the screen on a phone (`components/layout/Layout.jsx`).
+On a phone the top bar stays, slim and scrolling away with the page, holding
+only 食 (home) and the theme toggle.
 The section a page belongs to - its edit pages included - is marked with
 `aria-current="page"`; `lib/nav.js` holds that match.
 
@@ -104,8 +106,9 @@ words and its filters:
 - **Filters in a sidebar on a desktop and a drawer on a phone.** The sidebar
   is built from `components/layout/FilterPanel.jsx` - `FilterGroup`,
   `FilterOptions` (toggle chips), `FilterSwitch` (a checkbox with a count) and
-  `FilterTree` (the category tree). Below `lg` the same controls open in the
-  shared `Dialog`, which a phone draws as a bottom sheet; the 篩選 button
+  `FilterTree` (a single-choice tree whose branches open and close). Below
+  `lg` the same controls open in the shared `Dialog`, which a phone draws as
+  a bottom sheet; the 篩選 button
   carries the number of filters that are on.
 - **Every filter and the search term live in the URL query**
   (`hooks/useUrlFilters.js`, pure parsing in `lib/urlFilters.js`). A library
@@ -123,12 +126,19 @@ words and its filters:
 - **The cover view** (`CoverGrid.jsx`): the cover cropped at its focus, or the
   name's first character in the serif when there is no photograph; the name,
   one line of metadata, badges. **The list view** (`LibraryTable.jsx`): the
-  name as a link with its badges, then the page's columns.
+  name as a link with its badges, then the page's columns. A library may pass
+  `arrange(items)` to cut the list into titled sections (`sections`, each
+  headed with its count); both views then draw a section's `group` entries as
+  a parent with its varieties - an outlined block, or rows indented behind a
+  └ - and `card(item, place)` is told where a tile sits, `{ depth, root }`
+  inside a group.
 - **Two empties, two directions**: an empty library offers the add button; a
   filter or search that matches nothing offers 清除搜尋與篩選.
-- **A label chip carries its own library's count** - `ingredient_count`,
-  `dish_count` or `note_count` from `GET /api/labels` - not the total. The
-  recipe library shows `dish_count`: a recipe's labels are its dish's.
+- **The 標籤 group offers only its library's labels**, read with
+  `useLabels(scope)` (`hooks/useApi.js`, `GET /api/labels?scope=`); the
+  recipe library asks for `dish`, since a recipe's labels are its dish's. A
+  library with none says so (還沒有食材標籤。). Each chip carries its own
+  library's count - `ingredient_count`, `dish_count` or `note_count`.
 - The list keeps the previous result on screen while a new filter loads
   (`keepPreviousData`), so the grid does not blank on every click.
 
@@ -136,7 +146,7 @@ words and its filters:
 | --- | --- | --- | --- |
 | 料理 `/dishes` | `kind`, `course`, `region`, `label` (all "any of") | 種類, 類別, 地區, 食譜 (how many) | - |
 | 食譜 `/recipes` | `dish` (ids, sent as `dish_id`), `kind`, `course`, `status` (ids, sent as `status_id`), `method`, `equipment`, `author` (ids, sent as `author_id`), `label` (all "any of"); `written` = `true` / `false`. `kind`, `course` and `label` are the dish's | 類別, 做法, 時間, 作者, 狀態 | 書籤 when not written up |
-| 食材 `/ingredients` | `category`, `label`, `rating` (one each); `stub`, `variety` (switches) | 分類 / 品種, 冷藏, 用於, 評等 | 待補, rating |
+| 食材 `/ingredients` | `category`, `group` (an ingredient id, sent as `group_id`), `label`, `rating` (one each); `variety` = `top` / `only` (sent as `has_parent` = `false` / `true`; the old `?variety=1` still means `only`); `stub` (switch) | 品種, 冷藏, 用於, 評等 | 待補, rating |
 | 筆記 `/notes` | `kind`, `label` (both "any of") | 種類, 連結 (host only) | - |
 
 **A dish card** (`pages/library/DishLibrary.jsx`) is the dish's cover - its
@@ -154,6 +164,32 @@ category the ingredient page links to (`/ingredients?category=<id>`). The
 tree says so under itself. The stub backlog's count (`只看待補`) shows whether
 or not the switch is on, read from the unfiltered list - which also names a
 variety's parent when the filtered list does not include it.
+
+**A group is an ingredient with varieties** (`lib/ingredientGroups.js`), and
+whether a row is one is read from the unfiltered list, never the filtered
+one - under 只看主項 the varieties are gone and 雞肉 is still a group.
+
+- **The 分類 tree carries the groups.** Under each category come its child
+  categories, then the groups filed in it, marked with a ring; a group that is
+  itself a variety (雞腿 under 雞肉) nests under its parent. A group's count is
+  its size including itself. Choosing a group sets `group` and clears
+  `category` in one history entry, and the other way round - the two are
+  never both on. Branches start closed, except the path to the chosen node,
+  which opens when the choice changes or when the groups arrive after the
+  categories.
+- **品種** is 全部 / 只看主項 / 只看品種: no filter, top-level ingredients
+  only, varieties only.
+- **The list is sectioned by category**, in the tree's order, a child category
+  titled with its path (蔬菜 › 葉菜) and anything outside the tree last under
+  其他. Inside a section: groups with varieties in the result, as a block
+  with those varieties depth-first; then groups whose varieties are filtered
+  out; then the rest. A block sits in its parent's section even when a
+  variety is filed elsewhere, and that variety names its own category in the
+  block (乾辣椒 is 乾貨 inside 辣椒's 蔬菜 block); a variety whose parent is
+  not in the result stands alone, as 「X 的品種」.
+- **A row says what its section does not**: 「X 的品種」 for a variety
+  outside its parent's block or two levels down, 「N 個品種」 for a group.
+  That is the 品種 column in 清單.
 
 ## Two things that are not pages
 
@@ -333,6 +369,10 @@ if the categories fail to load.
   by its id.
 - **Choosing from a short vocabulary** - a dish's labels and serves-as, a
   recipe's methods and equipment - is `ChipPicker.jsx`, toggle chips with `aria-pressed`.
+  **A form offers only its own library's labels**: the ingredient, dish and
+  note forms read `useLabels('ingredient' | 'dish' | 'note')`, the same
+  server-side filter the sidebars use, so a form cannot offer a label its
+  save would refuse. With none, the picker says 還沒有標籤，可以在設定裡新增。
 - **Aliases are one box**, split on any comma or 、 (`splitAliases`): they are
   unordered and never displayed, so a row editor's ordering would be noise.
 
@@ -605,11 +645,22 @@ rule: shown immediately, the handles off until it has landed and the list has
 been read again, the stored order back with the server's sentence on a
 refusal.
 
-Label rows show where each label is used - 食材, 料理 and 筆記 separately; the
-other vocabularies show `usage_count`. A change invalidates the vocabulary
-and every owner that shows its names (a label: ingredients, dishes, recipes -
-which show their dish's - and notes; a course or region: dishes and recipes;
-a method: recipes and ingredients).
+**標籤** (`components/settings/LabelEditor.jsx`) is three sections, 食材標籤,
+料理標籤 and 筆記標籤, in the order `label_scopes` comes in
+(`GET /api/vocabularies/fixed`), from one read of every label grouped by
+`scope`. Each section lists its labels by name, each a `NameRow` (改名,
+刪除) saying how many of that library's things carry it, and ends with its
+own add line, which sends the section's `scope`. **「移到」** is a select on
+each row naming the other two libraries; it is off while the label is in
+use, and the row's count line says it has to be taken off first. A refusal
+from the server (the label was put on something since the page read it) is
+said in the row.
+
+A change invalidates the vocabulary and every owner that shows its names (a
+label: ingredients, dishes, recipes - which show their dish's - and notes,
+and so every `?scope=` read of labels too, since they sit under
+`GET /api/labels`; a course or region: dishes and recipes; a method: recipes
+and ingredients). The other vocabularies show `usage_count`.
 
 `/edit/images` is `pages/edit/ImageLibrary.jsx`, media's admin image page
 without what food lacks: a grid of thumbnails (centred, `data-focus="none"` -
@@ -764,6 +815,21 @@ runtime `--c-*` variable and the light and dark palettes in `index.css`
 redefine only those. A numbered grey or a raw hex in a component fails
 `theme-tokens.test.js`, which is what keeps dark mode from rotting one
 component at a time and keeps the four apps looking like one product.
+
+**Light, dark, or the device's setting.** The theme follows
+`prefers-color-scheme` - live, as the OS changes - until the toggle at the
+right end of the top bar is pressed (a moon while the page is light, a sun
+while it is dark; `aria-label` 切換為深色模式 / 切換為淺色模式). The choice is
+kept in `localStorage` under `cg1618:food:theme` (`light` or `dark`; nothing
+stored means follow the device), per device like the 封面 / 清單 choice, and
+every read and write is guarded, so blocked storage keeps it for the session.
+`contexts/ThemeContext.jsx` is media's provider with food's key: it stamps
+`<html data-theme>`, which `index.css` keys both palettes off, and points the
+`theme-color` metas at the canvas colour on screen; `contexts/theme.js` holds
+the key, the context and `useTheme()`. An inline script in `index.html` stamps
+the same attribute before first paint, so a stored dark choice never flashes
+paper on load. Anything that renders `Layout` - every page test - needs a
+`ThemeProvider` around it, as `App.jsx` has.
 
 ## Primitives
 

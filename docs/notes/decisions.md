@@ -353,6 +353,19 @@ so a later reader can tell a decision from an accident. These are food's.
   keys is the standard pattern for a tab bar, which `aria-current` (a link in
   a set of links) is not. The look and the wrapping row are media's
   `AdminTabBar`'s.
+- **The theme toggle is in a slim top bar on a phone**, where media puts it
+  in the header strip on a desktop and as a row in its menu drawer below `lg`.
+  food has no drawer: its phone navigation is the bottom bar, one column per
+  section, which at 360px has no room for a ninth column that is a control
+  rather than a destination - and a choice made once per device does not earn
+  a place under the thumb. So the desktop's top bar is kept on a phone, shown
+  with only 食 and the toggle, not sticky, so it scrolls away and costs the
+  page no height while reading. Rejected: a floating button, which would sit
+  over each page's own top-right actions; and putting it on 設定, which is
+  behind Access and so out of reach of a reader who is not the owner. The
+  storage key is `cg1618:food:theme` rather than media's `cg1618:theme`:
+  every app is its own origin on its own hostname, so a shared name would
+  share nothing, and food's keys are all `cg1618:food:<thing>`.
 
 ### Reordering is a drag, as it now is in `media`
 
@@ -962,6 +975,82 @@ What the branch after module 1 chose, and what it turned down.
   both in Asia/Taipei, as every timestamp here assumes; the pages send the
   range from the browser's own date, and only a bare `GET` falls back to the
   server's today in Asia/Taipei.
+
+## Ingredient groups in the library
+
+**The group filter is the API's; the arrangement is the page's.** Choosing
+雞肉 in the tree has to list 雞肉 and everything below it at any depth, which
+is a recursive query over `parent_id` - `group_id` on `GET /api/ingredients`,
+next to the other filters, so the count, the search and the other filters
+compose with it the way they do with `category_id`. Sectioning and nesting
+the result is presentation, done in `lib/ingredientGroups.js` from two lists
+the page already loads (the filtered result and the whole library), so the
+API's list stays one flat, sorted shape that the typeahead also reads.
+
+**What makes a row a group is read from the whole library.** Read from the
+result, 只看主項 would empty every group and the "groups on top" order would
+vanish exactly when someone asked to see only the groups.
+
+**A block sits in its parent's section.** A variety may be filed in another
+category than its parent (乾辣椒 is 乾貨, 辣椒 is 蔬菜). Splitting the block
+across two sections would undo the point of the block, so the variety stays
+with its parent and names its own category there. The category filter stays
+exact, so choosing 乾貨 still lists 乾辣椒 - alone, as 「辣椒 的品種」.
+
+**品種 became a three-way choice, not a second switch.** 只看主項 and 只看品種
+contradict each other; two switches would allow both on and list nothing.
+The URL word for the old switch (`?variety=1`) is kept as an alias of
+`only`, so a link written before the change still lands.
+
+## Every label in one library
+
+**A label belongs to exactly one library: ingredient, dish or note.** Labels
+began as one vocabulary across all three owners, so 辣 on a chilli and 辣 on
+麻婆豆腐 were one row. That made every form and every sidebar offer every
+label - an ingredient form offering 下飯, a note sidebar offering 常備 - and
+a label's count was three numbers that meant different things. What a tag
+says depends on what it is on, so the owner ruled each label into one
+library: two libraries wanting 辣 have a 辣 each, and names are unique per
+scope rather than across the table. Recipes have no labels of their own and
+show their dish's, so they follow `dish` rather than being a fourth scope.
+
+**The scope is a String plus `LABEL_SCOPES`, not an enum and not three
+tables.** The house shape for a closed list. Three label tables would have
+been the database enforcing the split, at the cost of three copies of every
+label route, form and settings editor for what is one concept with one
+behaviour.
+
+**The API, not the database, keeps a link inside its scope.** A composite
+foreign key carrying the scope onto each link table would make a wrong-scope
+link unrepresentable, but it is four columns and four constraints to guard
+two code paths. Instead: every write that links a label to an owner goes
+through `services/lookup.fetch_labels` or `check_label_scope` (ingredient,
+dish and note saves, and the ingredient attach route), which refuse another
+library's label with 422 - the payload is wrong, as for an id naming
+nothing - and a label in use cannot change scope (409 with `usage_count`, the
+in-use refusal deleting a vocabulary value answers). Between them no route
+can produce a wrong-scope link. Ingredient merge needs no check of its own:
+it moves labels from one ingredient to another, and both carry only
+ingredient labels.
+
+**A move is refused while the label is in use, rather than detaching it.**
+Moving a used label would either leave its owners carrying another library's
+label, or silently strip it from them. Deleting is the explicit way to strip
+a label, and it says how many things it is on first.
+
+**`l1abels` deletes the labels nothing carries.** A label linked from
+nothing has no library to be scoped into, and guessing one would put it in
+front of the owner in a library where it may mean nothing. The eight seeded
+by `v1ocabulary` (飯 麵 肉 麵包 馬鈴薯 地瓜 沙拉 鍋) were unused and the
+owner had already removed them; production held none.
+
+**`l1abels` refuses a label more than one library carries**, before
+changing anything, naming each such label and its libraries. Which library
+keeps it, and whether the other gets its own copy, is the owner's call; a
+migration that split or picked would be making it for them. The downgrade
+refuses two labels of one name in different libraries for the same reason:
+the global index it restores cannot hold both, and deleting one is not the
+migration's to decide.
 
 ## The starting ingredient list
 

@@ -3,6 +3,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ThemeProvider } from './contexts/ThemeContext'
 import { SECTIONS } from './lib/nav'
 import AppRoutes from './routes'
 
@@ -15,12 +16,14 @@ function LocationProbe() {
 function renderAt(path) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
-        <AppRoutes />
-        <LocationProbe />
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <ThemeProvider>
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[path]}>
+          <AppRoutes />
+          <LocationProbe />
+        </MemoryRouter>
+      </QueryClientProvider>
+    </ThemeProvider>,
   )
   return screen.getByTestId('location').textContent
 }

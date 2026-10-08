@@ -82,8 +82,8 @@ CONSTRAINT_MESSAGES = {
     "uq_ingredient_image_once": "That image is already in this gallery.",
     "uq_ingredient_name_cn": "Another ingredient already has that Chinese name.",
     "uq_ingredient_name_en": "Another ingredient already has that English name.",
-    "uq_label_name_cn": "Another label already has that Chinese name.",
-    "uq_label_name_en": "Another label already has that English name.",
+    "uq_label_name_cn": "Another label in this library already has that Chinese name.",
+    "uq_label_name_en": "Another label in this library already has that English name.",
     "uq_ingredient_alias": "That ingredient already carries that alias.",
     "uq_ingredient_preservation_state_method": (
         "That ingredient already has a note for that state and storage method."

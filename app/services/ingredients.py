@@ -33,6 +33,7 @@ from app.models import (
 )
 from app.services import recipe_templates
 from app.services.hierarchy import check_parent, is_descendant
+from app.services.lookup import fetch_labels
 from app.services.search import ESCAPE, contains
 
 
@@ -64,6 +65,21 @@ def get(db: Session, ingredient_id: int) -> Ingredient:
     return row
 
 
+def group_member_ids(group_id: int):
+    """A group: the ingredient itself and its varieties at any depth.
+
+    A recursive CTE over `parent_id`. The write path refuses a parent cycle, and
+    UNION (not UNION ALL) stops the recursion even if one existed.
+    """
+    members = (
+        select(Ingredient.id).where(Ingredient.id == group_id).cte("group_members", recursive=True)
+    )
+    members = members.union(
+        select(Ingredient.id).where(Ingredient.parent_id == members.c.id)
+    )
+    return select(members.c.id)
+
+
 def search(
     db: Session,
     q: str | None = None,
@@ -73,6 +89,7 @@ def search(
     parent_id: int | None = None,
     rating: str | None = None,
     has_parent: bool | None = None,
+    group_id: int | None = None,
 ) -> list[Ingredient]:
     query = _loaded(db.query(Ingredient))
 
@@ -100,6 +117,8 @@ def search(
         query = query.filter(Ingredient.category_id == category_id)
     if parent_id is not None:
         query = query.filter(Ingredient.parent_id == parent_id)
+    if group_id is not None:
+        query = query.filter(Ingredient.id.in_(group_member_ids(group_id)))
     if needs_detail is not None:
         query = query.filter(Ingredient.needs_detail.is_(needs_detail))
     if rating is not None:
@@ -124,17 +143,6 @@ def search(
     # shows, so the two cannot disagree.
     rows.sort(key=lambda r: r.display_name.casefold())
     return rows
-
-
-def _apply_labels(db: Session, ingredient: Ingredient, label_ids: list[int]) -> None:
-    if not label_ids:
-        ingredient.labels = []
-        return
-    labels = db.query(Label).filter(Label.id.in_(label_ids)).all()
-    missing = set(label_ids) - {label.id for label in labels}
-    if missing:
-        raise AppError(422, f"No such label: {sorted(missing)[0]}.")
-    ingredient.labels = labels
 
 
 def _apply_aliases(ingredient: Ingredient, values: list[str]) -> None:
@@ -203,6 +211,8 @@ def _apply_links(ingredient: Ingredient, entries) -> None:
 
 def create(db: Session, payload) -> Ingredient:
     check_parent(db, Ingredient, None, payload.parent_id, "ingredient")
+    # Resolved before anything is added, so a refused label writes nothing.
+    labels = fetch_labels(db, payload.label_ids, "ingredient")
 
     ingredient = Ingredient(
         name_cn=payload.name_cn,
@@ -223,7 +233,7 @@ def create(db: Session, payload) -> Ingredient:
     _apply_links(ingredient, payload.links)
     db.add(ingredient)
     db.flush()
-    _apply_labels(db, ingredient, payload.label_ids)
+    ingredient.labels = labels
     db.commit()
     return get(db, ingredient.id)
 
@@ -242,6 +252,7 @@ def update(db: Session, ingredient_id: int, payload) -> Ingredient:
     heating = changes.pop("heating", None)
     links = changes.pop("links", None)
     label_ids = changes.pop("label_ids", None)
+    labels = None if label_ids is None else fetch_labels(db, label_ids, "ingredient")
 
     for field, value in changes.items():
         setattr(ingredient, field, value)
@@ -263,8 +274,8 @@ def update(db: Session, ingredient_id: int, payload) -> Ingredient:
         _apply_heating(db, ingredient, _as_entries(heating, schemas.HeatingIn))
     if links is not None:
         _apply_links(ingredient, _as_entries(links, schemas.LinkIn))
-    if label_ids is not None:
-        _apply_labels(db, ingredient, label_ids)
+    if labels is not None:
+        ingredient.labels = labels
 
     db.commit()
     return get(db, ingredient_id)

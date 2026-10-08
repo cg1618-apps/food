@@ -18,13 +18,15 @@
 // source platform, author or 材料分組 / 步驟分組 on every recipe, a renamed
 // method on recipes and on ingredient heating rows, a renamed label on all
 // three kinds of owner - ingredients, dishes and notes - and on the recipes
-// that show their dish's. 常用食材 is not a vocabulary but an ordered pick of ingredients -
+// that show their dish's. 標籤 is its own editor (LabelEditor): a section per
+// library a label can belong to, and a label moved between them while unused. 常用食材 is not a vocabulary but an ordered pick of ingredients -
 // the recipe form's chips - and makes only its own list stale. 範本 is not a
 // vocabulary either: the recipe templates a new recipe can start from,
 // ordered, renamed and deleted here and edited on their own form.
 import { endpoints } from '../../api/endpoints'
 import CategoryEditor from '../../components/settings/CategoryEditor'
 import CommonIngredientsEditor from '../../components/settings/CommonIngredientsEditor'
+import LabelEditor from '../../components/settings/LabelEditor'
 import TemplatesEditor from '../../components/settings/TemplatesEditor'
 import VocabularyEditor from '../../components/settings/VocabularyEditor'
 import { LinkButton, Tabs } from '../../components/ui/primitives'
@@ -34,7 +36,6 @@ import { inUseMessage } from '../../lib/vocabulary'
 const DISHES = endpoints.dishes.list()
 const RECIPES = endpoints.recipes.list()
 const INGREDIENTS = endpoints.ingredients.list()
-const NOTES = endpoints.notes.list()
 
 // The nine factory vocabularies: one shape, one count (`usage_count`, the
 // RESTRICT references that would stop a delete). Authors are listed by name
@@ -110,30 +111,6 @@ const FACTORY = [
 ]
 
 const usageMeta = (row) => (row.usage_count ? `用在 ${row.usage_count} 個地方` : '沒有使用')
-
-function LabelEditor() {
-  return (
-    <VocabularyEditor
-      title="標籤"
-      endpoints={endpoints.labels}
-      invalidate={[endpoints.labels.list(), INGREDIENTS, DISHES, RECIPES, NOTES]}
-      ordered={false}
-      hint="跨分類的標記，食材、料理和筆記都可以貼。依名稱排列。"
-      addLabel="新增標籤"
-      meta={(row) =>
-        row.usage_count
-          ? `食材 ${row.ingredient_count} · 料理 ${row.dish_count} · 筆記 ${row.note_count}`
-          : '沒有使用'
-      }
-      confirmText={(row) =>
-        row.usage_count
-          ? `它會從 ${row.usage_count} 個項目上拿掉；那些項目本身不受影響。`
-          : '沒有任何項目貼著它。'
-      }
-      refusal={(_row, error) => error?.message}
-    />
-  )
-}
 
 function FactoryEditor({ vocabulary, ...section }) {
   return (

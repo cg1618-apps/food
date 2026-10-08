@@ -8,8 +8,8 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.errors import AppError
-from app.models import KitchenNote, KitchenNoteImage, KitchenNoteLabel, Label
-from app.services.lookup import fetch_all
+from app.models import KitchenNote, KitchenNoteImage, KitchenNoteLabel
+from app.services.lookup import fetch_labels
 from app.services.search import ESCAPE, contains
 
 
@@ -61,7 +61,7 @@ def search(
 
 
 def create(db: Session, payload) -> KitchenNote:
-    labels = fetch_all(db, Label, payload.label_ids, "label")
+    labels = fetch_labels(db, payload.label_ids, "note")
     note = KitchenNote(**payload.model_dump(exclude={"label_ids"}))
     note.labels = labels
     db.add(note)
@@ -73,7 +73,7 @@ def update(db: Session, note_id: int, payload) -> KitchenNote:
     note = get(db, note_id)
     sent = payload.model_dump(exclude_unset=True)
     label_ids = sent.pop("label_ids", None)
-    labels = None if label_ids is None else fetch_all(db, Label, label_ids, "label")
+    labels = None if label_ids is None else fetch_labels(db, label_ids, "note")
 
     for field, value in sent.items():
         setattr(note, field, value)

@@ -17,7 +17,7 @@ import { endpoints } from '../../api/endpoints'
 import { FilterGroup, FilterOptions } from '../../components/layout/FilterPanel'
 import LibraryLayout from '../../components/layout/LibraryLayout'
 import { Badge } from '../../components/ui/primitives'
-import { useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
+import { useApiQuery, useFixedVocabularies, useLabels } from '../../hooks/useApi'
 import { useUrlFilters } from '../../hooks/useUrlFilters'
 
 const SPEC = {
@@ -58,7 +58,7 @@ export default function RecipeLibrary() {
   const methods = useApiQuery(endpoints.methods.list())
   const equipment = useApiQuery(endpoints.equipment.list())
   const authors = useApiQuery(endpoints.authors.list())
-  const labels = useApiQuery(endpoints.labels.list())
+  const labels = useLabels('dish')
   const fixed = useFixedVocabularies()
 
   const card = (row) => ({
@@ -149,6 +149,7 @@ export default function RecipeLibrary() {
           }))}
           selected={values.label}
           onToggle={(value) => toggle('label', value)}
+          empty="還沒有料理標籤。"
         />
       </FilterGroup>
     </>

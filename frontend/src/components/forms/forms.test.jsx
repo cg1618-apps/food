@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ThemeProvider } from '../../contexts/ThemeContext'
 import AppRoutes from '../../routes'
 import Dialog from '../ui/Dialog'
 import DeleteDialog from './DeleteDialog'
@@ -52,12 +53,14 @@ function LocationProbe() {
 
 function wrap(ui, path = '/', client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
-        {ui}
-        <LocationProbe />
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <ThemeProvider>
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[path]}>
+          {ui}
+          <LocationProbe />
+        </MemoryRouter>
+      </QueryClientProvider>
+    </ThemeProvider>,
   )
 }
 
@@ -1017,7 +1020,8 @@ describe('DishForm', () => {
       ])
     }
     if (url === '/api/regions') return json([{ id: 3, display_name: '日式', sort_order: 30, usage_count: 0 }])
-    if (url === '/api/labels') return json([{ id: 9, display_name: '下飯', dish_count: 0, usage_count: 0 }])
+    // Only the dish library's labels: a form asking without the scope gets none.
+    if (url === '/api/labels?scope=dish') return json([{ id: 9, display_name: '下飯', scope: 'dish', dish_count: 0, usage_count: 0 }])
     if (url === '/api/edit/dishes' && method === 'POST') return json({ id: 42, images: [] }, 201)
     return json([])
   }

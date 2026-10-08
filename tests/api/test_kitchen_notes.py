@@ -29,7 +29,7 @@ def image_dir(tmp_path, monkeypatch):
 def labels(db):
     """Two labels, so a label list has something real to name beside the
     unknown id - the set the 422 refuses from is not empty."""
-    rows = [Label(name_cn="影片"), Label(name_cn="刀工")]
+    rows = [Label(name_cn="影片", scope="note"), Label(name_cn="刀工", scope="note")]
     db.add_all(rows)
     db.flush()
     return rows
@@ -296,7 +296,7 @@ def test_an_unknown_field_is_refused(client):
 def three(client, labels, db):
     """Three notes, one per kind, each with its own label (the third label is
     made here), created oldest first."""
-    third = Label(name_cn="參考書")
+    third = Label(name_cn="參考書", scope="note")
     db.add(third)
     db.flush()
     label_ids = [labels[0].id, labels[1].id, third.id]

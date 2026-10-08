@@ -17,7 +17,7 @@ import FormActions from '../../components/forms/FormActions'
 import GalleryPicker from '../../components/forms/GalleryPicker'
 import { Field, Input, Section, Select, TextArea, Toggle } from '../../components/ui/primitives'
 import { ErrorNote, Loading } from '../../components/ui/states'
-import { useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
+import { useApiQuery, useFixedVocabularies, useLabels } from '../../hooks/useApi'
 import { useOwnerSave } from '../../hooks/useOwnerSave'
 import { galleryChanged, galleryFromImages } from '../../lib/gallery'
 import { DISH } from '../../lib/recipeLines'
@@ -92,7 +92,7 @@ export default function DishForm() {
   const existing = useApiQuery(endpoints.dishes.detail(id), null, { enabled: !isNew })
   const courses = useApiQuery(endpoints.courses.list())
   const regions = useApiQuery(endpoints.regions.list())
-  const labels = useApiQuery(endpoints.labels.list())
+  const labels = useLabels('dish')
   const fixed = useFixedVocabularies()
   const { save, saving } = useOwnerSave({ group: endpoints.dishes, invalidate: INVALIDATE })
 

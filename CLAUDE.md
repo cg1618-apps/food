@@ -40,7 +40,7 @@ reference work.
 ## Status
 
 **Modules 1 and 2 are built, with dishes, recipe templates, kitchen notes,
-the weekly schedule, 加熱 and TBD.** The schema is at revision `h1eating` (the
+the weekly schedule, 加熱 and TBD.** The schema is at revision `l1abels` (the
 head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a

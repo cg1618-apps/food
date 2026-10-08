@@ -10,7 +10,7 @@ import { keepPreviousData } from '@tanstack/react-query'
 import { endpoints } from '../../api/endpoints'
 import { FilterGroup, FilterOptions } from '../../components/layout/FilterPanel'
 import LibraryLayout from '../../components/layout/LibraryLayout'
-import { fixedLabel, useApiQuery, useFixedVocabularies } from '../../hooks/useApi'
+import { fixedLabel, useApiQuery, useFixedVocabularies, useLabels } from '../../hooks/useApi'
 import { useUrlFilters } from '../../hooks/useUrlFilters'
 
 const SPEC = {
@@ -37,7 +37,7 @@ export default function DishLibrary() {
   })
   const courses = useApiQuery(endpoints.courses.list())
   const regions = useApiQuery(endpoints.regions.list())
-  const labels = useApiQuery(endpoints.labels.list())
+  const labels = useLabels('dish')
   const fixed = useFixedVocabularies()
   const kindLabel = (row) => fixedLabel(fixed.data?.dish_kinds, row.kind)
 
@@ -94,6 +94,7 @@ export default function DishLibrary() {
           }))}
           selected={values.label}
           onToggle={(value) => toggle('label', value)}
+          empty="還沒有料理標籤。"
         />
       </FilterGroup>
     </>

@@ -34,7 +34,7 @@ def three(client, db):
         rows = {
             "course": RecipeCourse(name_cn=f"課{i}"),
             "region": Region(name_cn=f"區{i}"),
-            "label": Label(name_cn=f"標{i}"),
+            "label": Label(name_cn=f"標{i}", scope="dish"),
         }
         db.add_all(rows.values())
         db.flush()

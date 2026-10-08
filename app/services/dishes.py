@@ -29,7 +29,7 @@ from app.models import (
 )
 from app.schemas.dish import LIST_FIELDS
 from app.services import images
-from app.services.lookup import fetch_all
+from app.services.lookup import check_label_scope, fetch_all
 from app.services.search import ESCAPE, contains
 
 # The id lists a dish carries, the relationship each fills, the model it
@@ -196,11 +196,14 @@ def _check_scalars(db: Session, scalars: dict) -> None:
 
 
 def _check_and_fetch(db: Session, lists: dict) -> dict:
-    return {
+    fetched = {
         field: fetch_all(db, model, lists[field], what)
         for field, (_, model, what) in _LINKED.items()
         if lists.get(field) is not None
     }
+    if "label_ids" in fetched:
+        check_label_scope(fetched["label_ids"], "dish")
+    return fetched
 
 
 def _apply_aliases(dish: Dish, values: list[str]) -> None:
