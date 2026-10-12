@@ -24,6 +24,7 @@ from app.models import (
     Dish,
     Ingredient,
     IngredientAlias,
+    IngredientCategory,
     IngredientHeating,
     IngredientImage,
     IngredientLabel,
@@ -82,6 +83,25 @@ def group_member_ids(group_id: int):
     return select(members.c.id)
 
 
+def category_subtree_ids(category_id: int):
+    """A category and every category below it, at any depth.
+
+    The category filter's set: an ingredient filed under 肉類 › 雞肉 is
+    listed when 肉類 is chosen. A recursive CTE over `parent_id`, as
+    `group_member_ids` is over the ingredient's; the write path refuses a
+    cycle, and UNION stops the recursion even if one existed.
+    """
+    subtree = (
+        select(IngredientCategory.id)
+        .where(IngredientCategory.id == category_id)
+        .cte("category_subtree", recursive=True)
+    )
+    subtree = subtree.union(
+        select(IngredientCategory.id).where(IngredientCategory.parent_id == subtree.c.id)
+    )
+    return select(subtree.c.id)
+
+
 def search(
     db: Session,
     q: str | None = None,
@@ -116,7 +136,7 @@ def search(
         )
 
     if category_id is not None:
-        query = query.filter(Ingredient.category_id == category_id)
+        query = query.filter(Ingredient.category_id.in_(category_subtree_ids(category_id)))
     if parent_id is not None:
         query = query.filter(Ingredient.parent_id == parent_id)
     if group_id is not None:

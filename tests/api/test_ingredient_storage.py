@@ -215,6 +215,73 @@ def test_the_library_filters_by_group_at_any_depth(client, fallback_category):
     assert {row["name_cn"] for row in inner} == {"雞腿", "去骨雞腿"}
 
 
+def _category(client, name, parent_id=None):
+    response = client.post(
+        "/api/edit/ingredient-categories", json={"name_cn": name, "parent_id": parent_id}
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+@pytest.fixture
+def meat_tree(client, fallback_category):
+    """肉類 holds nothing directly; 雞肉 under it holds 雞腿, and 去骨 under
+    雞肉 holds one more, two levels down. 海鮮 is a sibling with its own
+    ingredient. The empty parent is what makes the subtree test bite - an
+    exact filter answers it with nothing - and the sibling is what makes
+    the mirror bite: a filter that ignored the category would return it."""
+    meat = _category(client, "肉類")
+    chicken = _category(client, "雞肉", meat["id"])
+    boneless = _category(client, "去骨", chicken["id"])
+    seafood = _category(client, "海鮮")
+    _create(client, chicken["id"], name_cn="雞腿")
+    _create(client, boneless["id"], name_cn="去骨雞腿")
+    _create(client, seafood["id"], name_cn="蝦")
+    return {"meat": meat, "chicken": chicken, "boneless": boneless, "seafood": seafood}
+
+
+def _names(client, **params):
+    return {row["name_cn"] for row in client.get("/api/ingredients", params=params).json()}
+
+
+def test_a_category_filter_includes_its_sub_categories(client, meat_tree):
+    assert _names(client, category_id=meat_tree["meat"]["id"]) == {"雞腿", "去骨雞腿"}
+    assert _names(client, category_id=meat_tree["chicken"]["id"]) == {"雞腿", "去骨雞腿"}
+
+
+def test_a_category_filter_leaves_out_sibling_and_parent_categories(client, meat_tree):
+    """The mirror: a leaf lists only itself, and a sibling tree is never
+    reached."""
+    assert _names(client, category_id=meat_tree["boneless"]["id"]) == {"去骨雞腿"}
+    assert _names(client, category_id=meat_tree["seafood"]["id"]) == {"蝦"}
+
+
+def test_a_category_filter_composes_with_the_other_filters(client, meat_tree):
+    thigh = next(
+        row for row in client.get("/api/ingredients").json() if row["name_cn"] == "雞腿"
+    )
+    client.patch(f"/api/edit/ingredients/{thigh['id']}", json={"rating": "A"})
+    assert _names(client, category_id=meat_tree["meat"]["id"], rating="A") == {"雞腿"}
+    assert _names(client, category_id=meat_tree["meat"]["id"], q="去骨") == {"去骨雞腿"}
+
+
+def test_the_filtered_list_agrees_with_the_trees_subtree_counts(client, meat_tree):
+    """The sidebar sums `ingredient_count` over a node's subtree; that sum and
+    the filtered list must be the same number for every node."""
+    tree = client.get("/api/ingredient-categories").json()
+
+    def subtree_total(node):
+        return node["ingredient_count"] + sum(subtree_total(c) for c in node["children"])
+
+    def walk(nodes):
+        for node in nodes:
+            listed = client.get("/api/ingredients", params={"category_id": node["id"]}).json()
+            assert len(listed) == subtree_total(node), node["display_name"]
+            walk(node["children"])
+
+    walk(tree)
+
+
 def test_the_summary_carries_the_unused_fridge_range(client, fallback_category):
     _create(
         client,

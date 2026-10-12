@@ -118,8 +118,10 @@ discipline was never tested.
 
 **`GET /api/ingredients` is also module 2's typeahead.** The library search box
 and recipe-line completion ask the same question, and two implementations would
-answer differently within a month. Query parameters: `q`, `category_id`,
-`label_id`, `parent_id`, `needs_detail`, `rating` (one grade), `has_parent`
+answer differently within a month. Query parameters: `q`, `category_id`
+(that category and every category below it, at any depth of the category
+tree - choosing 肉類 lists what is filed under 肉類 › 雞肉 too; a leaf lists
+only itself), `label_id`, `parent_id`, `needs_detail`, `rating` (one grade), `has_parent`
 (`true` for varieties, `false` for top-level ingredients), and `group_id` (that
 ingredient and every variety below it, at any depth of `parent_id` - the
 library's group filter).
@@ -946,8 +948,12 @@ current notes, each once, or a 422 that changes nothing.
 | `PATCH /api/edit/ingredient-categories/{id}` | |
 | `DELETE /api/edit/ingredient-categories/{id}` | |
 
-The tree comes back in one response with `ingredient_count` per node, assembled
-in Python from two queries. A few dozen rows. A node is `id`, `display_name`,
+The tree comes back in one response with `ingredient_count` per node - the
+ingredients filed in that node alone, not below it, which is what refuses a
+delete - assembled in Python from two queries. A node's subtree total (its
+own count plus its descendants') is what `GET /api/ingredients?category_id=`
+lists for it; the library sums it from the tree rather than the API sending
+it. A few dozen rows. A node is `id`, `display_name`,
 `name_cn`, `name_en`, `description`, `parent_id`, `sort_order`, `is_fallback`,
 `children` and `ingredient_count`; `POST` and `PATCH` answer the same fields
 without the last two.

@@ -149,6 +149,23 @@ describe('the ingredient library', () => {
     expect(text.className).toContain('whitespace-pre-line')
   })
 
+  // 肉類 holds nothing itself; its count is 雞肉's, and choosing it lists
+  // 雞肉's ingredients under their own 肉類 › 雞肉 section.
+  it('counts a parent category by its subtree and lists its sub-categories in their sections', async () => {
+    const THIGH = { ...CABBAGE, id: 3, display_name: '雞腿', name_en: null, category_id: 7, needs_detail: false }
+    responses['/api/ingredient-categories'] = WITH_NOTES
+    responses['/api/ingredients'] = [THIGH]
+    renderAt('/ingredients?category=4')
+    const sidebar = screen.getByRole('complementary', { name: '篩選' })
+    const meat = await within(sidebar).findByRole('button', { name: /肉類/, pressed: true })
+    expect(meat.textContent).toContain('2')
+    await waitFor(() =>
+      expect(listRequests('/api/ingredients')).toContain('/api/ingredients?category_id=4'),
+    )
+    const section = await screen.findByRole('region', { name: '肉類 › 雞肉' })
+    expect(within(section).getByText('雞腿')).toBeTruthy()
+  })
+
   it('draws no notes for a category without any, nor when no category is chosen', async () => {
     responses['/api/ingredient-categories'] = WITH_NOTES
     responses['/api/ingredients'] = [CABBAGE]

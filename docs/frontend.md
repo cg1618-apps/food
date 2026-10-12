@@ -157,16 +157,19 @@ under `cg1618:food:dishes-view`. **A recipe card** is the recipe's display
 name, with its dish's name under it when the two differ - the table view
 draws the same subtitle under the name.
 
-**The ingredient category filter is exact.** Choosing 蔬菜 lists what is filed
-under 蔬菜 itself, not under its child categories; that is the API's
-`category_id`, the count beside each node is the same number, and it is the
-category the ingredient page links to (`/ingredients?category=<id>`). The
-tree says so under itself. The stub backlog's count (`只看待補`) shows whether
+**A category lists its sub-categories' ingredients too.** Choosing 肉類 lists
+what is filed under 肉類 itself and under 肉類 › 雞肉, 肉類 › 豬肉 and anything
+deeper; a leaf category lists only itself. That is the API's `category_id`
+(a subtree), and the count beside each node is the same subtree total -
+its `ingredient_count` plus its descendants', summed by
+`lib/ingredientGroups.js` `subtreeCount` - so the number and the list agree.
+The ingredient page's category link (`/ingredients?category=<id>`) lands on
+that category the same way. The tree says so under itself. The stub backlog's count (`只看待補`) shows whether
 or not the switch is on, read from the unfiltered list - which also names a
 variety's parent when the filtered list does not include it.
 
 **A chosen category's notes come first.** With `category` set to a category
-that has a `description`, the list opens with a panel titled with the
+that has a `description` - its own, never its sub-categories' - the list opens with a panel titled with the
 category's name holding those notes, line breaks kept - under the search
 box, above the count. A category without notes, and no category chosen,
 draw nothing there. A group choice draws nothing either: the notes are the
@@ -188,7 +191,8 @@ one - under 只看主項 the varieties are gone and 雞肉 is still a group.
   only, varieties only.
 - **The list is sectioned by category**, in the tree's order, a child category
   titled with its path (蔬菜 › 葉菜) and anything outside the tree last under
-  其他. Inside a section: groups with varieties in the result, as a block
+  其他. Choosing a parent category gives its own section first, then one per
+  sub-category that holds a result (蛋豆製品, then 蛋豆製品 › 蛋 …). Inside a section: groups with varieties in the result, as a block
   with those varieties depth-first; then groups whose varieties are filtered
   out; then the rest. A block sits in its parent's section even when a
   variety is filed elsewhere, and that variety names its own category in the

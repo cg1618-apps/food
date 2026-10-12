@@ -127,7 +127,9 @@ def _response(
 @router.get("", response_model=list[schemas.IngredientSummary])
 def list_ingredients(
     q: str | None = Query(default=None, description="Matches any name slot or an alias"),
-    category_id: int | None = None,
+    category_id: int | None = Query(
+        default=None, description="That category and every category below it, at any depth"
+    ),
     label_id: int | None = None,
     parent_id: int | None = None,
     needs_detail: bool | None = None,

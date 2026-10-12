@@ -994,8 +994,23 @@ vanish exactly when someone asked to see only the groups.
 **A block sits in its parent's section.** A variety may be filed in another
 category than its parent (乾辣椒 is 乾貨, 辣椒 is 蔬菜). Splitting the block
 across two sections would undo the point of the block, so the variety stays
-with its parent and names its own category there. The category filter stays
-exact, so choosing 乾貨 still lists 乾辣椒 - alone, as 「辣椒 的品種」.
+with its parent and names its own category there. Choosing 乾貨 still lists
+乾辣椒 - alone, as 「辣椒 的品種」 - since its parent is filed outside 乾貨's
+subtree.
+
+**A category filter includes its sub-categories.** It was exact when it was
+set, because only top-level categories held ingredients then. Production now
+files them into sub-categories (肉類 › 雞肉 / 豬肉 / 牛肉, 海鮮 › 魚類, 蛋豆製品
+› 蛋), and the exact filter showed a parent as empty - 肉類 listed 0, and
+蛋豆製品 left out the eggs filed under 蛋. So `category_id` is a recursive
+query over the category tree, as `group_id` is over `parent_id`, and the
+sidebar's count is the subtree total, summed from the same tree, so the
+number and the list cannot disagree. Each sub-category keeps its own section
+under its path. `ingredient_count` on the tree stays the node's own: 設定
+refuses deleting a category with ingredients filed directly in it, and that
+is the number the refusal is about. Every caller of the filter wants the
+subtree - the library, and the ingredient page's category link - so there
+is no second, exact parameter.
 
 **品種 became a three-way choice, not a second switch.** 只看主項 and 只看品種
 contradict each other; two switches would allow both on and list nothing.

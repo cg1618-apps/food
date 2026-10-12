@@ -86,10 +86,12 @@ class CategoryNode(CategoryResponse):
     """A category with its subtree, and the count the editor needs.
 
     `ingredient_count` is the ingredients filed in this node alone, not in the
-    nodes beneath it - the library's category filter is exact, and this is the
-    number beside it. It is here because computing it in the browser would mean
-    shipping every ingredient to do it. A subtree total is not sent: the
-    `children` lists are there for whoever wants to sum them.
+    nodes beneath it - what 設定 needs, since a category with ingredients of
+    its own cannot be deleted. It is here because computing it in the browser
+    would mean shipping every ingredient to do it. A subtree total is not
+    sent: the `children` lists are there for whoever wants to sum them, and
+    the library's sidebar does - its count is the subtree total, which is
+    what the category filter lists.
     """
 
     children: list["CategoryNode"] = []
