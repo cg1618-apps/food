@@ -10,6 +10,11 @@
 // categoryBlockers). The fallback category - where new stubs land - offers no
 // delete at all; the server refuses it anyway, and a button that always fails
 // is worse than none.
+//
+// Renaming a category also edits its 說明 - the family's own notes (how to
+// pick fresh chicken, how long it keeps), shown above the ingredient library
+// when that category is chosen. A multi-line box, line breaks kept; an empty
+// one clears the notes.
 import { useState } from 'react'
 
 import { endpoints } from '../../api/endpoints'
@@ -17,7 +22,7 @@ import { useApiMutation, useApiQuery } from '../../hooks/useApi'
 import { flatten, subtreeIds } from '../../lib/tree'
 import { useSortOrderMove } from '../../hooks/useSortOrderMove'
 import { categoryBlockers, nextSortOrder } from '../../lib/vocabulary'
-import { Chip, Section, Select } from '../ui/primitives'
+import { Chip, Section, Select, TextArea } from '../ui/primitives'
 import { SortableList } from '../ui/Sortable'
 import { Empty, ErrorNote, Loading } from '../ui/states'
 import AddNameForm from './AddNameForm'
@@ -51,7 +56,11 @@ export default function CategoryEditor() {
 
   async function rename(node, draft) {
     const parentId = draft.parent_id === '' ? null : Number(draft.parent_id)
-    const body = { name_cn: draft.name_cn, name_en: draft.name_en }
+    const body = {
+      name_cn: draft.name_cn,
+      name_en: draft.name_en,
+      description: draft.description.trim() ? draft.description : null,
+    }
     if (parentId !== node.parent_id) {
       // A node moving under a new parent goes after its new siblings.
       body.parent_id = parentId
@@ -60,28 +69,38 @@ export default function CategoryEditor() {
     await update.mutateAsync({ url: endpoints.categories.update(node.id), body })
   }
 
-  function parentPicker(node) {
+  function renameExtras(node) {
     const excluded = new Set(subtreeIds(node))
-    return function ParentSelect(draft, setDraft) {
+    return function ParentAndNotes(draft, setDraft) {
       return (
-        <label className="flex items-center gap-2 text-sm text-text-muted">
-          上層
-          <Select
-            className="w-auto"
-            value={draft.parent_id}
-            onChange={(e) => setDraft({ ...draft, parent_id: e.target.value })}
-          >
-            <option value="">（最上層）</option>
-            {flat
-              .filter((other) => !excluded.has(other.id))
-              .map((other) => (
-                <option key={other.id} value={other.id}>
-                  {'　'.repeat(other.depth)}
-                  {other.display_name}
-                </option>
-              ))}
-          </Select>
-        </label>
+        <>
+          <label className="flex items-center gap-2 text-sm text-text-muted">
+            上層
+            <Select
+              className="w-auto"
+              value={draft.parent_id}
+              onChange={(e) => setDraft({ ...draft, parent_id: e.target.value })}
+            >
+              <option value="">（最上層）</option>
+              {flat
+                .filter((other) => !excluded.has(other.id))
+                .map((other) => (
+                  <option key={other.id} value={other.id}>
+                    {'　'.repeat(other.depth)}
+                    {other.display_name}
+                  </option>
+                ))}
+            </Select>
+          </label>
+          <TextArea
+            aria-label={`${node.display_name} 的說明`}
+            placeholder="說明：整類共通的挑選、保存方式…"
+            rows={3}
+            value={draft.description}
+            onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+            className="basis-full"
+          />
+        </>
       )
     }
   }
@@ -108,8 +127,11 @@ export default function CategoryEditor() {
               badge={node.is_fallback ? <Chip title="新的食材先放在這裡">預設</Chip> : null}
               meta={`${node.ingredient_count} 種食材`}
               onRename={(draft) => rename(node, draft)}
-              renameExtra={parentPicker(node)}
-              initialExtra={{ parent_id: node.parent_id == null ? '' : String(node.parent_id) }}
+              renameExtra={renameExtras(node)}
+              initialExtra={{
+                parent_id: node.parent_id == null ? '' : String(node.parent_id),
+                description: node.description ?? '',
+              }}
               onDelete={
                 node.is_fallback
                   ? undefined

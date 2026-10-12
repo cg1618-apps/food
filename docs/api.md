@@ -933,7 +933,16 @@ current notes, each once, or a 422 that changes nothing.
 | `DELETE /api/edit/ingredient-categories/{id}` | |
 
 The tree comes back in one response with `ingredient_count` per node, assembled
-in Python from two queries. A few dozen rows.
+in Python from two queries. A few dozen rows. A node is `id`, `display_name`,
+`name_cn`, `name_en`, `description`, `parent_id`, `sort_order`, `is_fallback`,
+`children` and `ingredient_count`; `POST` and `PATCH` answer the same fields
+without the last two.
+
+**`description` is the category's own notes** - what is true of the whole
+family, 雞肉's "how to pick fresh chicken" - with its line breaks. `POST`
+and `PATCH` take it beside `name_cn`, `name_en`, `parent_id` and
+`sort_order`; on `PATCH` an absent `description` is left alone and `null`
+clears it. Blank or whitespace-only is stored as null.
 
 **`is_fallback` cannot be set through the API.** There is exactly one fallback
 category, the migration seeds it, and moving it would re-file every stub ever

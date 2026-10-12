@@ -40,13 +40,16 @@ reference work.
 ## Status
 
 **Modules 1 and 2 are built, with dishes, recipe templates, kitchen notes,
-the weekly schedule, 加熱 and TBD.** The schema is at revision `l1abels` (the
+the weekly schedule, 加熱 and TBD.** The schema is at revision `c2ategory` (the
 head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
   parent, rating, labels, storage as a state x method grid with day ranges, a
   heating guide, links, galleries, the 待補 (`needs_detail`) stub backlog,
   and merge.
+- **Category notes** - a category's own `description`, the family's notes
+  (how to pick fresh chicken, how long it keeps), edited on 設定 and shown
+  above the ingredient library when that category is chosen.
 - **Dishes** - a dish (料理) or a sauce (醬料) in general: names and aliases,
   kind, course, region, labels, serves-as, a description and a gallery; its
   recipes, and "used in" - the recipes whose lines name it. A dish with

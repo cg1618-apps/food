@@ -109,6 +109,9 @@ TBD page with them. Nothing else is touched.
 `h1eating`'s downgrade drops `heating_note`, and every note on the 加熱 page
 with it. Nothing else is touched.
 
+`c2ategory`'s downgrade drops `ingredient_category.description`, and every
+category's notes with it. Nothing else is touched.
+
 `l1abels`'s downgrade drops `label.scope` and restores the global
 case-insensitive name indexes. The labels its upgrade deleted (every label
 nothing carried) are not restored. Two labels of one name in different
@@ -209,7 +212,8 @@ they ever do not, believe the box.
 | The weekly schedule | `s3chedule` — forty-two tables |
 | Schedule marks as booleans, several dishes per meal | `s4chedule` — forty-three tables |
 | 加熱 | `h1eating` — forty-four tables |
-| Every label in one library | `l1abels` — no new table, the current head |
+| Every label in one library | `l1abels` — no new table |
+| A category's own notes | `c2ategory` — no new table, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

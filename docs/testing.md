@@ -253,7 +253,7 @@ the entire failure.
 | File | What it covers |
 | --- | --- |
 | `tests/api/test_ingredient_crud.py` | create, read, update, delete and search over HTTP; re-sending existing aliases and storage rows on `PATCH` |
-| `tests/api/test_category_crud.py`, `test_label_crud.py` | the same round trip for categories and labels |
+| `tests/api/test_category_crud.py`, `test_label_crud.py` | the same round trip for categories and labels; a category's `description` through create, the tree (a child's too), `PATCH` and clearing, blank stored as null |
 | `tests/api/test_label_scope.py` | every label in one library: `scope` required and known, names unique per scope, `?scope=`, a move allowed while unused and the in-use 409, and each owner (ingredient create, update and attach; dish; note) refusing another library's label, each with its mirror |
 | `tests/test_label_scope_migration.py` | `l1abels` on a scratch database: used labels scoped by their one library, unused ones deleted, uniqueness per scope, the refusal on a label two libraries carry (changing nothing), and the downgrade with its own refusal |
 | `tests/api/test_ingredient_storage.py` | storage state and range, heating, links, rating, the new list filters, the delete counts and the 409 that names the moved one, `/api/vocabularies/fixed` |

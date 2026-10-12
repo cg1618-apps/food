@@ -117,6 +117,51 @@ afterEach(() => {
 })
 
 describe('the ingredient library', () => {
+  // 雞肉 is a family name, never bought itself: what is true of every member
+  // is the category's own notes, read where the family is browsed.
+  const WITH_NOTES = [
+    {
+      id: 4,
+      display_name: '肉類',
+      parent_id: null,
+      description: null,
+      ingredient_count: 0,
+      children: [
+        {
+          id: 7,
+          display_name: '雞肉',
+          parent_id: 4,
+          description: '挑選：肉色粉紅\n冷藏 1-2 天',
+          ingredient_count: 2,
+          children: [],
+        },
+      ],
+    },
+  ]
+
+  it("shows the chosen category's notes above the list, line breaks kept", async () => {
+    responses['/api/ingredient-categories'] = WITH_NOTES
+    responses['/api/ingredients'] = [CABBAGE]
+    renderAt('/ingredients?category=7')
+    const notes = await screen.findByRole('region', { name: '雞肉的說明' })
+    const text = notes.querySelector('p')
+    expect(text.textContent).toBe('挑選：肉色粉紅\n冷藏 1-2 天')
+    expect(text.className).toContain('whitespace-pre-line')
+  })
+
+  it('draws no notes for a category without any, nor when no category is chosen', async () => {
+    responses['/api/ingredient-categories'] = WITH_NOTES
+    responses['/api/ingredients'] = [CABBAGE]
+    renderAt('/ingredients?category=4')
+    await screen.findByRole('button', { name: /肉類/, pressed: true })
+    expect(screen.queryByRole('region', { name: /的說明$/ })).toBeNull()
+    cleanup()
+
+    renderAt('/ingredients')
+    await screen.findAllByText('高麗菜')
+    expect(screen.queryByRole('region', { name: /的說明$/ })).toBeNull()
+  })
+
   // The known defect: the ingredient page links to /ingredients?category=N
   // and the library ignored the query.
   it('filters by the category in the URL, as the detail page links it', async () => {

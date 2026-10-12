@@ -23,12 +23,13 @@ class CategoryBase(BaseModel):
 
     name_cn: str | None = None
     name_en: str | None = None
+    description: str | None = None
     parent_id: int | None = None
     sort_order: int = 0
 
-    @field_validator("name_cn", "name_en", mode="before")
+    @field_validator("name_cn", "name_en", "description", mode="before")
     @classmethod
-    def normalise_names(cls, value):
+    def normalise_text(cls, value):
         return _blank_to_none(value)
 
     @model_validator(mode="after")
@@ -57,12 +58,13 @@ class CategoryUpdate(BaseModel):
 
     name_cn: str | None = None
     name_en: str | None = None
+    description: str | None = None
     parent_id: int | None = None
     sort_order: int | None = None
 
-    @field_validator("name_cn", "name_en", mode="before")
+    @field_validator("name_cn", "name_en", "description", mode="before")
     @classmethod
-    def normalise_names(cls, value):
+    def normalise_text(cls, value):
         return _blank_to_none(value)
 
 
@@ -73,6 +75,8 @@ class CategoryResponse(BaseModel):
     display_name: str = ""
     name_cn: str | None = None
     name_en: str | None = None
+    # The family's own notes, line breaks kept; null when there are none.
+    description: str | None = None
     parent_id: int | None = None
     sort_order: int
     is_fallback: bool

@@ -91,6 +91,7 @@ def build_tree(rows, counts: dict[int, int], node_schema):
             display_name=row.display_name,
             name_cn=row.name_cn,
             name_en=row.name_en,
+            description=row.description,
             parent_id=row.parent_id,
             sort_order=row.sort_order,
             is_fallback=row.is_fallback,

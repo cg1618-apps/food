@@ -165,6 +165,13 @@ tree says so under itself. The stub backlog's count (`只看待補`) shows wheth
 or not the switch is on, read from the unfiltered list - which also names a
 variety's parent when the filtered list does not include it.
 
+**A chosen category's notes come first.** With `category` set to a category
+that has a `description`, the list opens with a panel titled with the
+category's name holding those notes, line breaks kept - under the search
+box, above the count. A category without notes, and no category chosen,
+draw nothing there. A group choice draws nothing either: the notes are the
+category's, not the ingredient's.
+
 **A group is an ingredient with varieties** (`lib/ingredientGroups.js`), and
 whether a row is one is read from the unfiltered list, never the filtered
 one - under 只看主項 the varieties are gone and 雞肉 is still a group.
@@ -620,7 +627,9 @@ Each value is a `components/settings/NameRow.jsx`:
 - **Add** is the line under each vocabulary (`AddNameForm.jsx`); a new value
   goes after the last one. A category row's ＋子分類 opens the same line
   under that node; renaming a category also offers 上層, its parent (never
-  itself or anything beneath it).
+  itself or anything beneath it), and 說明, the category's own notes in a
+  multi-line box - an emptied box clears them (sent as null). They are what
+  the ingredient library shows above the list when that category is chosen.
 
 **常用食材** (`components/settings/CommonIngredientsEditor.jsx`) is not a
 vocabulary but an ordered pick of ingredients: the chips the recipe form

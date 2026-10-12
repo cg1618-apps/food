@@ -46,6 +46,11 @@ class IngredientCategory(Base, NameFallbackMixin):
     name_en = Column(String, nullable=True)
     sort_order = Column(Integer, nullable=False, server_default=text("0"))
 
+    # Notes about the family as a whole - how to pick fresh chicken, how long
+    # it keeps. A category like 雞肉 is never itself bought or cited, so what
+    # is true of every member has nowhere else to live.
+    description = Column(Text, nullable=True)
+
     # Exactly one row may set this, and stub ingredients created from a recipe
     # line are filed here. That is what lets `ingredient.category_id` be NOT
     # NULL without a required category interrupting recipe writing to ask a

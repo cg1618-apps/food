@@ -1002,6 +1002,31 @@ contradict each other; two switches would allow both on and list nothing.
 The URL word for the old switch (`?variety=1`) is kept as an alias of
 `only`, so a link written before the change still lands.
 
+## A category's own notes
+
+**A category carries a `description`, for notes about a family as a whole.**
+The owner's rule draws the line between the two tables: an ingredient is
+something you buy, or write on a recipe line, as itself - 醬油, which also has
+varieties - and a category is a family name whose members you buy but which
+is never itself bought or cited - 雞肉, under 肉類, whose members are 雞腿 and
+雞胸肉. That leaves notes about the family ("how to pick fresh chicken",
+"chicken keeps 1-2 days in the fridge") with nowhere to live: on any one
+member they are hidden from the others, and copied onto each they drift.
+
+Rejected: making 雞肉 an ingredient to hang the notes on. It would be a row
+that is never bought or cited, which is exactly what the rule says an
+ingredient is not, and it would turn up in the typeahead and the stock list
+as if it could be.
+
+**One free-text column, not the ingredient's four.** An ingredient splits its
+notes into what it is, picking, sourcing and keeping because each is read at a
+different moment of an errand. A family's notes are short and few; splitting
+them before anyone has written them would be four empty boxes per category.
+
+**Shown where the family is browsed.** The ingredient library draws a chosen
+category's notes above its list, which is where a reader looking at 肉類 ›
+雞肉 is; the category is not a page of its own.
+
 ## Every label in one library
 
 **A label belongs to exactly one library: ingredient, dish or note.** Labels

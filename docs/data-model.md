@@ -1,6 +1,6 @@
 # Data model
 
-What the database holds today: forty-four tables, at revision `l1abels`.
+What the database holds today: forty-four tables, at revision `c2ategory`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the nine managed
 vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
@@ -94,6 +94,12 @@ and appear in the tidy-up pass alongside `needs_detail`.
 where `name_cn` is not null.** The `coalesce` is load-bearing: a null parent
 means "top level", and without it two root categories sharing a name would not
 collide at all.
+
+**`description` is the family's own notes**, nullable `Text`: what is true of
+every member of a category that is never itself bought or cited - how to pick
+fresh chicken, how long chicken keeps, on 肉類 › 雞肉. An ingredient's notes
+are about the thing you buy; a category's are about the family. Blank is
+stored as null.
 
 **A category's own category is never inherited by a child ingredient.** The
 form may pre-fill it; the stored value is the row's own. Inheritance would mean
