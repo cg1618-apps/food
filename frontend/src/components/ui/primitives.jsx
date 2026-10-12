@@ -9,9 +9,10 @@
 //   - `className` EXTENDS the base classes, it never replaces them. A layout
 //     class like `sm:col-span-2` passed to an Input must not cost it its
 //     border - the defect the first version of this file had.
-import { useId, useRef } from 'react'
+import { useCallback, useId, useRef } from 'react'
 import { Link } from 'react-router-dom'
 
+import { useAutoGrow } from '../../hooks/useAutoGrow'
 import { cx } from '../../lib/cx'
 
 const FOCUS_RING =
@@ -85,9 +86,27 @@ export function Input({ className, ...rest }) {
   return <input className={cx(CONTROL, FOCUS_RING, className)} {...rest} />
 }
 
-export function TextArea({ className, rows = 4, ...rest }) {
+// Grows with its text (hooks/useAutoGrow.js): `rows` is the height it opens at
+// and never goes below. No scrollbar inside it and no drag handle - the height
+// always fits, and the next keystroke would undo a drag anyway.
+export function TextArea({ className, rows = 4, ref, ...rest }) {
+  const growRef = useAutoGrow(rest.value)
+  const setRef = useCallback(
+    (node) => {
+      growRef.current = node
+      if (typeof ref === 'function') return ref(node)
+      if (ref) ref.current = node
+      return undefined
+    },
+    [growRef, ref],
+  )
   return (
-    <textarea rows={rows} className={cx(CONTROL, FOCUS_RING, 'leading-relaxed', className)} {...rest} />
+    <textarea
+      ref={setRef}
+      rows={rows}
+      className={cx(CONTROL, FOCUS_RING, 'resize-none overflow-y-hidden leading-relaxed', className)}
+      {...rest}
+    />
   )
 }
 

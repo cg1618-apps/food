@@ -838,6 +838,13 @@ outline / danger / ghost, `size` sm / md), `Field`, `Input`, `TextArea`,
 `Select`, `Card`, `Chip` (`tone`), `Badge` (`kind` bookmark 書籤 / stub 待補 /
 rating with `value`), `Section` (a titled block on a ruled line) and `Toggle`
 (封面 / 清單). **`className` extends the base classes, never replaces them.**
+`TextArea` is every multi-line field in the app - a description, a step, a
+note, 備註 - and it grows with its text: it opens `rows` high and never goes
+below that, fits its height as text is typed or deleted, when its value is set
+from outside (a template applied, a form reset) and when its width changes (a
+window resized, a phone rotated). It has no scrollbar of its own and no drag
+handle; the page scrolls instead. The fitting is `hooks/useAutoGrow.js`, and a
+`ref` passed to `TextArea` still reaches the `<textarea>`.
 `components/ui/Dialog.jsx` is the modal shell - Escape closes, and the
 backdrop closes only on a press that starts and ends on it -
 and `components/modals/ConfirmModal.jsx` the yes/no question drawn in it.
