@@ -148,6 +148,16 @@ is load-bearing and says so. Some examples worth knowing about:
   the recipe-through-a-sauce is what makes "depth through sub-dishes is zero"
   able to fail; and the lines are what give the delete refusal something to
   refuse.
+- `shallot_crisps` (`tests/api/test_homemade_version.py`) is a real dish in
+  every test there. It is what makes the 422 for a `homemade_dish_id` naming
+  no dish mean "no such id" rather than "no dishes at all", and the test also
+  asserts the sentence, since an unknown field is a 422 too. The SET NULL
+  test deletes a dish an ingredient really names, with no recipes - the
+  mirror of the dish-delete refusals - and asserts the ingredient survives
+  with a null link; a second test deletes in raw SQL, so the schema's
+  `ON DELETE` is proven and not the ORM's. The merge tests cover both
+  branches: the target with a link of its own keeps it, and the target
+  without one takes the source's.
 - The schedule's refusals (`tests/api/test_schedule.py`) each make the thing
   they refuse. The dish-delete refusal puts the dish in **three real meal
   items** on two dates, two of them on one date and one beside another dish -
@@ -269,6 +279,7 @@ the entire failure.
 | `tests/api/test_recipe_library.py` | the list's summary (its dish), search over the dish's names and aliases (wildcards literal) and the recipe's own filters (`author_id` among them), and the query count |
 | `tests/api/test_kitchen_notes.py` | every named kitchen-note constraint with its mirror, CASCADE on delete, the round trip, title, kind, link and label refusals, newest-first order, `q` over title and body (wildcards literal), the "any of" filters, the query count, the gallery and the image 409 naming a note |
 | `tests/api/test_ingredient_used_in.py` | "used in" over descendants, the list filter agreeing with it, the delete refusal, the query count |
+| `tests/api/test_homemade_version.py` | an ingredient's 自製版: the round trip and `PATCH` set / change / clear, any dish kind, one dish named by several ingredients as the dish's `bought_as`, the 422 for an id naming no dish (writing nothing), SET NULL through the API and in raw SQL, the cascade's `bought_as`, and the merge keeping the target's or taking the source's, with its preview word and fingerprint |
 | `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, ordering after the target's rows, the fingerprint and its 409, refusals |
 | `tests/api/test_common_ingredients.py` | 常用食材: the whole-list `PUT` and its order, the unknown-id and duplicate 422s that change nothing, the write only under the gated prefix, CASCADE on an ingredient's delete, and a merge moving or dropping the source's entry |
 | `tests/api/test_heating.py` | 加熱: the blank-name CHECK, the round trip with line breaks kept, a blank body stored as null, the no-name 422 on create and the blank-name `PATCH` 422 with the mirror that renames, a `PATCH` applying only what it sends, a new note last, the delete, the order `PUT` and each of its 422s against three real notes, the writes only under the gated prefix |

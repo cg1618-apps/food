@@ -21,6 +21,7 @@ from app.errors import AppError
 from app.models import (
     CommonIngredient,
     CookingMethod,
+    Dish,
     Ingredient,
     IngredientAlias,
     IngredientHeating,
@@ -33,7 +34,7 @@ from app.models import (
 )
 from app.services import recipe_templates
 from app.services.hierarchy import check_parent, is_descendant
-from app.services.lookup import fetch_labels
+from app.services.lookup import fetch_all, fetch_labels
 from app.services.search import ESCAPE, contains
 
 
@@ -49,6 +50,7 @@ def _loaded(query):
         selectinload(Ingredient.category),
         selectinload(Ingredient.parent),
         selectinload(Ingredient.children),
+        selectinload(Ingredient.homemade_dish),
         selectinload(Ingredient.aliases),
         selectinload(Ingredient.preservation),
         selectinload(Ingredient.heating).selectinload(IngredientHeating.method),
@@ -209,8 +211,16 @@ def _apply_links(ingredient: Ingredient, entries) -> None:
     ]
 
 
+def _check_homemade_dish(db: Session, dish_id: int | None) -> None:
+    """422 when the homemade version names no dish. Any kind is accepted:
+    `kind` is how the library files a dish, not a permission."""
+    if dish_id is not None:
+        fetch_all(db, Dish, [dish_id], "dish")
+
+
 def create(db: Session, payload) -> Ingredient:
     check_parent(db, Ingredient, None, payload.parent_id, "ingredient")
+    _check_homemade_dish(db, payload.homemade_dish_id)
     # Resolved before anything is added, so a refused label writes nothing.
     labels = fetch_labels(db, payload.label_ids, "ingredient")
 
@@ -220,6 +230,7 @@ def create(db: Session, payload) -> Ingredient:
         name_alt=payload.name_alt,
         category_id=payload.category_id,
         parent_id=payload.parent_id,
+        homemade_dish_id=payload.homemade_dish_id,
         description=payload.description,
         selection_notes=payload.selection_notes,
         sourcing_notes=payload.sourcing_notes,
@@ -246,6 +257,8 @@ def update(db: Session, ingredient_id: int, payload) -> Ingredient:
 
     if "parent_id" in changes:
         check_parent(db, Ingredient, ingredient.id, changes["parent_id"], "ingredient")
+    if "homemade_dish_id" in changes:
+        _check_homemade_dish(db, changes["homemade_dish_id"])
 
     aliases = changes.pop("aliases", None)
     preservation = changes.pop("preservation", None)
@@ -342,7 +355,8 @@ class MergePlan:
 
     The target wins every collision: a name or alias it already answers to, a
     `(state, method)` it already has a note for, a label or an image it already
-    carries, a prose field it already filled. What only the source has moves.
+    carries, a prose field it already filled, a homemade version it already
+    names. What only the source has moves.
     """
 
     source: Ingredient
@@ -357,6 +371,8 @@ class MergePlan:
     dropped_preservation: list[IngredientPreservation]
     new_aliases: list[str]
     prose: dict[str, str]
+    # "moved" / "dropped" for the source's homemade version; None without one.
+    homemade_dish: str | None
 
     def moves(self) -> dict[str, int]:
         return {
@@ -394,6 +410,7 @@ class MergePlan:
                 name: [outcome, getattr(self.source, name)]
                 for name, outcome in self.prose.items()
             },
+            "homemade_dish": [self.homemade_dish, self.source.homemade_dish_id],
         }
         text_form = json.dumps(
             canonical, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str
@@ -460,7 +477,16 @@ def merge_plan(db: Session, source_id: int, target_id: int) -> MergePlan:
             for name in PROSE_FIELDS
             if getattr(source, name)
         },
+        homemade_dish=_homemade_outcome(source, target),
     )
+
+
+def _homemade_outcome(source: Ingredient, target: Ingredient) -> str | None:
+    """The target keeps its own homemade version; without one it takes the
+    source's."""
+    if source.homemade_dish_id is None:
+        return None
+    return "dropped" if target.homemade_dish_id is not None else "moved"
 
 
 def _move_after(db: Session, model, rows, target_id: int, order: str, taken: list[int]) -> None:
@@ -537,6 +563,8 @@ def merge(db: Session, plan: MergePlan) -> Ingredient:
     for name, outcome in plan.prose.items():
         if outcome == "moved":
             setattr(target, name, getattr(plan.source, name))
+    if plan.homemade_dish == "moved":
+        target.homemade_dish_id = plan.source.homemade_dish_id
     db.flush()
 
     db.expire_all()

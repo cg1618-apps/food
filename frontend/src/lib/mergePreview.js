@@ -2,8 +2,9 @@
 //
 // The preview is computed by the same function the merge runs, so what this
 // says is what will happen: which rows move, which names become aliases,
-// which storage rows the target already has and so drops, and which prose
-// fields move (the target's is empty) or are dropped (the target has its own).
+// which storage rows the target already has and so drops, which prose
+// fields move (the target's is empty) or are dropped (the target has its own),
+// and the same for the source's homemade version (自製版).
 
 const MOVE_WORDS = [
   ['lines', '行食譜材料'],
@@ -26,7 +27,8 @@ const label = (list, value) => list?.find((item) => item.value === value)?.label
 
 /**
  * `{ moves: [{ key, count, words }], aliases, dropped: [text], proseMoved,
- * proseDropped }`, every list empty when there is nothing of its kind.
+ * proseDropped, homemade }`, every list empty when there is nothing of its
+ * kind; `homemade` is 'moved', 'dropped' or null (the source has none).
  * `states` is the fixed preservation states, for 未使用 rather than `unused`.
  */
 export function describeMerge(preview, states) {
@@ -47,5 +49,6 @@ export function describeMerge(preview, states) {
     ),
     proseMoved: proseNamed('moved'),
     proseDropped: proseNamed('dropped'),
+    homemade: preview.homemade_dish ?? null,
   }
 }

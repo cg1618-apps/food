@@ -63,6 +63,10 @@ def _response(db: Session, row: Dish) -> schemas.DishResponse:
             summary(r) for r in sorted(row.recipes, key=lambda r: (r.display_name.casefold(), r.id))
         ],
         used_in=[recipe_ref(r) for r in dishes.used_in(db, row.id)],
+        bought_as=[
+            schemas.IngredientRef(id=i.id, display_name=i.display_name, needs_detail=i.needs_detail)
+            for i in dishes.bought_as(db, row.id)
+        ],
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -97,9 +101,10 @@ def get_dish(dish_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{dish_id}/cascade", response_model=dict)
 def cascade_preview(dish_id: int, db: Session = Depends(get_db)):
-    """What deleting this would remove (`aliases`), and the three counts that
-    refuse it (`recipes`, `used_in`, `meals`). Only `aliases` is echoed on the
-    delete."""
+    """What deleting this would remove (`aliases`), the three counts that
+    refuse it (`recipes`, `used_in`, `meals`), and the ingredients that lose
+    their homemade-version link to it (`bought_as`). Only `aliases` is echoed
+    on the delete."""
     dishes.get(db, dish_id)
     return dishes.cascade_counts(db, dish_id)
 

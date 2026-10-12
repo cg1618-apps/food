@@ -108,9 +108,9 @@ from app.schemas.vocabulary import (
     VocabularyUpdate,
 )
 
-# IngredientResponse names RecipeRef by a forward reference, because
-# recipe.py imports ingredient.py; resolved here, once both are loaded.
-IngredientResponse.model_rebuild(_types_namespace={"RecipeRef": RecipeRef})
+# IngredientResponse names RecipeRef and DishRef by forward references,
+# because recipe.py imports ingredient.py; resolved here, once both are loaded.
+IngredientResponse.model_rebuild(_types_namespace={"RecipeRef": RecipeRef, "DishRef": DishRef})
 
 __all__ = [
     "AttachedImage",

@@ -40,7 +40,7 @@ reference work.
 ## Status
 
 **Modules 1 and 2 are built, with dishes, recipe templates, kitchen notes,
-the weekly schedule, 加熱 and TBD.** The schema is at revision `c2ategory` (the
+the weekly schedule, 加熱 and TBD.** The schema is at revision `h2omemade` (the
 head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
@@ -50,6 +50,9 @@ head).
 - **Category notes** - a category's own `description`, the family's notes
   (how to pick fresh chicken, how long it keeps), edited on 設定 and shown
   above the ingredient library when that category is chosen.
+- **自製版** - an ingredient's homemade version, `homemade_dish_id` naming
+  the dish that makes it (油蔥酥 the sauce for 油蔥酥 and 紅蔥油); the dish
+  lists those ingredients as 市售版. Deleting the dish unlinks them.
 - **Dishes** - a dish (料理) or a sauce (醬料) in general: names and aliases,
   kind, course, region, labels, serves-as, a description and a gallery; its
   recipes, and "used in" - the recipes whose lines name it. A dish with

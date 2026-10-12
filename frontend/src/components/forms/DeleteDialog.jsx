@@ -12,7 +12,10 @@
 //      ingredient with varieties or recipe lines) is said up front, in
 //      words, but the button stays: the server is the one that decides, and
 //      its refusal is what carries the list;
-//   5. on a 409 refusing the delete outright, show what blocks it: the
+//   5. what only loses its link to the row and stays (`notices` - the
+//      ingredients naming a dish as their 自製版) is said too, plainly: it
+//      neither blocks the delete nor goes with it;
+//   6. on a 409 refusing the delete outright, show what blocks it: the
 //      recipes in `recipes` (a dish's own) and `used_in` (the ones using
 //      it), with links; the dates in `meals` (a dish on the schedule), each
 //      linked to its week; or the server's sentence (an
@@ -67,6 +70,7 @@ export default function DeleteDialog({ kind, id, name, onClose, onDeleted }) {
   const counts = hasCascade && cascade.data ? { ...cascade.data, ...corrected } : {}
   const shown = target.counts.filter(([key]) => counts[key] > 0)
   const blocking = target.blockers.filter(([key]) => counts[key] > 0)
+  const noticing = target.notices.filter(([key]) => counts[key] > 0)
 
   async function remove() {
     setBusy(true)
@@ -140,6 +144,12 @@ export default function DeleteDialog({ kind, id, name, onClose, onDeleted }) {
 
         {blocking.map(([key, sentence]) => (
           <p key={key} className="rounded-md bg-warn-soft px-3 py-2 text-warn">
+            {sentence(counts[key])}
+          </p>
+        ))}
+
+        {noticing.map(([key, sentence]) => (
+          <p key={key} className="text-text-muted">
             {sentence(counts[key])}
           </p>
         ))}

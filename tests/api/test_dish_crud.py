@@ -81,6 +81,7 @@ def test_a_dish_round_trips_through_create_read_update_delete(client, vocab):
         "recipes": 0,
         "used_in": 0,
         "meals": 0,
+        "bought_as": 0,
     }
     deleted = client.delete(f"/api/edit/dishes/{created['id']}", params={"aliases": 0})
     assert deleted.status_code == 204

@@ -24,10 +24,10 @@ from app.schemas.image import AttachedImage, CoverRef
 from app.schemas.vocabulary import VocabRef
 
 if TYPE_CHECKING:
-    # recipe.py imports this module, so RecipeRef cannot be imported here at
-    # runtime; `app/schemas/__init__.py` resolves the forward reference once
-    # both modules exist.
-    from app.schemas.recipe import RecipeRef
+    # recipe.py imports this module, so RecipeRef and DishRef cannot be
+    # imported here at runtime; `app/schemas/__init__.py` resolves the forward
+    # references once both modules exist.
+    from app.schemas.recipe import DishRef, RecipeRef
 
 
 def _clean_aliases(values: list[str]) -> list[str]:
@@ -248,6 +248,7 @@ class IngredientBase(BaseModel):
     name_alt: str | None = None
     category_id: int
     parent_id: int | None = None
+    homemade_dish_id: int | None = None
     description: str | None = None
     selection_notes: str | None = None
     sourcing_notes: str | None = None
@@ -314,6 +315,7 @@ class IngredientUpdate(BaseModel):
     name_alt: str | None = None
     category_id: int | None = None
     parent_id: int | None = None
+    homemade_dish_id: int | None = None
     description: str | None = None
     selection_notes: str | None = None
     sourcing_notes: str | None = None
@@ -359,6 +361,8 @@ class IngredientResponse(BaseModel):
     category: CategoryRef | None = None
     parent: RelatedIngredient | None = None
     children: list[RelatedIngredient] = []
+    # The dish that makes this at home (自製版), or null.
+    homemade_dish: "DishRef | None" = None
 
     description: str | None = None
     selection_notes: str | None = None
@@ -420,5 +424,9 @@ class MergePreview(BaseModel):
     # Only the prose fields the source has: "moved" when the target's is
     # empty, "dropped" when the target already has its own.
     prose: dict[str, Literal["moved", "dropped"]]
+    # The source's homemade version, when it has one: "moved" when the
+    # target has none, "dropped" when the target keeps its own. Null when
+    # the source has none.
+    homemade_dish: Literal["moved", "dropped"] | None = None
     # Echoed back on the merge; a different plan by then is a 409.
     fingerprint: str

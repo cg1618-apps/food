@@ -138,8 +138,10 @@ one query, so they cannot disagree; the list computes every row's count in a
 fixed number of queries.
 
 **The full row** adds `aliases`, `preservation`, `heating`, `links`, `labels`,
-`images` and `used_in` (recipes as `{id, display_name, dish}`, `dish` being
-`{id, display_name, kind}`, sorted by display name). Its `parent` and `children` are summaries, `used_in_count` included,
+`images`, `used_in` (recipes as `{id, display_name, dish}`, `dish` being
+`{id, display_name, kind}`, sorted by display name) and `homemade_dish` - its
+自製版, the dish that makes it at home, as `{id, display_name, kind}`, or
+null. Its `parent` and `children` are summaries, `used_in_count` included,
 plus `sourcing_notes` - the page lists varieties with where each is bought;
 a list row does not carry it. A preservation entry is `state` (`unused`, `opened`, `cooked`;
 default `unused`), `method`, `duration_min_days`, `duration_max_days` and
@@ -150,8 +152,10 @@ default `unused`), `method`, `duration_min_days`, `duration_max_days` and
 with a `sort_order`, but it is not sent: their order is the order of the list,
 and a request naming `sort_order` on either is a 422.
 
-**`POST` and `PATCH` take `rating`, `preservation`, `heating` (each entry names
-a `method_id`) and `links`.** On `PATCH`, each list that is sent replaces the
+**`POST` and `PATCH` take `rating`, `homemade_dish_id`, `preservation`,
+`heating` (each entry names a `method_id`) and `links`.** `homemade_dish_id`
+may name a dish of any kind, and one dish may be named by several
+ingredients; on `PATCH`, `null` clears it and absent leaves it alone. On `PATCH`, each list that is sent replaces the
 stored one and each that is absent is left alone. Aliases and preservation are
 *reconciled* rather than rewritten, so re-sending a row the ingredient already
 has changes nothing instead of colliding with its own unique key.
@@ -159,7 +163,8 @@ has changes nothing instead of colliding with its own unique key.
 Refused with 422: a `rating` outside S to D, an unknown `state` or `method`, a
 duration that is not positive, a minimum above the maximum, the same
 `(state, method)` twice, a link that is not `http` or `https`, and a heating
-entry naming no cooking method, and a label that is not an `ingredient`
+entry naming no cooking method, a `homemade_dish_id` naming no dish (`No
+such dish: <id>.`), and a label that is not an `ingredient`
 label (see "A label of another library is 422 too"). A preservation row with
 only a maximum is valid.
 
@@ -204,6 +209,7 @@ answers what it would do, computed by the same function, without writing:
   "new_aliases": ["蔥花", "青蔥"],
   "dropped_preservation": [{"state": "unused", "method": "冷藏"}],
   "prose": {"description": "dropped", "selection_notes": "moved"},
+  "homemade_dish": "moved",
   "fingerprint": "3f1c…"
 }
 ```
@@ -239,6 +245,9 @@ The target wins every collision:
 - each prose field the source has (`description`, `selection_notes`,
   `sourcing_notes`, `preservation_notes`) moves when the target's is empty and
   is dropped otherwise; `prose` lists only fields the source has;
+- the source's homemade version moves when the target has none and is
+  dropped otherwise; `homemade_dish` is `"moved"`, `"dropped"`, or null when
+  the source has none, and the link is in the fingerprint;
 - names, category, parent, rating and `needs_detail` are the target's and are
   not touched;
 - the source's 常用食材 entry moves to the target in the same place, unless
@@ -298,7 +307,10 @@ and different parameters narrow each other.
 - `recipes` - the dish's recipes, as the recipe library lists them (the
   recipe summary below), by display name;
 - `used_in` - recipes with a line naming this dish **directly**, as
-  `{id, display_name, dish}`. What a sauce is used in.
+  `{id, display_name, dish}`. What a sauce is used in;
+- `bought_as` - the ingredients naming this dish as their homemade version,
+  as `{id, display_name, needs_detail}`, by display name: the bought things
+  it stands in for.
 
 **`POST` takes `name_cn`, `name_en`, `name_alt`, `kind` (default `dish`),
 `course_id`, `region_id`, `description`, `aliases`, `serves_as_ids` and
@@ -309,10 +321,12 @@ list (null included), the same alias twice, and an id that names nothing
 (`course_id`, `region_id`, either id list), the detail naming it, and a
 label that is not a `dish` label. Unknown fields are refused.
 
-**`GET .../cascade` answers `{aliases, recipes, used_in, meals}`.** `aliases`
-is what the delete removes and is echoed back; `recipes` (the dish's own),
-`used_in` (recipes whose lines name it) and `meals` (meal items on the
-schedule naming it, one per item) block the delete.
+**`GET .../cascade` answers `{aliases, recipes, used_in, meals, bought_as}`.**
+`aliases` is what the delete removes and is echoed back; `recipes` (the
+dish's own), `used_in` (recipes whose lines name it) and `meals` (meal items
+on the schedule naming it, one per item) block the delete; `bought_as` is
+the ingredients that lose their homemade-version link and stay (`SET NULL`)
+- it neither blocks the delete nor is echoed.
 
 **`DELETE` takes `aliases` as a required query parameter.** A dish with
 recipes, one a recipe's line names, or one a meal item on the schedule names

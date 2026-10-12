@@ -222,6 +222,9 @@ which block, and which reads go stale:
   under 它的食譜： those in `recipes` (a dish's own) and under 用到它的食譜：
   those in `used_in` - and under 排了它的日子： the dates in `meals`, each
   linked to its week on `/schedule`;
+- what only loses its link and stays (`notices` in `deleteTargets.js`: on a
+  dish, `bought_as`, the ingredients naming it as their 自製版) is said in
+  plain words; it neither blocks the delete nor is echoed;
 - a recipe's dialog has nothing that blocks: lines name dishes, the dish
   stays, and a meal item on the schedule naming the recipe keeps its dish;
 - a kitchen note has no cascade, so its dialog is the plain question.
@@ -251,7 +254,8 @@ empties.
   whichever start is chosen - the one section drawn even when empty
   (還沒有食譜。), since its button is how a new dish gets a recipe; and
   **用在**, the recipes whose lines name this dish, which is what a sauce's
-  page is mostly for.
+  page is mostly for; and **市售版**, the ingredients naming this dish as
+  their 自製版, each a link to its page.
 - **Recipe**: its **dish, a link**, with the dish's kind (醬料 only), course,
   region and 也可以當作 beside it and the dish's labels under the status -
   shown read-only, since they are the dish's and edited there; 書籤 when not
@@ -288,7 +292,7 @@ empties.
   and how many varieties it has; labels. A stub adds a 待補 note linking to
   its form. Then 說明, 挑選, 品種 (each child with its rating and where it is
   bought - the full row's children carry `sourcing_notes` for this), 哪裡買,
-  保存, 加熱 (°C with the °F beside it, 要預熱, 中途翻面), 參考連結, 用在.
+  自製版 (the dish that makes it at home, a link to it), 保存, 加熱 (°C with the °F beside it, 要預熱, 中途翻面), 參考連結, 用在.
 - **保存 is a state x method grid** (`lib/storageGrid.js`): rows are the
   states and columns the methods, both in the fixed vocabularies' order, and
   only those in use - a fridge-only ingredient is one column, not seven. A
@@ -301,7 +305,8 @@ empties.
 (ingredients, never itself); read the preview in words
 (`lib/mergePreview.js` - counts that move, names that become aliases, and in
 a warning block the storage rows and notes the target already has and so
-drops); 合併 posts `{into, fingerprint}`. Text typed in the picker and not
+drops, and whether the source's 自製版 moves or is dropped); 合併 posts
+`{into, fingerprint}`. Text typed in the picker and not
 picked is said under it (從清單選一個), since 合併 stays off until there is a
 target. If either ingredient changed since
 the preview, the server's 409 carries a fresh preview: it replaces the one
@@ -409,8 +414,15 @@ shows the choice in its place, with 待補 for a stub and 更換 to search again
 **Typed but not picked is never dropped.** `onQueryChange(text)` tells the
 caller what is in the box ('' after a pick), and every caller refuses to save
 over it: a recipe line holding text is not blank (below); the ingredient's
-品種 parent and the recipe's 料理 refuse the save with a sentence naming the
-text; the merge picker says it under the box.
+品種 parent, its 自製版 and the recipe's 料理 refuse the save with a sentence
+naming the text; the merge picker says it under the box.
+
+**The ingredient form's 自製版** is a typeahead over the dish library only
+(`sources={['dish']}`, any kind), shown as `Picked` once chosen with 移除 to
+clear it; the save sends `homemade_dish_id`, null when none. An ingredient
+save, delete or merge marks the dish reads stale too, since a dish's 市售版
+lists the ingredients naming it, and a dish delete marks the ingredient
+reads stale.
 
 **A new recipe asks how to start** (`pages/edit/NewRecipeChooser.jsx`):
 `/edit/recipes/new` with none of `blank`, `template` or `from` in its query

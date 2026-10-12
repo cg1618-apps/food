@@ -1027,6 +1027,35 @@ them before anyone has written them would be four empty boxes per category.
 category's notes above its list, which is where a reader looking at 肉類 ›
 雞肉 is; the category is not a page of its own.
 
+## Bought or made: 自製版
+
+**Two rows, linked.** Caramel, 雞高湯 and 油蔥酥 can be bought or made. The
+bought thing is an ingredient - stocked, bought, cited on a recipe line - and
+the homemade one is a dish, usually a 醬料, with recipes of its own.
+`ingredient.homemade_dish_id` names the dish. A recipe line names whichever
+the recipe means, which is usually the ingredient: "add 雞高湯" is satisfied
+either way, and module 4 is where that is resolved (see "Rules with no
+referent yet"). Rejected: one row that is both, which would give every
+ingredient a recipe list or every dish a stock flag, each empty for almost
+every row.
+
+**Not unique, and any kind.** Making 油蔥酥 also yields 紅蔥油, so one dish may
+be the homemade version of several ingredients. Any dish `kind` may be named:
+`kind` is how the library files a dish, not a permission - the rule a recipe
+line follows too.
+
+**`ON DELETE SET NULL`, not `RESTRICT`.** The link is a cross-reference, not
+a usage: nothing about the ingredient stops being true when the dish goes,
+and deleting a dish should not require first unlinking it in another
+library. The delete dialog still says how many ingredients lose the link
+(`bought_as` in the cascade), as a notice rather than a blocker or an echoed
+count. The ORM side has no collection on `Dish`, so the database does the
+nulling (`docs/data-model.md`).
+
+**Merge keeps the target's.** As with a prose field, the target's own link
+wins and the source's moves only when the target has none; the preview says
+which, and the link is in the fingerprint.
+
 ## Every label in one library
 
 **A label belongs to exactly one library: ingredient, dish or note.** Labels
@@ -1113,6 +1142,12 @@ Written down where the next person will look rather than where they were
 learned. Each is dormant today and goes live the moment food grows the feature
 it is about — which is exactly when nobody will remember it.
 
+- **An ingredient with a homemade version is available when it is in stock
+  OR its dish is cookable.** "What can I cook" (module 4) resolves a recipe
+  line naming 雞高湯 the ingredient; with `homemade_dish_id` set, the line is
+  satisfied by the bought thing on the shelf or by being able to make the
+  dish. Answering on stock alone would rank a recipe as missing something the
+  kitchen can make.
 - **A row-hiding filter belongs in SQL, not in Python after the page was
   cut.** food hides nothing today. The moment it has a discontinued ingredient
   or an archived recipe, filtering after `limit`/`offset` silently shortens
@@ -1148,6 +1183,6 @@ it is about — which is exactly when nobody will remember it.
   media has one, and deleting a duplicate instead is on its own list of
   mistakes. Module 1 adds nothing that makes merging hard: no name is copied
   into another table.
-- **Whether a bought-and-makeable thing is one row or two** — caramel is an
-  ingredient you can buy and a general recipe you can make. Module 1 adds no
-  link column and assumes nothing either way.
+- **A bought-and-makeable thing is two rows.** Caramel is an ingredient you
+  can buy and a dish (a 醬料) you can make; the ingredient's
+  `homemade_dish_id` links the two. See "Bought or made: 自製版" below.

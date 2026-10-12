@@ -7,6 +7,9 @@ anything, as `recipes` does.
 
 "Used in" for a dish is the recipes with a line naming it, directly; there is
 no reverse relationship from a dish to those lines, so it is a query here.
+`bought_as` - the ingredients naming it as their homemade version - is a query
+for the same reason, and the missing relationship is what leaves that link's
+SET NULL to the database.
 """
 
 from sqlalchemy import func, or_, select
@@ -18,6 +21,7 @@ from app.models import (
     DishAlias,
     DishImage,
     DishLabel,
+    Ingredient,
     Label,
     Recipe,
     RecipeCourse,
@@ -111,6 +115,13 @@ def used_in(db: Session, dish_id: int) -> list[Recipe]:
         )
         .all()
     )
+    return sorted(rows, key=lambda r: (r.display_name.casefold(), r.id))
+
+
+def bought_as(db: Session, dish_id: int) -> list[Ingredient]:
+    """The ingredients naming this dish as their homemade version (自製版),
+    by display name - the bought things it stands in for."""
+    rows = db.query(Ingredient).filter(Ingredient.homemade_dish_id == dish_id).all()
     return sorted(rows, key=lambda r: (r.display_name.casefold(), r.id))
 
 
@@ -257,9 +268,10 @@ def update(db: Session, dish_id: int, payload) -> Dish:
 
 
 def cascade_counts(db: Session, dish_id: int) -> dict[str, int]:
-    """What the delete dialog shows: the aliases a delete takes with it, and
-    the three counts that refuse it - recipes of the dish, recipes using it,
-    and meal items on the schedule naming it.
+    """What the delete dialog shows: the aliases a delete takes with it, the
+    three counts that refuse it - recipes of the dish, recipes using it, and
+    meal items on the schedule naming it - and `bought_as`, the ingredients
+    that lose their link to it (SET NULL) and stay.
 
     Serves-as and label links cascade too but are not counted, as for a
     recipe; gallery rows go and the pictures stay.
@@ -269,4 +281,5 @@ def cascade_counts(db: Session, dish_id: int) -> dict[str, int]:
         "recipes": db.query(Recipe).filter(Recipe.dish_id == dish_id).count(),
         "used_in": len(used_in(db, dish_id)),
         "meals": db.query(ScheduleMealItem).filter(ScheduleMealItem.dish_id == dish_id).count(),
+        "bought_as": db.query(Ingredient).filter(Ingredient.homemade_dish_id == dish_id).count(),
     }

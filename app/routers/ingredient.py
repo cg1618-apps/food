@@ -18,7 +18,7 @@ from app import schemas
 from app.database import get_db
 from app.errors import AppError, StaleCountError
 from app.models import Ingredient, IngredientImage
-from app.routers.recipe import recipe_ref
+from app.routers.recipe import dish_ref, recipe_ref
 from app.routing import read_router, write_router
 from app.services import images, ingredients, recipes
 from app.services.lookup import check_label_scope
@@ -82,6 +82,7 @@ def _response(
         else None,
         parent=_related(row.parent, counts) if row.parent else None,
         children=[_related(c, counts) for c in row.children],
+        homemade_dish=dish_ref(row.homemade_dish) if row.homemade_dish else None,
         description=row.description,
         selection_notes=row.selection_notes,
         sourcing_notes=row.sourcing_notes,
@@ -198,6 +199,7 @@ def _merge_preview(db: Session, plan: ingredients.MergePlan) -> schemas.MergePre
             {"state": r.state, "method": r.method} for r in plan.dropped_preservation
         ],
         prose=plan.prose,
+        homemade_dish=plan.homemade_dish,
         fingerprint=plan.fingerprint(),
     )
 
