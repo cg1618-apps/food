@@ -274,6 +274,7 @@ the entire failure.
 | `tests/test_label_scope_migration.py` | `l1abels` on a scratch database: used labels scoped by their one library, unused ones deleted, uniqueness per scope, the refusal on a label two libraries carry (changing nothing), and the downgrade with its own refusal |
 | `tests/api/test_ingredient_storage.py` | storage state and range, heating, links, rating, the new list filters (the category filter over a subtree, its sibling mirror, and the list agreeing with the tree's subtree totals), the delete counts and the 409 that names the moved one, `/api/vocabularies/fixed` |
 | `tests/api/test_vocabularies.py` | the nine vocabularies, parametrised over one factory, the in-use 409 for each (a course or region a dish is filed in), and authors in name order |
+| `tests/api/test_author_details.py` | an author's links and 備註: the blank-url CHECK and CASCADE to links (with two links really present), the round trip in order, a blank 備註 as null, `https://` given to a link without a scheme, the 422 for a blank, `javascript:` or other non-web url with nothing written and the mirror that saves, a refused `PATCH` keeping the stored links, links replaced wholesale, left alone, cleared by `[]` and the null refused, the delete taking the links, and the other eight vocabularies refusing `notes` and `links` with the author accepting the same body |
 | `tests/api/test_images.py` | upload, re-encode, deduplication, ingredient, dish and recipe galleries (kitchen-note galleries are in `test_kitchen_notes.py`), a dish's cover falling back to its first recipe's, an image's owners, deletion, serving |
 | `tests/api/test_recipe_model.py` | every named dish and recipe constraint, each refusal with its mirror; a recipe's display name falling back to its dish's; CASCADE and RESTRICT on delete, and a recipe's delete leaving its dish |
 | `tests/api/test_dish_crud.py` | the dish round trip, kind, names, unknown ids, its recipes and "used in", the two delete refusals with their mirrors, the stale alias count, 404s |
@@ -386,6 +387,16 @@ sent, and the server's refusal shown on the card with the typing kept),
 payload),
 `pages/detail/details.test.jsx` (a dish delete refused with `meals`, each
 date linked to its week), `lib/nav.test.js` and `routes.test.jsx`.
+
+Authors' links and 備註 are covered in: `pages/edit/settings.test.jsx`
+(the row's 編輯 opening the stored links and 備註, a link added and the
+remark changed sent as one `PATCH` in order, a link removed and a blank
+remark sent as `[]` and null), `pages/library/libraries.test.jsx` (the
+panel above the recipe library filtered to one author - its heading,
+links by label or by address, each `target="_blank"` with
+`rel="noopener noreferrer"`, the 備註 with its line break - and its
+mirror: no panel for an author with neither, nor for two authors, once the
+authors have loaded) and `lib/authors.test.js` (the draft and the body).
 
 The recipe form's own tests in `components/forms/forms.test.jsx`
 open it at `/edit/recipes/new?blank=1` and are otherwise unchanged by the

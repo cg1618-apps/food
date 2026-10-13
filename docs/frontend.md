@@ -157,6 +157,18 @@ under `cg1618:food:dishes-view`. **A recipe card** is the recipe's display
 name, with its dish's name under it when the two differ - the table view
 draws the same subtitle under the name.
 
+**The recipe library filtered to one author introduces them.** With
+exactly one `author` in the URL - which is where a source's author on a
+recipe page links to - a panel above the list (`AuthorIntro` in
+`pages/library/RecipeLibrary.jsx`, drawn through `LibraryLayout`'s
+`intro`) shows the author's name, their links and their 備註 (line breaks
+kept). A link reads as its name, else as its host and path
+(`lib/format.js` `linkText`, as on TBD), and opens in a new tab with
+`rel="noopener noreferrer"`. The author comes from the `GET
+/api/authors` the sidebar already reads; nothing else is fetched. An
+author with neither links nor 備註 draws no panel, and neither do two
+authors chosen at once.
+
 **A category lists its sub-categories' ingredients too.** Choosing 肉類 lists
 what is filed under 肉類 itself and under 肉類 › 雞肉, 肉類 › 豬肉 and anything
 deeper; a leaf category lists only itself. That is the API's `category_id`
@@ -590,6 +602,17 @@ platforms (YouTube, 網站, 書 …), 作者 the sources' authors, and 材料分
 that order - and counted by the recipe groups using them; renaming any of
 them marks every recipe read stale, as a course does. 作者 is listed by name, as 標籤 is, so it has no
 drag handle and a new author is added without a `sort_order`.
+
+**An author's row says 編輯, not 改名**, because it opens more than the
+names: under them, the author's links - TBD's link editor
+(`components/forms/RowEditor.jsx`), a row each of 名稱 (optional) and 網址,
+dragged to reorder, ✕ to remove, ＋ 新增連結 to add - and a multi-line
+備註. 儲存 sends one `PATCH` with the names, `notes` and every link in the
+order shown (`lib/authors.js`): a link row left wholly empty is dropped, a
+blank 備註 is sent as null, and a refusal (a `javascript:` or blank url) is
+said in the row. `VocabularyEditor` takes this as its `details` prop
+(built in `Settings.jsx` around `components/settings/AuthorDetails.jsx`);
+the other vocabularies pass none and are unchanged.
 
 - **The tab is in the URL**, `?tab=` with `categories`, `common-ingredients`,
   `templates`, `labels`, `courses`, `regions`,

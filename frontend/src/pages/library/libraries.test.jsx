@@ -432,6 +432,58 @@ describe('the recipe library', () => {
     await waitFor(() => expect(listRequests('/api/recipes')).toContain('/api/recipes?author_id=8'))
   })
 
+  describe("the chosen author's panel", () => {
+    const AUTHORS = [
+      {
+        id: 6,
+        display_name: '阿基師',
+        sort_order: 0,
+        usage_count: 1,
+        notes: '台菜。\n影片比較詳細。',
+        links: [
+          { label: 'YouTube', url: 'https://youtube.com/@a' },
+          { label: null, url: 'https://blog.example/a' },
+        ],
+      },
+      { id: 8, display_name: '詹姆士', sort_order: 0, usage_count: 1, notes: null, links: [] },
+    ]
+
+    it('draws the name, the links opening in a new tab, and the 備註 above the list', async () => {
+      responses['/api/authors'] = AUTHORS
+      responses['/api/recipes'] = [RECIPE]
+      renderAt('/recipes?author=6')
+      const panel = await screen.findByRole('region', { name: '關於阿基師' })
+      expect(within(panel).getByRole('heading', { name: '阿基師' })).toBeTruthy()
+      const links = within(panel).getAllByRole('link')
+      // The label when there is one, else the address as words.
+      expect(links.map((link) => link.textContent)).toEqual(['YouTube', 'blog.example/a'])
+      expect(links.map((link) => link.getAttribute('href'))).toEqual([
+        'https://youtube.com/@a',
+        'https://blog.example/a',
+      ])
+      for (const link of links) {
+        expect(link.getAttribute('target')).toBe('_blank')
+        expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+      }
+      // Line breaks kept.
+      expect(within(panel).getByText(/台菜。/).textContent).toBe('台菜。\n影片比較詳細。')
+    })
+
+    it('draws nothing for an author with neither links nor 備註, or for two authors', async () => {
+      responses['/api/authors'] = AUTHORS
+      renderAt('/recipes?author=8')
+      // The filter options have loaded, so the panel had what it needed.
+      const sidebar = screen.getByRole('complementary', { name: '篩選' })
+      expect(await within(sidebar).findByRole('button', { name: /詹姆士/ })).toBeTruthy()
+      expect(screen.queryByRole('region', { name: /^關於/ })).toBeNull()
+      cleanup()
+
+      renderAt('/recipes?author=6&author=8')
+      expect(await within(screen.getByRole('complementary', { name: '篩選' })).findByRole('button', { name: /阿基師/ })).toBeTruthy()
+      expect(screen.queryByRole('region', { name: /^關於/ })).toBeNull()
+    })
+  })
+
   it('shows the status and the authors by name in the table', async () => {
     responses['/api/recipes'] = [RECIPE]
     localStorage.setItem('cg1618:food:recipes-view', 'list')

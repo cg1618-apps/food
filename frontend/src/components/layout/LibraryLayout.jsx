@@ -29,7 +29,8 @@
 //                   CoverGrid); without it the list is drawn flat
 //   itemTo(item)  - the item's detail path
 //   intro         - optional: drawn above the list, under the search - the
-//                   chosen ingredient category's own notes
+//                   chosen ingredient category's own notes, or the one
+//                   chosen author's links and 備註 on the recipe library
 //   searchPlaceholder, emptyText, noMatchText
 import { useState } from 'react'
 

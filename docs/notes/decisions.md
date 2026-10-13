@@ -1148,6 +1148,46 @@ refuses two labels of one name in different libraries for the same reason:
 the global index it restores cannot hold both, and deleting one is not the
 migration's to decide.
 
+## An author's links and remark
+
+- **Links are a child table, `tbd_link`'s shape copied.** An author has
+  any number of links - a channel, an IG, a blog - each with a name the
+  owner chooses, in an order the owner chooses. TBD had already settled
+  exactly that: a row per link with a `position`, a NOT NULL url a CHECK
+  refuses blank, an optional label, CASCADE from the owner, and a save
+  that replaces the rows wholesale (so `position` carries no unique
+  constraint). Copying a shape that is tested and understood beats
+  inventing one. A column per platform (`youtube_url`, `ig_url`) was
+  rejected because the owner names the links, and the next platform would
+  be a migration; a JSONB list was rejected because the database could no
+  longer refuse a blank url, and the two link lists would differ for no
+  reason.
+- **The link rules are TBD's by inheritance, not by copy.**
+  `AuthorLinkIn` subclasses `TbdLinkIn`, so `https://` for a bare host and
+  the refusal of every scheme but `http` and `https` - which is what keeps
+  a `javascript:` link off a public page - cannot drift between the two.
+  The response omits a link's id: nothing addresses one link, since a save
+  replaces them all.
+- **Authors stay on the vocabulary factory.** `build` takes a `Shape` - the
+  schemas, how a write is applied, what the list loads - and only authors
+  pass a non-default one. A router of their own would have repeated the
+  list order, the in-use 409 and the name rules; widening the shared
+  schemas would have let the other eight accept and silently drop `notes`.
+  As it is they refuse it as an extra field, and a test says so.
+- **The panel lives on the filtered recipe library, not on an author
+  page.** A source's author on a recipe already linked to
+  `/recipes?author=<id>`, and that list - the author's recipes - is what an
+  author page would mostly be. Putting the links and 備註 above it adds the
+  one thing missing without a route, a detail page and a second list of
+  the same recipes. It is drawn only for exactly one author, because with
+  two the page is about neither, and not at all for an author with nothing
+  to say: a box holding only the name repeats the filter chip.
+- **Edited on 設定's row, not on a form of its own.** The row's rename mode
+  already held the two names; it now holds the links (TBD's
+  `RowEditor`) and the 備註 under them, and the button says 編輯 because it
+  opens more than a name. An author is a short record, and a separate
+  page for three fields would be a round trip for every one.
+
 ## The starting ingredient list
 
 - **Loaded by a migration, not by a script or the API.** Production receives

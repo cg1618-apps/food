@@ -686,6 +686,20 @@ and names are unique case-insensitively per slot. Authors are never
 hand-ordered: the recipe form creates them with `sort_order` 0 and 設定 sends
 none, so their list is in name order.
 
+**An author also carries `notes` and `links`.** `notes` is its remark, text
+with line breaks kept, or null; `links` is `[{label, url}]` in the owner's
+order, `label` the link's name (YouTube, IG, 部落格) or null. `POST` and
+`PATCH` on `/api/edit/authors` accept both: a blank `notes` is stored as
+null, and a link follows a TBD link's rules - a url with no scheme is
+given `https://`, any scheme but `http` or `https` is a 422 (so
+`javascript:` never reaches a page), a blank url is a 422, a blank label is
+null, and a link has no other field. On a `PATCH`, `links` replaces every
+link in the order sent when it is sent and leaves them alone when it is
+not; `[]` clears them and an explicit null is a 422. The other eight
+vocabularies neither answer with these fields nor accept them - sending
+one is a 422. Deleting an author takes its links with it; the 409 above
+counts only sources.
+
 **Deleting a value that is in use is a 409 carrying `usage_count`**, answered
 before the database is asked; the `RESTRICT` foreign key is the backstop. The
 count is the number of `RESTRICT` references: for a course, the dishes filed

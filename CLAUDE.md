@@ -40,7 +40,7 @@ reference work.
 ## Status
 
 **Modules 1 and 2 are built, with dishes, recipe templates, kitchen notes,
-the weekly schedule, 加熱 and TBD.** The schema is at revision `h2omemade` (the
+the weekly schedule, 加熱 and TBD.** The schema is at revision `a2uthor` (the
 head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
@@ -66,6 +66,10 @@ head).
   made by the save, a status, methods, equipment, galleries, "used in" for
   ingredients, and 常用 chips above the lines that add one in a tap. A new
   recipe starts blank, from a template, or as a copy of another recipe.
+- **Authors** - a 設定 vocabulary that also carries links (a name and a
+  url each, in the owner's order) and a 備註, edited on the author's row
+  and shown above the recipe library when it is filtered to that author;
+  a source's author on a recipe links to that filter.
 - **Recipe templates** - a named skeleton (servings, time, lines and steps in
   their groups, methods, equipment) stored as one JSONB body, made on its own
   form or from a recipe (存成範本), ordered on 設定; a reference to something
