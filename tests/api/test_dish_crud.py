@@ -143,6 +143,7 @@ def test_a_dish_lists_its_recipes_and_the_recipes_that_use_it(client, source_pla
             "id": a["id"],
             "display_name": "A 版",
             "dish": {"id": chicken["id"], "display_name": "照燒雞腿排", "kind": "dish"},
+            "alternative_only": False,
         }
     ]
 

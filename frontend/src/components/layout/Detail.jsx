@@ -9,7 +9,8 @@
 //                  any other error; renders nothing once there is data
 //   Prose          a block of written notes, line breaks kept
 //   LabelLinks     a row's labels, each a link to its library filtered by it
-//   RecipeLinks    a short list of recipes as links ("used in", 其他版本)
+//   RecipeLinks    a short list of recipes as links ("used in", 其他版本),
+//                  a recipe using the row only as an alternative marked 替代
 //   DetailActions  編輯 and 刪除, the latter through the one DeleteDialog
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -50,7 +51,12 @@ export function LabelLinks({ labels, to }) {
 }
 
 // `describe(recipe)` adds a faint word after a name.
-export function RecipeLinks({ recipes, describe }) {
+//
+// Without one, a recipe a "used in" list marks `alternative_only` - it names
+// the row only as a line's alternative - is followed by 替代.
+const usedInNote = (recipe) => (recipe.alternative_only ? '替代' : null)
+
+export function RecipeLinks({ recipes, describe = usedInNote }) {
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1">
       {recipes.map((recipe) => (

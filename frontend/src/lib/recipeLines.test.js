@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  emptyAlternative,
   emptyLine,
   isStub,
   lineFromResponse,
@@ -37,14 +38,63 @@ describe('recipe lines', () => {
       { ...emptyLine(), target: targetFromOption({ type: 'new-dish', label: 'teriyaki' }) },
       { ...emptyLine(), target: { type: 'new-dish', label: '白飯', kind: 'dish' } },
     ]
+    const none = { alternatives: [] }
     expect(linesPayload(lines)).toEqual([
-      { amount: '1 片', note: null, is_optional: false, ingredient_id: 3 },
-      { amount: null, note: null, is_optional: false, sub_dish_id: 9 },
-      { amount: null, note: null, is_optional: true, new_ingredient: { name_cn: '紫蘇' } },
+      { amount: '1 片', note: null, is_optional: false, ingredient_id: 3, ...none },
+      { amount: null, note: null, is_optional: false, sub_dish_id: 9, ...none },
+      { amount: null, note: null, is_optional: true, new_ingredient: { name_cn: '紫蘇' }, ...none },
       // A dish typed into a line is a sauce unless the form says otherwise.
-      { amount: null, note: null, is_optional: false, new_dish: { name_en: 'teriyaki', kind: 'sauce' } },
-      { amount: null, note: null, is_optional: false, new_dish: { name_cn: '白飯', kind: 'dish' } },
+      { amount: null, note: null, is_optional: false, new_dish: { name_en: 'teriyaki', kind: 'sauce' }, ...none },
+      { amount: null, note: null, is_optional: false, new_dish: { name_cn: '白飯', kind: 'dish' }, ...none },
     ])
+  })
+
+  it('reads a line’s alternatives back as targets, in order', () => {
+    const line = lineFromResponse({
+      ingredient: { id: 1, display_name: '雞腿', needs_detail: false },
+      sub_dish: null,
+      amount: '300g',
+      alternatives: [
+        { id: 7, ingredient: { id: 2, display_name: '雞胸肉', needs_detail: false }, sub_dish: null, amount: '250g', note: '較柴' },
+        { id: 8, ingredient: null, sub_dish: { id: 9, display_name: '照燒醬', kind: 'sauce' }, amount: null, note: null },
+      ],
+    })
+    expect(line.alternatives).toHaveLength(2)
+    expect(line.alternatives[0]).toMatchObject({ target: { type: 'ingredient', id: 2 }, amount: '250g', note: '較柴' })
+    expect(line.alternatives[1]).toMatchObject({ target: { type: 'dish', id: 9 }, amount: '', note: '' })
+    expect(line.alternatives[0]._key).not.toEqual(line.alternatives[1]._key)
+    // A template body stored before alternatives existed has none.
+    expect(lineFromResponse({ ingredient: { id: 1, display_name: 'x' } }).alternatives).toEqual([])
+  })
+
+  it('sends alternatives with the same four targets a line uses', () => {
+    const line = {
+      ...emptyLine(),
+      target: targetFromOption({ type: 'ingredient', id: 1, label: '雞腿' }),
+      alternatives: [
+        { ...emptyAlternative(), target: targetFromOption({ type: 'ingredient', id: 2, label: '雞胸肉' }), amount: ' 250g ' },
+        { ...emptyAlternative(), target: targetFromOption({ type: 'new', label: '清酒' }), note: '較香' },
+        { ...emptyAlternative(), target: targetFromOption({ type: 'new-dish', label: '市售照燒醬' }) },
+        emptyAlternative(), // blank: dropped, as a blank line is
+      ],
+    }
+    expect(linesPayload([line])[0].alternatives).toEqual([
+      { amount: '250g', note: null, ingredient_id: 2 },
+      { amount: null, note: '較香', new_ingredient: { name_cn: '清酒' } },
+      { amount: null, note: null, new_dish: { name_cn: '市售照燒醬', kind: 'sauce' } },
+    ])
+  })
+
+  it('refuses an alternative typed but never picked, naming its line', () => {
+    const line = {
+      ...emptyLine(),
+      target: targetFromOption({ type: 'ingredient', id: 1, label: '雞腿' }),
+      alternatives: [{ ...emptyAlternative(), pending: '雞胸' }],
+    }
+    expect(() => linesPayload([emptyLine(), line], 2)).toThrow(/第 4 行材料的替代 1.*還沒選/)
+    expect(() => linesPayload([{ ...line, alternatives: [{ ...emptyAlternative(), amount: '1' }] }])).toThrow(
+      /第 1 行材料的替代 1/,
+    )
   })
 
   it('files a typed Latin name as English and a Han one as Chinese', () => {

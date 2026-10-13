@@ -28,9 +28,9 @@ describe('recipe structure', () => {
     expect(structurePayload(structureFromResponse(BODY))).toEqual({
       servings: '2 人份',
       time: null,
-      lines: [{ ingredient_id: 1, amount: '1 片', note: null, is_optional: false }],
+      lines: [{ ingredient_id: 1, amount: '1 片', note: null, is_optional: false, alternatives: [] }],
       line_groups: [
-        { line_group_id: 5, lines: [{ sub_dish_id: 7, amount: null, note: '熱的', is_optional: true }] },
+        { line_group_id: 5, lines: [{ sub_dish_id: 7, amount: null, note: '熱的', is_optional: true, alternatives: [] }] },
         { name: '醃料', lines: [] },
       ],
       steps: [{ body: '熱鍋', kind: 'step' }],

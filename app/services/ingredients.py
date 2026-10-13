@@ -12,6 +12,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 
+from sqlalchemy import delete as delete_rows
 from sqlalchemy import func, or_, select
 from sqlalchemy import inspect as inspect_row
 from sqlalchemy import update as update_rows
@@ -32,10 +33,12 @@ from app.models import (
     IngredientPreservation,
     Label,
     RecipeLine,
+    RecipeLineAlternative,
 )
 from app.services import recipe_templates
 from app.services.hierarchy import check_parent, is_descendant
 from app.services.lookup import fetch_all, fetch_labels
+from app.services.recipes import distinct_alternatives
 from app.services.search import ESCAPE, contains
 
 
@@ -382,6 +385,10 @@ class MergePlan:
     source: Ingredient
     target: Ingredient
     line_ids: list[int]
+    # Alternatives naming the source that move to the target, and those the
+    # merge deletes because they would repeat their line or a sibling.
+    alternative_ids: list[int]
+    dropped_alternative_ids: list[int]
     child_ids: list[int]
     links: list[IngredientLink]
     labels: list[Label]
@@ -397,6 +404,7 @@ class MergePlan:
     def moves(self) -> dict[str, int]:
         return {
             "lines": len(self.line_ids),
+            "alternatives": len(self.alternative_ids),
             "children": len(self.child_ids),
             "links": len(self.links),
             "labels": len(self.labels),
@@ -418,6 +426,8 @@ class MergePlan:
             "source": self.source.id,
             "target": self.target.id,
             "lines": sorted(self.line_ids),
+            "alternatives": sorted(self.alternative_ids),
+            "dropped_alternatives": sorted(self.dropped_alternative_ids),
             "children": sorted(self.child_ids),
             "links": [_columns(r) for r in self.links],
             "labels": sorted(label.id for label in self.labels),
@@ -447,6 +457,48 @@ def _answers_to(ingredient: Ingredient) -> list[str]:
     """Every string an ingredient answers to: its name slots, then its aliases."""
     slots = [ingredient.name_cn, ingredient.name_en, ingredient.name_alt]
     return [n for n in slots if n] + sorted(alias.value for alias in ingredient.aliases)
+
+
+def _alternatives_plan(db: Session, source_id: int, target_id: int) -> tuple[list, list]:
+    """`(moved, dropped)` alternative ids for a merge of source into target.
+
+    Only alternatives naming either of the two can change: once the source
+    is the target, one may name what its own line names (a line naming
+    either) or what an earlier alternative of the line names. Those are
+    dropped, by the rule every save applies (`distinct_alternatives`); of
+    the rest, the ones naming the source move.
+    """
+    rows = db.execute(
+        select(
+            RecipeLineAlternative.id,
+            RecipeLineAlternative.line_id,
+            RecipeLineAlternative.ingredient_id,
+            RecipeLine.ingredient_id,
+            RecipeLine.sub_dish_id,
+        )
+        .join(RecipeLine, RecipeLine.id == RecipeLineAlternative.line_id)
+        .where(RecipeLineAlternative.ingredient_id.in_([source_id, target_id]))
+        .order_by(RecipeLineAlternative.line_id, RecipeLineAlternative.position)
+    ).all()
+    by_line: dict[int, list] = {}
+    for row in rows:
+        by_line.setdefault(row[1], []).append(row)
+
+    def merged(ingredient_id):
+        return target_id if ingredient_id == source_id else ingredient_id
+
+    moved, dropped = [], []
+    for alternatives in by_line.values():
+        _, _, _, line_ingredient, line_dish = alternatives[0]
+        kept = distinct_alternatives(
+            (merged(line_ingredient), line_dish),
+            alternatives,
+            lambda row: (merged(row[2]), None),
+        )
+        kept_ids = {row[0] for row in kept}
+        dropped.extend(row[0] for row in alternatives if row[0] not in kept_ids)
+        moved.extend(row[0] for row in kept if row[2] == source_id)
+    return moved, dropped
 
 
 def merge_plan(db: Session, source_id: int, target_id: int) -> MergePlan:
@@ -479,11 +531,14 @@ def merge_plan(db: Session, source_id: int, target_id: int) -> MergePlan:
     kept_labels = {label.id for label in target.labels}
     kept_images = {row.image_id for row in target.images}
     line_ids = db.execute(select(RecipeLine.id).where(RecipeLine.ingredient_id == source_id))
+    alternative_ids, dropped_alternative_ids = _alternatives_plan(db, source_id, target_id)
 
     return MergePlan(
         source=source,
         target=target,
         line_ids=[line_id for (line_id,) in line_ids],
+        alternative_ids=alternative_ids,
+        dropped_alternative_ids=dropped_alternative_ids,
         child_ids=[child.id for child in source.children],
         links=list(source.links),
         labels=[label for label in source.labels if label.id not in kept_labels],
@@ -537,8 +592,12 @@ def merge(db: Session, plan: MergePlan) -> Ingredient:
     re-read and hold only what stayed behind - the dropped notes, the images
     the target already had, its aliases - which go with it.
 
-    Recipe templates follow too: every template line naming the source names
-    the target (`recipe_templates.rewrite_ingredient`). Like a 常用食材 entry,
+    A line's alternatives follow as the plan says: the redundant ones are
+    deleted, the rest naming the source name the target.
+
+    Recipe templates follow too: every template line and alternative naming
+    the source names the target, with the same alternatives dropped
+    (`recipe_templates.rewrite_ingredient`). Like a 常用食材 entry,
     that is not in the plan - a template is a starting point, not content the
     merge moves.
 
@@ -553,6 +612,16 @@ def merge(db: Session, plan: MergePlan) -> Ingredient:
     db.execute(
         update_rows(RecipeLine)
         .where(RecipeLine.id.in_(plan.line_ids))
+        .values(ingredient_id=target_id)
+    )
+    db.execute(
+        delete_rows(RecipeLineAlternative).where(
+            RecipeLineAlternative.id.in_(plan.dropped_alternative_ids)
+        )
+    )
+    db.execute(
+        update_rows(RecipeLineAlternative)
+        .where(RecipeLineAlternative.id.in_(plan.alternative_ids))
         .values(ingredient_id=target_id)
     )
     db.execute(

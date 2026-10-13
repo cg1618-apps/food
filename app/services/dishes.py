@@ -5,8 +5,10 @@ region, labels, serves-as, a description, a gallery - and its recipes are the
 specific ways of making it. Writes validate everything before they change
 anything, as `recipes` does.
 
-"Used in" for a dish is the recipes with a line naming it, directly; there is
-no reverse relationship from a dish to those lines, so it is a query here.
+"Used in" for a dish is the recipes with a line or a line's alternative
+naming it, directly; there is no reverse relationship from a dish to those
+rows, so it is a query - the recipe service's, which an ingredient's delete
+refusal reads too.
 `bought_as` - the ingredients naming it as their homemade version - is a query
 for the same reason, and the missing relationship is what leaves that link's
 SET NULL to the database.
@@ -27,6 +29,7 @@ from app.models import (
     RecipeCourse,
     RecipeImage,
     RecipeLine,
+    RecipeLineAlternative,
     RecipeSource,
     Region,
     ScheduleMealItem,
@@ -99,23 +102,19 @@ def cover(dish: Dish):
     return None
 
 
-def used_in(db: Session, dish_id: int) -> list[Recipe]:
-    """Distinct recipes with a line naming this dish DIRECTLY.
+def used_in(db: Session, dish_id: int) -> list[tuple[Recipe, bool]]:
+    """Distinct recipes with a line or an alternative naming this dish
+    DIRECTLY, each with whether it names it only as an alternative (替代).
 
     Depth zero: a recipe using a sauce whose recipe uses this one is not
     counted - the depth "used in" has for an ingredient too.
     """
-    rows = (
-        db.query(Recipe)
-        .options(selectinload(Recipe.dish))
-        .filter(
-            Recipe.id.in_(
-                select(RecipeLine.recipe_id).where(RecipeLine.sub_dish_id == dish_id).scalar_subquery()
-            )
-        )
-        .all()
+    # Deferred: `recipes` imports this module.
+    from app.services import recipes
+
+    return recipes.recipes_naming(
+        db, RecipeLine.sub_dish_id, RecipeLineAlternative.sub_dish_id, dish_id
     )
-    return sorted(rows, key=lambda r: (r.display_name.casefold(), r.id))
 
 
 def bought_as(db: Session, dish_id: int) -> list[Ingredient]:

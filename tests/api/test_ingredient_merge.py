@@ -127,6 +127,7 @@ def test_the_preview_describes_the_plan(client, pair):
     assert body["target"]["id"] == pair["target"]
     assert body["moves"] == {
         "lines": 2,
+        "alternatives": 0,
         "children": 1,
         "links": 1,
         "labels": 1,

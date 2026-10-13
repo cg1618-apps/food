@@ -18,7 +18,7 @@ from app import schemas
 from app.database import get_db
 from app.errors import AppError, StaleCountError
 from app.models import Ingredient, IngredientImage
-from app.routers.recipe import dish_ref, recipe_ref
+from app.routers.recipe import dish_ref, used_in_ref
 from app.routing import read_router, write_router
 from app.services import images, ingredients, recipes
 from app.services.lookup import check_label_scope
@@ -113,7 +113,7 @@ def _response(
         ],
         links=[schemas.LinkResponse.model_validate(link) for link in row.links],
         images=images.attached(row.images),
-        used_in=[recipe_ref(r) for r in used_in],
+        used_in=[used_in_ref(r, only) for r, only in used_in],
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -200,6 +200,7 @@ def _merge_preview(db: Session, plan: ingredients.MergePlan) -> schemas.MergePre
         dropped_preservation=[
             {"state": r.state, "method": r.method} for r in plan.dropped_preservation
         ],
+        dropped_alternatives=len(plan.dropped_alternative_ids),
         prose=plan.prose,
         homemade_dish=plan.homemade_dish,
         fingerprint=plan.fingerprint(),
@@ -248,10 +249,10 @@ def delete_ingredient(
     with children cannot be deleted at all, and that is a refusal rather than a
     number - the IntegrityError handler turns it into a 409 saying so.
 
-    Recipe lines are RESTRICT too, but refused here, before the database is
-    asked, so the 409 can name the recipes: `used_in` on the body is what the
-    user has to change first. Lines naming a child do not block this - the
-    child does, on its own.
+    Recipe lines and their alternatives are RESTRICT too, but refused here,
+    before the database is asked, so the 409 can name the recipes: `used_in`
+    on the body is what the user has to change first. Lines naming a child do
+    not block this - the child does, on its own.
     """
     ingredient = ingredients.get(db, ingredient_id)
     naming = recipes.recipes_naming_ingredient(db, ingredient_id)

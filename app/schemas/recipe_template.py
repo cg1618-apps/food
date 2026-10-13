@@ -6,8 +6,8 @@ so a template line, group or step is exactly a recipe's. What a template
 leaves out (the dish, a name, status, sources, notes, the gallery) is refused
 by `extra="forbid"` rather than silently dropped.
 
-One thing the models accept that a template does not: a line's
-`new_ingredient` or `new_dish`. A template never creates rows - it is applied
+One thing the models accept that a template does not: a line's or an
+alternative's `new_ingredient` or `new_dish`. A template never creates rows - it is applied
 to a form, and nothing about it is saved until the recipe is - so the service
 refuses those with a sentence saying to pick an existing one.
 
@@ -113,12 +113,20 @@ class TemplateOrderIn(BaseModel):
     ids: list[int]
 
 
+class TemplateAlternative(BaseModel):
+    ingredient: IngredientRef | None = None
+    sub_dish: DishRef | None = None
+    amount: str | None = None
+    note: str | None = None
+
+
 class TemplateLine(BaseModel):
     ingredient: IngredientRef | None = None
     sub_dish: DishRef | None = None
     amount: str | None = None
     note: str | None = None
     is_optional: bool = False
+    alternatives: list[TemplateAlternative] = []
 
 
 class TemplateStep(BaseModel):

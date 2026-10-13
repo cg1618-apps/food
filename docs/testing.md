@@ -146,6 +146,19 @@ is load-bearing and says so. Some examples worth knowing about:
   `IMAGE_DIR` at the test's own `tmp_path`. It has to be: the `/images` mount is
   built when the app is, and the `client` fixture builds the app, so a test that
   chose its directory afterwards would have mounted the real one.
+- The line-alternative refusals (`tests/api/test_recipe_line_alternatives.py`)
+  each make the thing they refuse. The unknown-id 422 has a real ingredient
+  and a real dish in the database, sends a second, valid new-name alternative
+  beside the bad one to prove the refused save created nothing, and its
+  mirror saves alternatives naming the real rows. Both delete refusals put a
+  **real alternative** on the row - the only thing naming it - and their
+  mirrors remove the alternative and delete. The cycle test builds a loop that
+  runs **only through an alternative** (A's line offers B; B's line names A),
+  so a guard that read lines alone would pass B's save; its mirror removes
+  A's alternative and B then saves. The merge test has one line for each case
+  - an alternative that moves, one dropped because its line names the target,
+  one dropped because its line named the source, and two that collapse - so
+  each count in the preview can fail on its own.
 - `soy` (`tests/api/test_ingredient_used_in.py`) is 醬油 with 生抽 and 老抽
   under it, a recipe naming **both** children, a sauce's recipe naming 生抽,
   and a recipe whose only line names the sauce's dish. Each piece is
@@ -279,8 +292,10 @@ the entire failure.
 | `tests/api/test_recipe_model.py` | every named dish and recipe constraint, each refusal with its mirror; a recipe's display name falling back to its dish's; CASCADE and RESTRICT on delete, and a recipe's delete leaving its dish |
 | `tests/api/test_dish_crud.py` | the dish round trip, kind, names, unknown ids, its recipes and "used in", the two delete refusals with their mirrors, the stale alias count, 404s |
 | `tests/api/test_dish_library.py` | the dish list's summary, search and "any of" filters, and the recipe list's filters that read through the dish (dish, kind, course, region, label) and its search over the dish's names |
-| `tests/api/test_recipe_crud.py` | the recipe round trip, its dish (`dish_id`, `new_dish`, reuse by name, moving), 其他版本, `PATCH` list semantics, status, the default status and the 422 with none, the moved fields refused, sources and their platforms, delete leaving the dish, stale counts |
+| `tests/api/test_recipe_crud.py` | the recipe round trip, its dish (`dish_id`, `new_dish`, reuse by name, moving), 其他版本, `PATCH` list semantics, status, the default status and the 422 with none, the moved fields refused, sources and their platforms, `reheating_notes` (加熱) round-tripping and cleared as `storage_notes` is, delete leaving the dish, stale counts |
 | `tests/api/test_recipe_lines.py` | line targets (ingredient, dish, new ingredient, new dish), the claimed-type refusal, the own-dish rule and the cycle guard through dishes, stub and dish creation and reuse |
+| `tests/api/test_recipe_line_alternatives.py` | a line's alternatives: the round trip in order with amount and note, in a group, new names resolved with the lines' (one stub for a name typed on both), the unknown-id 422 writing nothing, exactly one target, redundant alternatives dropped, a re-save replacing them; the own-dish rule, the cycle guard and a dish move through an alternative; "used in" for an ingredient (a variety's included) and a dish with `alternative_only`, the recipe filter; both delete refusals with mirrors, the RESTRICT itself, the CASCADE with the recipe; the ingredient merge moving and dropping them with the preview's counts and the fingerprint; templates carrying them, dropping a deleted one, `from-recipe`, a body stored before them, and a merge rewriting them |
+| `tests/test_line_alternatives_migration.py` | `a2lternatives` on a scratch database: the downgrade drops the table with an alternative in it and keeps the line, and the chain upgrades again |
 | `tests/api/test_recipe_step_kinds.py` | a step's kind: the `step` default, the round trip through create, read and `PATCH` in and out of groups, the 422 for an unknown or null kind, the `step_kinds` fixed list |
 | `tests/api/test_recipe_groups.py` | lines and steps in groups: order and positions, a name stored as its 設定 value, the empty group, duplicate and malformed groups, the `PATCH` pair rule, stubs, cycles and a dish's "used in" through grouped lines, the delete counts, the in-use 409, SET NULL from a group to its rows |
 | `tests/api/test_recipe_library.py` | the list's summary (its dish), search over the dish's names and aliases (wildcards literal) and the recipe's own filters (`author_id` among them), and the query count |
@@ -353,6 +368,18 @@ use and on for an unused one, and a refused move said in the row),
 `pages/library/libraries.test.jsx` (each sidebar asking for its own scope,
 the recipe library for `dish`, against a server answering only `dish`) and
 `components/forms/forms.test.jsx` (the dish form reading `?scope=dish`).
+
+Line alternatives are covered in: `lib/recipeLines.test.js` (read back as
+targets in order, a body without them reading as none, the payload's four
+targets, a blank one dropped, and the unpicked one refused naming its line
+and its number), `components/forms/forms.test.jsx` (「＋替代」 under a line:
+an existing dish, a 新增 stub, a note and an amount, one removed, the exact
+payload; and the unpicked refusal sending nothing),
+`pages/detail/details.test.jsx` (a line's alternatives after it with their
+links, amounts and notes, a line without them unchanged; 替代 in an
+ingredient's and a sauce's 用在), `lib/mergePreview.test.js` (the moved and
+dropped counts) and the payload expectations of every recipe and template
+form test, which now carry `alternatives: []`.
 
 Recipe templates are covered in: `pages/edit/templates.test.jsx` (the
 new-recipe chooser's three ways in and the URL each writes, `?dish=` kept

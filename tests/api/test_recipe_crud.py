@@ -527,3 +527,23 @@ def test_a_delete_with_a_stale_count_is_refused_naming_the_count(client):
     assert response.status_code == 409
     assert response.json()["field"] == "steps"
     assert (response.json()["expected"], response.json()["actual"]) == (1, 2)
+
+
+def test_reheating_notes_round_trip_as_storage_notes_do(client):
+    """加熱: free text beside 保存, line breaks kept, absent from a bare
+    recipe, replaced or cleared by a PATCH that sends it and left alone by
+    one that does not."""
+    bare = create(client)
+    assert bare["reheating_notes"] is None
+    created = create(client, storage_notes="冷藏三天", reheating_notes="微波 2 分鐘\n中途翻面")
+    assert created["reheating_notes"] == "微波 2 分鐘\n中途翻面"
+    read = client.get(f"/api/recipes/{created['id']}").json()
+    assert read["reheating_notes"] == "微波 2 分鐘\n中途翻面"
+
+    path = f"/api/edit/recipes/{created['id']}"
+    assert client.patch(path, json={"notes": "x"}).json()["reheating_notes"] == "微波 2 分鐘\n中途翻面"
+    assert client.patch(path, json={"reheating_notes": "電鍋"}).json()["reheating_notes"] == "電鍋"
+    cleared = client.patch(path, json={"reheating_notes": None}).json()
+    assert cleared["reheating_notes"] is None
+    # The neighbour it mirrors is untouched.
+    assert cleared["storage_notes"] == "冷藏三天"

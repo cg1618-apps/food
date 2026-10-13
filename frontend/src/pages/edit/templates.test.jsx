@@ -97,6 +97,7 @@ const SOURCE = {
   servings: '4 人份',
   time: null,
   storage_notes: '冷藏三天',
+  reheating_notes: '電鍋蒸 10 分鐘',
   notes: '醬汁先調',
   sources: [{ id: 1, platform: { id: 1, display_name: 'YouTube' }, author: null, url: 'https://example.com', title: '影片', sort_order: 0 }],
   lines: [{ id: 1, position: 0, ingredient: { id: 1, display_name: '薑', needs_detail: false }, sub_dish: null, amount: '2 片', note: null, is_optional: true }],
@@ -217,9 +218,9 @@ describe('a new recipe from a template', () => {
     const body = await save()
     expect(body.dish_id).toBe(41)
     expect(body.servings).toBe('2 人份')
-    expect(body.lines).toEqual([{ ingredient_id: 1, amount: '1 片', note: null, is_optional: false }])
+    expect(body.lines).toEqual([{ ingredient_id: 1, amount: '1 片', note: null, is_optional: false, alternatives: [] }])
     expect(body.line_groups).toEqual([
-      { name: '醬汁', lines: [{ sub_dish_id: 7, amount: '3 匙', note: null, is_optional: false }] },
+      { name: '醬汁', lines: [{ sub_dish_id: 7, amount: '3 匙', note: null, is_optional: false, alternatives: [] }] },
     ])
     expect(body.steps).toEqual([{ body: '煎皮', kind: 'step' }])
     expect(body.step_groups).toEqual([{ name: '收尾', steps: [{ body: '別燒焦', kind: 'note' }] }])
@@ -264,8 +265,9 @@ describe('a new recipe copied from another', () => {
     expect(body.status_id).toBe(1)
     expect(body.servings).toBe('4 人份')
     expect(body.storage_notes).toBe('冷藏三天')
+    expect(body.reheating_notes).toBe('電鍋蒸 10 分鐘')
     expect(body.notes).toBe('醬汁先調')
-    expect(body.lines).toEqual([{ ingredient_id: 1, amount: '2 片', note: null, is_optional: true }])
+    expect(body.lines).toEqual([{ ingredient_id: 1, amount: '2 片', note: null, is_optional: true, alternatives: [] }])
     expect(body.steps).toEqual([{ body: '先醃', kind: 'optional' }])
     expect(body.equipment_ids).toEqual([4])
     // No gallery PUT: the pictures stayed with the source.
@@ -309,7 +311,7 @@ describe('the template form', () => {
           body: {
             servings: '2 人份',
             time: null,
-            lines: [{ ingredient_id: 1, amount: null, note: null, is_optional: false }],
+            lines: [{ ingredient_id: 1, amount: null, note: null, is_optional: false, alternatives: [] }],
             line_groups: [],
             steps: [{ body: '大火', kind: 'step' }],
             step_groups: [],
@@ -339,7 +341,7 @@ describe('the template form', () => {
     expect(patch.url).toBe('/api/edit/recipe-templates/11')
     expect(patch.body.name).toBe('基本照燒')
     expect(patch.body.body.line_groups).toEqual([
-      { name: '醬汁', lines: [{ sub_dish_id: 7, amount: '3 匙', note: null, is_optional: false }] },
+      { name: '醬汁', lines: [{ sub_dish_id: 7, amount: '3 匙', note: null, is_optional: false, alternatives: [] }] },
     ])
     expect(patch.body.body.step_groups).toEqual([{ name: '收尾', steps: [{ body: '別燒焦', kind: 'note' }] }])
   })
