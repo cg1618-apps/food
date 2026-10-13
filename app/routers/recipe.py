@@ -27,6 +27,12 @@ def recipe_ref(row: Recipe) -> schemas.RecipeRef:
     return schemas.RecipeRef(id=row.id, display_name=row.display_name, dish=dish_ref(row.dish))
 
 
+def used_in_ref(row: Recipe, alternative_only: bool) -> schemas.UsedInRef:
+    """A recipe in an ingredient's or a dish's "used in", marked when it
+    names that only as an alternative."""
+    return schemas.UsedInRef(**recipe_ref(row).model_dump(), alternative_only=alternative_only)
+
+
 def _vocab(rows) -> list[schemas.VocabRef]:
     return [schemas.VocabRef(id=r.id, display_name=r.display_name) for r in rows]
 
@@ -51,21 +57,34 @@ def summary(row: Recipe) -> schemas.RecipeSummary:
     )
 
 
+def _target(row) -> dict:
+    """A line's or an alternative's target, in the shape both carry it."""
+    return {
+        "ingredient": schemas.IngredientRef(
+            id=row.ingredient.id,
+            display_name=row.ingredient.display_name,
+            needs_detail=row.ingredient.needs_detail,
+        )
+        if row.ingredient
+        else None,
+        "sub_dish": dish_ref(row.sub_dish) if row.sub_dish else None,
+    }
+
+
 def _line(line) -> schemas.LineResponse:
     return schemas.LineResponse(
         id=line.id,
         position=line.position,
-        ingredient=schemas.IngredientRef(
-            id=line.ingredient.id,
-            display_name=line.ingredient.display_name,
-            needs_detail=line.ingredient.needs_detail,
-        )
-        if line.ingredient
-        else None,
-        sub_dish=dish_ref(line.sub_dish) if line.sub_dish else None,
+        **_target(line),
         amount=line.amount,
         note=line.note,
         is_optional=line.is_optional,
+        alternatives=[
+            schemas.AlternativeResponse(
+                id=a.id, position=a.position, **_target(a), amount=a.amount, note=a.note
+            )
+            for a in line.alternatives
+        ],
     )
 
 

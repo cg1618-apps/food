@@ -518,8 +518,8 @@ What the branch after module 1 chose, and what it turned down.
   typeahead shows it before the user chooses "new", which is the one moment a
   person is there to decide.
 - **"Used in" for a dish is depth zero through sub-dishes.** A recipe using a
-  sauce whose recipe uses this sauce is not listed; only recipes with a line
-  naming this dish directly. An ingredient's "used in" takes the same depth
+  sauce whose recipe uses this sauce is not listed; only recipes with a line,
+  or a line's alternative, naming this dish directly. An ingredient's "used in" takes the same depth
   through sub-dishes, so the two cannot disagree about what "uses" means.
 - **"Used in" for an ingredient goes all the way DOWN its own tree and not at
   all through sub-dishes.** It counts distinct recipes with a line naming the
@@ -634,6 +634,56 @@ What the branch after module 1 chose, and what it turned down.
   kept; a name with Han characters, kana or Hangul in `name_cn`, otherwise
   `name_en` - the rule `lib/recipeLines.js` applies to any typed name, copied
   into the migration because a revision imports nothing from the app.
+
+### Line alternatives
+
+- **What the owner asked for.** A line may list alternatives - substitutes
+  across families: 雞腿 or 雞胸肉, 米酒 or 清酒, a homemade sauce or a bought
+  one. Varieties already cover close substitutes - a line naming 醬油 accepts
+  its varieties, which is what "used in" going down the tree means - so an
+  alternative is only for what a variety cannot say. The owner confirmed an
+  alternative may carry its own amount (雞胸肉 250g where the line says 雞腿
+  300g); blank means the line's.
+- **A child table, `recipe_line_alternative`, not an "alternative of" line.**
+  An alternative is not a separate requirement of the recipe. Made a line of
+  its own, it would take a place in the recipe-wide positions, sit in a group
+  of its own choosing, carry a 可省略 that means nothing for it, and count in
+  `written_up` and the line count - and every future "what does this recipe
+  need" (the shopping list, module 4's "what can I cook") would have to filter
+  it back out, which is exactly the kind of rule that is forgotten once. As a
+  child of its line it has none of those by construction, goes with its line
+  on every save and every delete, and is read only by what asks for it.
+- **An alternative names what a line names, by the line's code.** The same
+  four targets on the wire (`AlternativeIn` and `LineIn` share one base), the
+  same `ck_..._one_target` CHECK, `RESTRICT` on both targets, and the save
+  resolves new names for lines and alternatives in one pass over one list
+  (`recipes._targets`), so a new name typed on a line and on an alternative is
+  one stub, and the own-dish rule and the cycle guard see both. A dish named
+  as an alternative is an edge of the nesting graph: the recipe may be made
+  with it, so the recipe is inside it all the same.
+- **Redundant alternatives are dropped, not refused.** One naming its line's
+  own target, or one an earlier alternative of the line already names, says
+  nothing more, and a new name may only turn out to be one of those after it
+  is resolved - by which point the save has started writing, and a refusal
+  then would leave rows behind. So every save (recipe and template) and an
+  ingredient merge apply one rule, `recipes.distinct_alternatives`: the first
+  of a repeat is kept. A merge reports what it drops (`dropped_alternatives`)
+  and fingerprints it, as it does every row it touches.
+- **"Used in" counts an alternative, and says so.** A recipe that could be
+  made with 雞胸肉 uses 雞胸肉 - deleting it would take something from that
+  recipe - so the ingredient's and the dish's "used in", the recipe filter and
+  both delete refusals count alternatives, still as distinct recipes at the
+  same depths. `alternative_only` marks a recipe that names the row only that
+  way, so the page can say 替代 rather than imply the recipe needs it.
+- **Position is unique per line, unlike `tbd_link.position`.** TBD replaces a
+  link list in place inside one flush, where a unique would collide with the
+  rows being replaced. Alternatives are never replaced in place: a save
+  replaces the lines, and the alternatives go with them, so the unique only
+  ever sees new rows - the rule `recipe_line.position` already follows.
+- **No drag to reorder alternatives.** They keep the order they were added
+  in. The lines already sit in a drag board across groups, and a second
+  sortable inside each row is the costly part; the order of two or three
+  substitutes rarely matters.
 
 ### Line and step groups
 
@@ -850,7 +900,8 @@ What the branch after module 1 chose, and what it turned down.
   be a surprise, and the next save writes what the form holds anyway.
 - **An ingredient merge rewrites template bodies.** A merge is the fix for a
   duplicate, so the duplicate's id must not turn into a dropped line in every
-  template. It is not in the merge preview or its fingerprint, as the
+  template - lines and alternatives alike, dropping an alternative that then
+  repeats its line or a sibling. It is not in the merge preview or its fingerprint, as the
   常用食材 move is not: a template is a starting point, not content the merge
   moves. A dish has no merge, so nothing rewrites dish ids.
 - **Copying another recipe copies its structure and its notes, not what makes
@@ -1245,6 +1296,11 @@ it is about — which is exactly when nobody will remember it.
   write responses whose counts disagree with a GET of the same object. A
   required parameter fails loudly; an optional one fails as a wrong number
   nobody notices.
+- **Module 4's "what can I cook" counts a line covered when its target or any
+  of its alternatives is available** (an ingredient through its varieties, as
+  "used in" reads the tree). An alternative is a way of meeting the line, not
+  a requirement of its own, so it never makes a line uncovered, and a recipe
+  whose only gap is a line with an available alternative is cookable.
 
 ## What module 1 hands module 2
 
@@ -1256,7 +1312,10 @@ it is about — which is exactly when nobody will remember it.
   and there an authorization helper was incidentally the only thing resolving
   a type from an id. food has no such helper, so nothing would catch it.
 - **"What uses this ingredient" counts distinct recipes, not lines**, and must
-  state its recursion depth explicitly. 生抽 in one line and 老抽 in another is
+  state its recursion depth explicitly. A line's alternatives count as its
+  lines do - a recipe naming the ingredient only as an alternative uses it,
+  once, marked `alternative_only` - at the same depths: down the ingredient's
+  own tree, zero through sub-dishes. 生抽 in one line and 老抽 in another is
   one recipe using 醬油; a one-level join and a recursive CTE look equally
   correct in review, and the wrong one under-counts silently.
 - **Stub creation files the new row in the fallback category** and sets

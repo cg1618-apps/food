@@ -52,6 +52,7 @@ function PreviewWords({ preview, states }) {
     !words.moves.length &&
     !words.aliases.length &&
     !words.dropped.length &&
+    !words.droppedAlternatives &&
     !words.proseMoved.length &&
     !words.proseDropped.length &&
     !words.homemade
@@ -77,7 +78,10 @@ function PreviewWords({ preview, states }) {
         {words.proseMoved.length ? <li>筆記搬過去：{words.proseMoved.join('、')}</li> : null}
         {words.homemade === 'moved' ? <li>自製版搬過去</li> : null}
       </ul>
-      {words.dropped.length || words.proseDropped.length || words.homemade === 'dropped' ? (
+      {words.dropped.length ||
+      words.proseDropped.length ||
+      words.homemade === 'dropped' ||
+      words.droppedAlternatives ? (
         <div className="space-y-1 rounded-md bg-warn-soft px-3 py-2 text-warn">
           <p>目標已經有自己的，這些會捨棄：</p>
           <ul className="list-disc pl-5">
@@ -86,6 +90,9 @@ function PreviewWords({ preview, states }) {
             ))}
             {words.proseDropped.length ? <li>筆記 {words.proseDropped.join('、')}</li> : null}
             {words.homemade === 'dropped' ? <li>自製版</li> : null}
+            {words.droppedAlternatives ? (
+              <li>{words.droppedAlternatives} 個食譜替代：合併後和那一行的材料或另一個替代重複</li>
+            ) : null}
           </ul>
         </div>
       ) : null}

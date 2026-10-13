@@ -12,7 +12,7 @@ from app import schemas
 from app.database import get_db
 from app.errors import AppError, StaleCountError
 from app.models import Dish, DishImage
-from app.routers.recipe import recipe_ref, summary
+from app.routers.recipe import summary, used_in_ref
 from app.routing import read_router, write_router
 from app.services import dishes, images, schedule
 
@@ -62,7 +62,7 @@ def _response(db: Session, row: Dish) -> schemas.DishResponse:
         recipes=[
             summary(r) for r in sorted(row.recipes, key=lambda r: (r.display_name.casefold(), r.id))
         ],
-        used_in=[recipe_ref(r) for r in dishes.used_in(db, row.id)],
+        used_in=[used_in_ref(r, only) for r, only in dishes.used_in(db, row.id)],
         bought_as=[
             schemas.IngredientRef(id=i.id, display_name=i.display_name, needs_detail=i.needs_detail)
             for i in dishes.bought_as(db, row.id)
@@ -132,8 +132,9 @@ def delete_dish(
 ):
     """Delete, with the alias count the user was shown echoed back.
 
-    A dish with recipes, one a recipe's line names, or one a meal item on the
-    schedule names is refused BEFORE the database is asked, with those recipes
+    A dish with recipes, one a recipe's line or a line's alternative names, or
+    one a meal item on the schedule names is refused BEFORE the database is
+    asked, with those recipes
     and the meals' dates on the body - the RESTRICT would refuse too, but
     could only say that something refers to it, not what.
     """
@@ -146,7 +147,7 @@ def delete_dish(
             "This dish still has recipes, recipes use it, or the schedule names it,"
             " so it cannot be removed.",
             recipes=[{"id": r.id, "display_name": r.display_name} for r in dish.recipes],
-            used_in=[{"id": r.id, "display_name": r.display_name} for r in users],
+            used_in=[{"id": r.id, "display_name": r.display_name} for r, _ in users],
             meals=[d.isoformat() for d in meal_dates],
         )
 

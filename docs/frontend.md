@@ -269,9 +269,10 @@ empties.
   `/edit/recipes/new?dish=<id>` - the new-recipe chooser, the dish kept for
   whichever start is chosen - the one section drawn even when empty
   (還沒有食譜。), since its button is how a new dish gets a recipe; and
-  **用在**, the recipes whose lines name this dish, which is what a sauce's
-  page is mostly for; and **市售版**, the ingredients naming this dish as
-  their 自製版, each a link to its page.
+  **用在**, the recipes whose lines or line alternatives name this dish,
+  which is what a sauce's page is mostly for, a recipe naming it only as an
+  alternative followed by a faint 替代; and **市售版**, the ingredients naming
+  this dish as their 自製版, each a link to its page.
 - **Recipe**: its **dish, a link**, with the dish's kind (醬料 only), course,
   region and 也可以當作 beside it and the dish's labels under the status -
   shown read-only, since they are the dish's and edited there; 書籤 when not
@@ -287,7 +288,12 @@ empties.
   step carrying a 可省略 chip in the number's place with its text muted, a
   備註 drawn as a ruled, tinted callout with no number); 保存; 筆記. A line
   links to its ingredient or to its dish (`/dishes/:id`); an optional line is
-  drawn faint with （可省略）; a stub ingredient carries 待補.
+  drawn faint with （可省略）; a stub ingredient carries 待補. A line's
+  alternatives follow it on its row - 「豆腐 300g 或 板豆腐 250g 較硬」 - each
+  linked as a line's target is, with its own amount and note when it has
+  them; such a line's amount moves beside its name, so each amount reads next
+  to what it measures, and a line without alternatives keeps its amount at
+  the row's end.
 - **存成範本**, beside 編輯, makes a recipe template of the recipe's
   structure: a dialog asks for the name (the recipe's display name to start
   with) and says what a template takes - 材料, 步驟, 做法, 器材, 份量, 時間 -
@@ -308,7 +314,9 @@ empties.
   and how many varieties it has; labels. A stub adds a 待補 note linking to
   its form. Then 說明, 挑選, 品種 (each child with its rating and where it is
   bought - the full row's children carry `sourcing_notes` for this), 哪裡買,
-  自製版 (the dish that makes it at home, a link to it), 保存, 加熱 (°C with the °F beside it, 要預熱, 中途翻面), 參考連結, 用在.
+  自製版 (the dish that makes it at home, a link to it), 保存, 加熱 (°C with the °F beside it, 要預熱, 中途翻面), 參考連結, 用在 -
+  a recipe using it (or a variety) only as a line's alternative followed by
+  a faint 替代.
 - **保存 is a state x method grid** (`lib/storageGrid.js`): rows are the
   states and columns the methods, both in the fixed vocabularies' order, and
   only those in use - a fridge-only ingredient is one column, not seven. A
@@ -319,9 +327,11 @@ empties.
 **Merge** is 「合併到…」 on the ingredient page,
 `components/modals/MergeDialog.jsx`: pick the target with the Typeahead
 (ingredients, never itself); read the preview in words
-(`lib/mergePreview.js` - counts that move, names that become aliases, and in
-a warning block the storage rows and notes the target already has and so
-drops, and whether the source's 自製版 moves or is dropped); 合併 posts
+(`lib/mergePreview.js` - counts that move, recipe alternatives among them,
+names that become aliases, and in a warning block the storage rows and notes
+the target already has and so drops, the recipe alternatives the merge drops
+because they would repeat their line or another alternative, and whether the
+source's 自製版 moves or is dropped); 合併 posts
 `{into, fingerprint}`. Text typed in the picker and not
 picked is said under it (從清單選一個), since 合併 stays off until there is a
 target. If either ingredient changed since
@@ -508,6 +518,17 @@ kind. An entirely blank line is dropped; one with an amount, a note or
 typed-but-unpicked text (the row's `pending`, never sent) and nothing chosen
 is refused by number - 「第 n 行材料…還沒選食材或料理」.
 A blank step is dropped the same way.
+
+**A line's alternatives** (或) sit under it: 「＋替代」 adds one, with the
+same typeahead, 新增 and 新增料理 as the line (none of either on the
+template form), a 份量 whose placeholder says blank is the line's, a 備註,
+and ✕ to remove it. They are rows of the same shape inside the line
+(`alternatives`), sent with the line in the same four targets; a blank one is
+dropped and an unpicked one refused as 「第 n 行材料的替代 m …還沒選食材或料理」.
+They keep the order they were added in - there is no drag for them. Every
+start of the form - blank, a template, a copy of another recipe, an edit -
+reads them back through `lineFromResponse`, so a copy and a template carry
+them.
 
 **Each step has a kind**, switched by a 步驟 / 可省略 / 備註 `Toggle`
 (aria-pressed buttons, the fixed `step_kinds` list) above its text box. A new

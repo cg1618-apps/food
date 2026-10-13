@@ -16,6 +16,11 @@
 // the payload is derived from it in one place. `pending` is what is typed in
 // the line's search box and not yet picked (Typeahead's onQueryChange): never
 // sent, but a line holding it is not blank.
+//
+// A line's `alternatives` (或 on the page) are rows of the same shape -
+// `{ target, pending, amount, note }` - each naming what may stand in for the
+// line's target, with the same four kinds of target and the same rules for a
+// blank or an unpicked one. They have no 可省略 and no group of their own.
 
 import { blankToNull, keyed } from './rowList'
 
@@ -28,34 +33,50 @@ export const SAUCE = 'sauce'
 // Which group a line is in is where it sits in the form's grouped list
 // (lib/groupedRows.js), not a field of the line.
 
-export function emptyLine() {
-  return keyed({ target: null, pending: '', amount: '', note: '', is_optional: false })
+export function emptyAlternative() {
+  return keyed({ target: null, pending: '', amount: '', note: '' })
 }
 
-/** A line as GET /api/recipes/{id} returns it -> a form row. */
-export function lineFromResponse(line) {
-  let target = null
-  if (line.ingredient) {
-    target = {
+export function emptyLine() {
+  return keyed({ target: null, pending: '', amount: '', note: '', is_optional: false, alternatives: [] })
+}
+
+/** The target a saved line or alternative names, from its response. */
+function targetFromResponse(row) {
+  if (row.ingredient) {
+    return {
       type: 'ingredient',
-      id: line.ingredient.id,
-      label: line.ingredient.display_name,
-      needsDetail: line.ingredient.needs_detail,
-    }
-  } else if (line.sub_dish) {
-    target = {
-      type: 'dish',
-      id: line.sub_dish.id,
-      label: line.sub_dish.display_name,
-      kind: line.sub_dish.kind,
+      id: row.ingredient.id,
+      label: row.ingredient.display_name,
+      needsDetail: row.ingredient.needs_detail,
     }
   }
+  if (row.sub_dish) {
+    return { type: 'dish', id: row.sub_dish.id, label: row.sub_dish.display_name, kind: row.sub_dish.kind }
+  }
+  return null
+}
+
+/** An alternative as a response carries it -> a form row. */
+function alternativeFromResponse(alternative) {
   return keyed({
-    target,
+    target: targetFromResponse(alternative),
+    pending: '',
+    amount: alternative.amount ?? '',
+    note: alternative.note ?? '',
+  })
+}
+
+/** A line as GET /api/recipes/{id} or a template's body returns it -> a form
+ * row, its alternatives included. */
+export function lineFromResponse(line) {
+  return keyed({
+    target: targetFromResponse(line),
     pending: '',
     amount: line.amount ?? '',
     note: line.note ?? '',
     is_optional: Boolean(line.is_optional),
+    alternatives: (line.alternatives ?? []).map(alternativeFromResponse),
   })
 }
 
@@ -81,8 +102,41 @@ export function newNames(text) {
   return CJK.test(name) ? { name_cn: name } : { name_en: name }
 }
 
-function isBlank(line) {
-  return !line.target && !blankToNull(line.pending) && !blankToNull(line.amount) && !blankToNull(line.note)
+function isBlank(row) {
+  return !row.target && !blankToNull(row.pending) && !blankToNull(row.amount) && !blankToNull(row.note)
+}
+
+/** A row's target -> the one field naming it on the wire. */
+function targetPayload({ type, id, label, kind }) {
+  if (type === 'ingredient') return { ingredient_id: id }
+  if (type === 'dish') return { sub_dish_id: id }
+  if (type === 'new-dish') return { new_dish: { ...newNames(label), kind: kind ?? SAUCE } }
+  return { new_ingredient: newNames(label) }
+}
+
+/** The error for a row with something typed but nothing chosen. `what` names
+ * it: 第 3 行材料, or 第 3 行材料的替代 1. */
+function unpicked(row, what) {
+  const typed = blankToNull(row.pending)
+  return new Error(
+    typed
+      ? `${what}打了「${typed}」，但還沒選食材或料理：從清單選一個，或選「新增」。`
+      : `${what}還沒選食材或料理。`,
+  )
+}
+
+function alternativesPayload(alternatives, number) {
+  const out = []
+  ;(alternatives ?? []).forEach((alternative, index) => {
+    if (isBlank(alternative)) return
+    if (!alternative.target) throw unpicked(alternative, `第 ${number} 行材料的替代 ${index + 1} `)
+    out.push({
+      amount: blankToNull(alternative.amount),
+      note: blankToNull(alternative.note),
+      ...targetPayload(alternative.target),
+    })
+  })
+  return out
 }
 
 /**
@@ -95,26 +149,17 @@ function isBlank(line) {
 export function linesPayload(rows, start = 0) {
   const out = []
   rows.forEach((line, index) => {
-    if (isBlank(line)) return
-    if (!line.target) {
-      const typed = blankToNull(line.pending)
-      const number = start + index + 1
-      throw new Error(
-        typed
-          ? `第 ${number} 行材料打了「${typed}」，但還沒選食材或料理：從清單選一個，或選「新增」。`
-          : `第 ${number} 行材料還沒選食材或料理。`,
-      )
-    }
-    const base = {
+    const number = start + index + 1
+    const alternatives = alternativesPayload(line.alternatives, number)
+    if (isBlank(line) && !alternatives.length) return
+    if (!line.target) throw unpicked(line, `第 ${number} 行材料`)
+    out.push({
       amount: blankToNull(line.amount),
       note: blankToNull(line.note),
       is_optional: Boolean(line.is_optional),
-    }
-    const { type, id, label, kind } = line.target
-    if (type === 'ingredient') out.push({ ...base, ingredient_id: id })
-    else if (type === 'dish') out.push({ ...base, sub_dish_id: id })
-    else if (type === 'new-dish') out.push({ ...base, new_dish: { ...newNames(label), kind: kind ?? SAUCE } })
-    else out.push({ ...base, new_ingredient: newNames(label) })
+      ...targetPayload(line.target),
+      alternatives,
+    })
   })
   return out
 }

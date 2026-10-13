@@ -128,6 +128,11 @@ carries.
 author's links and remark with them. The authors themselves, and the
 sources naming them, are untouched.
 
+`a2lternatives`'s downgrade drops `recipe_line_alternative`, and every
+recipe line's alternatives with it. The lines themselves, and the `alternatives`
+lists inside recipe templates' JSONB bodies, are untouched; the older code
+ignores the latter.
+
 **`d1ishes` restructures every recipe**, so its two directions are worth
 reading before either runs.
 
@@ -223,7 +228,8 @@ they ever do not, believe the box.
 | Every label in one library | `l1abels` — no new table |
 | A category's own notes | `c2ategory` — no new table |
 | An ingredient's homemade version | `h2omemade` — no new table |
-| An author's links and remark | `a2uthor` — forty-five tables, the current head |
+| An author's links and remark | `a2uthor` — forty-five tables |
+| Recipe line alternatives | `a2lternatives` — forty-six tables, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

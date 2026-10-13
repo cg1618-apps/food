@@ -447,9 +447,9 @@ describe('RecipeForm', () => {
       expect(gone in body).toBe(false)
     }
     expect(body.lines).toEqual([
-      { amount: null, note: null, is_optional: false, new_ingredient: { name_cn: '紫蘇' } },
-      { amount: null, note: null, is_optional: false, sub_dish_id: 7 },
-      { amount: null, note: null, is_optional: false, new_dish: { name_cn: '照燒醬', kind: 'sauce' } },
+      { amount: null, note: null, is_optional: false, new_ingredient: { name_cn: '紫蘇' }, alternatives: [] },
+      { amount: null, note: null, is_optional: false, sub_dish_id: 7, alternatives: [] },
+      { amount: null, note: null, is_optional: false, new_dish: { name_cn: '照燒醬', kind: 'sauce' }, alternatives: [] },
     ])
     expect(body.line_groups).toEqual([])
     // Pasted steps are ordinary steps.
@@ -543,6 +543,60 @@ describe('RecipeForm', () => {
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
     expect('status_id' in calls.find((c) => c.method === 'POST').body).toBe(false)
+  })
+
+  it('adds alternatives under a line with ＋替代, each picked, measured and removable', async () => {
+    handler = ({ url, method }) => {
+      if (url.startsWith('/api/ingredients?')) return json([GINGER])
+      if (url.startsWith('/api/dishes?q=高湯')) return json([STOCK])
+      if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
+      return json([])
+    }
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
+    await chooseNewDish('薑汁燒肉')
+
+    fireEvent.click(screen.getByRole('button', { name: /加一行材料/ }))
+    fireEvent.change(screen.getByRole('combobox', { name: '材料 1' }), { target: { value: '薑' } })
+    fireEvent.click(await screen.findByRole('option', { name: /薑/ }))
+
+    const line = screen.getByRole('group', { name: '材料 1' })
+    // Three alternatives: an existing dish, a stub, and one removed again.
+    for (let i = 0; i < 3; i += 1) fireEvent.click(within(line).getByRole('button', { name: '＋替代' }))
+    fireEvent.change(screen.getByRole('combobox', { name: '材料 1 的替代 1' }), { target: { value: '高湯' } })
+    fireEvent.click(await screen.findByRole('option', { name: /雞高湯/ }))
+    const first = screen.getByRole('group', { name: '材料 1 的替代 1' })
+    fireEvent.change(within(first).getByRole('textbox', { name: '替代份量' }), { target: { value: '100ml' } })
+
+    fireEvent.change(screen.getByRole('combobox', { name: '材料 1 的替代 2' }), { target: { value: '薑粉' } })
+    fireEvent.click(await screen.findByRole('option', { name: /^新增「\s*薑粉/ }))
+    fireEvent.change(within(screen.getByRole('group', { name: '材料 1 的替代 2' })).getByRole('textbox', { name: '替代備註' }), {
+      target: { value: '少一點' },
+    })
+    fireEvent.change(screen.getByRole('combobox', { name: '材料 1 的替代 3' }), { target: { value: '蒜' } })
+    fireEvent.click(screen.getByRole('button', { name: '移除材料 1 的替代 3' }))
+    expect(screen.queryByRole('group', { name: '材料 1 的替代 3' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+    const body = calls.find((c) => c.method === 'POST' && c.url === '/api/edit/recipes').body
+    expect(body.lines[0].alternatives).toEqual([
+      { amount: '100ml', note: null, sub_dish_id: 7 },
+      { amount: null, note: '少一點', new_ingredient: { name_cn: '薑粉' } },
+    ])
+  })
+
+  it('refuses to save an alternative whose name was typed but never picked', async () => {
+    handler = ({ url }) => (url.startsWith('/api/ingredients?') ? json([GINGER]) : json([]))
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
+    await chooseNewDish('湯')
+    fireEvent.click(screen.getByRole('button', { name: /加一行材料/ }))
+    fireEvent.change(screen.getByRole('combobox', { name: '材料 1' }), { target: { value: '薑' } })
+    fireEvent.click(await screen.findByRole('option', { name: /薑/ }))
+    fireEvent.click(within(screen.getByRole('group', { name: '材料 1' })).getByRole('button', { name: '＋替代' }))
+    fireEvent.change(screen.getByRole('combobox', { name: '材料 1 的替代 1' }), { target: { value: '紫蘇' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/第 1 行材料的替代 1.*紫蘇.*還沒選/)
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
   })
 
   it('refuses to save a line whose name was typed but never picked', async () => {
@@ -834,7 +888,7 @@ describe('RecipeForm groups', () => {
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
     const body = postBody()
-    expect(body.lines).toEqual([{ amount: null, note: null, is_optional: false, ingredient_id: 1 }])
+    expect(body.lines).toEqual([{ amount: null, note: null, is_optional: false, ingredient_id: 1, alternatives: [] }])
     expect(body.line_groups).toEqual([{ name: '主料們', lines: [] }])
   })
 
@@ -875,9 +929,9 @@ describe('RecipeForm groups', () => {
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/5'))
     const body = calls.find((c) => c.method === 'PATCH').body
     expect(body.dish_id).toBe(40)
-    expect(body.lines).toEqual([{ amount: null, note: null, is_optional: false, ingredient_id: 1 }])
+    expect(body.lines).toEqual([{ amount: null, note: null, is_optional: false, ingredient_id: 1, alternatives: [] }])
     expect(body.line_groups).toEqual([
-      { line_group_id: 11, lines: [{ amount: null, note: null, is_optional: false, ingredient_id: 2 }] },
+      { line_group_id: 11, lines: [{ amount: null, note: null, is_optional: false, ingredient_id: 2, alternatives: [] }] },
     ])
     expect(body.steps).toEqual([])
     expect(body.step_groups).toEqual([{ name: '收尾', steps: [] }])
@@ -939,9 +993,9 @@ describe('RecipeForm 常用食材', () => {
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
     const body = calls.find((c) => c.method === 'POST' && c.url === '/api/edit/recipes').body
     expect(body.lines).toEqual([
-      { amount: '3 瓣', note: null, is_optional: false, ingredient_id: 1 },
-      { amount: null, note: null, is_optional: false, ingredient_id: 1 },
-      { amount: null, note: null, is_optional: false, ingredient_id: 2 },
+      { amount: '3 瓣', note: null, is_optional: false, ingredient_id: 1, alternatives: [] },
+      { amount: null, note: null, is_optional: false, ingredient_id: 1, alternatives: [] },
+      { amount: null, note: null, is_optional: false, ingredient_id: 2, alternatives: [] },
     ])
     expect(body.line_groups).toEqual([{ line_group_id: 11, lines: [] }])
   })

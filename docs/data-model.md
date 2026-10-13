@@ -1,14 +1,14 @@
 # Data model
 
-What the database holds today: forty-five tables, at revision `a2uthor`.
+What the database holds today: forty-six tables, at revision `a2lternatives`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the nine managed
 vocabularies and an author's links (`author_link`), `ingredient_heating`, `ingredient_link`, the image library and
 its four galleries (`image`, `ingredient_image`, `dish_image`, `recipe_image`,
 `kitchen_note_image`), the dish family's four (`dish`, `dish_alias`,
-`dish_serves_as`, `dish_label`), the recipe family's eight (`recipe`,
+`dish_serves_as`, `dish_label`), the recipe family's nine (`recipe`,
 `recipe_method`, `recipe_equipment`, `recipe_source`, `recipe_line_group`,
-`recipe_line`, `recipe_step_group`, `recipe_step`), `recipe_template`, kitchen notes' two (`kitchen_note`, `kitchen_note_label`),
+`recipe_line`, `recipe_line_alternative`, `recipe_step_group`, `recipe_step`), `recipe_template`, kitchen notes' two (`kitchen_note`, `kitchen_note_label`),
 `common_ingredient`, the 常用食材 list, TBD's two (`tbd_entry`,
 `tbd_link`), 加熱's `heating_note`, and the schedule's three (`schedule_day`, `schedule_meal`,
 `schedule_meal_item`).
@@ -466,6 +466,40 @@ sauce — so nothing is unique on it.
 builds them together; a single-column foreign key cannot say so, and a
 composite one could not be `SET NULL` without nulling `recipe_id` with it.
 
+## `recipe_line_alternative`
+
+What may stand in for a line's target - 雞腿 或 雞胸肉, 米酒 或 清酒, a
+homemade sauce or a bought one (`a2lternatives`). Varieties already cover the
+close substitutes - a line naming 醬油 accepts its varieties - so this is for
+the rest.
+
+| Column | Notes |
+| --- | --- |
+| `line_id` | the owner, → `recipe_line`, `CASCADE`, indexed |
+| `position` | required, the order among the line's alternatives, unique per line (`uq_recipe_line_alternative_position`) |
+| `ingredient_id` | → `ingredient`, `RESTRICT`, indexed |
+| `sub_dish_id` | → `dish`, `RESTRICT`, indexed - any `kind` |
+| `amount` | free text; null is "the same as the line" |
+| `note` | free text |
+
+**An alternative names exactly one of `ingredient_id` and `sub_dish_id`**
+(`ck_recipe_line_alternative_one_target`), the line's own rule, and the write
+path holds it to the line's other two: **it may not name its recipe's own
+dish, and the dish-nesting graph counts it** - dish A uses dish B when a
+recipe of A has a line naming B or an alternative of a line naming B.
+
+**It is not a requirement of its own.** It has no group, no 可省略 and no
+place in the recipe's line positions; it belongs to its line and goes with it.
+A save replaces lines wholesale, so a line's alternatives are only ever
+written with a new line, and the per-line unique on `position` never meets the
+rows it replaces - unlike `tbd_link.position`, which has no unique for that
+reason.
+
+**No alternative names its line's own target, and no two of one line name the
+same thing.** Nothing in the schema says so; the write path drops such an
+alternative on every save of a recipe or a template, and an ingredient merge
+drops the ones it would create.
+
 ## `recipe_step`
 
 One step of the method: `position` (unique per recipe,
@@ -494,22 +528,27 @@ this canonical form:
 
 ```json
 {"servings": null, "time": null,
- "lines": [{"ingredient_id": 1, "sub_dish_id": null, "amount": null, "note": null, "is_optional": false}],
+ "lines": [{"ingredient_id": 1, "sub_dish_id": null, "amount": null, "note": null, "is_optional": false,
+            "alternatives": [{"ingredient_id": 2, "sub_dish_id": null, "amount": null, "note": null}]}],
  "line_groups": [{"line_group_id": 5, "name": null, "lines": []}],
  "steps": [{"body": "…", "kind": "step"}],
  "step_groups": [{"step_group_id": null, "name": "收尾", "steps": []}],
  "method_ids": [], "equipment_ids": []}
 ```
 
-A line names exactly one of an ingredient and a dish, and a group exactly one
-of a 設定 value and a one-off name, as a recipe's do; a template never names
-an ingredient or a dish that does not exist yet.
+A line and an alternative each name exactly one of an ingredient and a dish,
+and a group exactly one of a 設定 value and a one-off name, as a recipe's do;
+a template never names an ingredient or a dish that does not exist yet. A body
+stored before alternatives existed has no `alternatives` key on its lines and
+reads as having none.
 
 **Nothing in the body is a foreign key**, and nothing references the table.
 An ingredient, a dish, a method, a piece of equipment or a group value a body
 names can be deleted without a refusal; the API leaves the missing reference
-out when it reads the template, and counts it. An ingredient merge rewrites the
-merged ingredient's id to the target's in every body. Why JSONB rather than
+out when it reads the template, and counts it - a line whose target is gone
+takes its alternatives with it. An ingredient merge rewrites the merged
+ingredient's id to the target's in every body, lines and alternatives alike,
+dropping an alternative that then repeats its line or a sibling. Why JSONB rather than
 tables mirroring the recipe's is in `notes/decisions.md`.
 
 ## `schedule_day`, `schedule_meal` and `schedule_meal_item`
@@ -607,14 +646,15 @@ shared.
 | ingredient → its aliases, preservation rows, heating rows, links, label links, gallery rows | `CASCADE` |
 | ingredient → its 常用食材 row | `CASCADE` |
 | ingredient → its children | `RESTRICT` |
-| ingredient → the recipe lines that name it | `RESTRICT` |
+| ingredient → the recipe lines and line alternatives that name it | `RESTRICT` |
 | category → its ingredients and child categories | `RESTRICT` |
 | dish → its aliases, gallery rows, and serves-as and label links | `CASCADE` |
 | dish → its recipes | `RESTRICT` |
-| dish → the recipe lines that name it | `RESTRICT` |
+| dish → the recipe lines and line alternatives that name it | `RESTRICT` |
 | dish → the ingredients naming it as their homemade version | `SET NULL` — the ingredient stays, its link null |
 | recipe → its sources, line and step groups, lines, steps, gallery rows, and method and equipment links | `CASCADE` |
 | recipe → its dish | none — deleting a recipe leaves the dish |
+| recipe line → its alternatives | `CASCADE` |
 | schedule day → its meals | `CASCADE` |
 | schedule meal → its items | `CASCADE` |
 | dish → the meal items on the schedule that name it | `RESTRICT` |
@@ -670,7 +710,7 @@ pages.
 | Recipe doc | ingredient list, amounts | `recipe_line` (ingredient link + `amount`) |
 | Recipe doc | ingredient groups (漢堡醬, 調味料, for soup) | `recipe_line_group` (a `line_group` value or a one-off name) |
 | Recipe doc | `optional`, `自由添加`, `可省` | `recipe_line.is_optional` |
-| Recipe doc | `米酒or清酒`, `味醂可代替糖` | `recipe_line.note` |
+| Recipe doc | `米酒or清酒`, `味醂可代替糖` | `recipe_line_alternative` (清酒 as an alternative of the 米酒 line); a substitution that is not one ingredient for another stays in `recipe_line.note` |
 | Recipe doc | a sauce used inside a dish (蚵仔煎醬) | `dish.kind = sauce`, named by `recipe_line.sub_dish_id` |
 | Recipe doc | `Steps for 備料 / 醬汁備料 / cooking / noodles` | `recipe_step_group` (a `step_group` value or a one-off name) |
 | Recipe doc | `* tips`, `Notes:`, unit conversions inside a recipe | `recipe.notes` |

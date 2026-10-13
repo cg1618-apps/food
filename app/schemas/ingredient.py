@@ -24,10 +24,10 @@ from app.schemas.image import AttachedImage, CoverRef
 from app.schemas.vocabulary import VocabRef
 
 if TYPE_CHECKING:
-    # recipe.py imports this module, so RecipeRef and DishRef cannot be
+    # recipe.py imports this module, so UsedInRef and DishRef cannot be
     # imported here at runtime; `app/schemas/__init__.py` resolves the forward
     # references once both modules exist.
-    from app.schemas.recipe import DishRef, RecipeRef
+    from app.schemas.recipe import DishRef, UsedInRef
 
 
 def _clean_aliases(values: list[str]) -> list[str]:
@@ -377,7 +377,7 @@ class IngredientResponse(BaseModel):
     links: list[LinkResponse] = []
     labels: list[LabelRef] = []
     images: list[AttachedImage] = []
-    used_in: list["RecipeRef"] = []
+    used_in: list["UsedInRef"] = []
 
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -397,9 +397,12 @@ class MergeIn(BaseModel):
 
 
 class MergeMoves(BaseModel):
-    """How many rows of each kind move to the target."""
+    """How many rows of each kind move to the target. `alternatives` counts
+    only the ones that move; those the merge makes redundant are
+    `MergePreview.dropped_alternatives`."""
 
     lines: int
+    alternatives: int
     children: int
     links: int
     labels: int
@@ -421,6 +424,10 @@ class MergePreview(BaseModel):
     moves: MergeMoves
     new_aliases: list[str]
     dropped_preservation: list[PreservationKey]
+    # Alternatives the merge deletes: once the source is the target, they
+    # name what their own line names, or what another alternative of the
+    # line already names.
+    dropped_alternatives: int
     # Only the prose fields the source has: "moved" when the target's is
     # empty, "dropped" when the target already has its own.
     prose: dict[str, Literal["moved", "dropped"]]

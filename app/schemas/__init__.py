@@ -56,6 +56,8 @@ from app.schemas.kitchen_note import (
 )
 from app.schemas.label import LabelCreate, LabelResponse, LabelUpdate
 from app.schemas.recipe import (
+    AlternativeIn,
+    AlternativeResponse,
     DishBrief,
     DishRef,
     IngredientRef,
@@ -77,8 +79,10 @@ from app.schemas.recipe import (
     StepGroupResponse,
     StepIn,
     StepResponse,
+    UsedInRef,
 )
 from app.schemas.recipe_template import (
+    TemplateAlternative,
     TemplateBody,
     TemplateBodyIn,
     TemplateCreate,
@@ -115,11 +119,13 @@ from app.schemas.vocabulary import (
     VocabularyUpdate,
 )
 
-# IngredientResponse names RecipeRef and DishRef by forward references,
+# IngredientResponse names UsedInRef and DishRef by forward references,
 # because recipe.py imports ingredient.py; resolved here, once both are loaded.
-IngredientResponse.model_rebuild(_types_namespace={"RecipeRef": RecipeRef, "DishRef": DishRef})
+IngredientResponse.model_rebuild(_types_namespace={"UsedInRef": UsedInRef, "DishRef": DishRef})
 
 __all__ = [
+    "AlternativeIn",
+    "AlternativeResponse",
     "AttachedImage",
     "AuthorCreate",
     "AuthorLinkIn",
@@ -199,6 +205,7 @@ __all__ = [
     "TbdLinkIn",
     "TbdLinkResponse",
     "TbdOrderIn",
+    "TemplateAlternative",
     "TemplateBody",
     "TemplateBodyIn",
     "TemplateCreate",
@@ -211,6 +218,7 @@ __all__ = [
     "TemplateStepGroup",
     "TemplateSummary",
     "TemplateUpdate",
+    "UsedInRef",
     "VocabRef",
     "VocabularyCreate",
     "VocabularyResponse",
