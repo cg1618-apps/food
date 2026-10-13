@@ -393,6 +393,33 @@ replaced its own chevrons with drag, and food followed at the owner's request.
   contiguous on screen, and dragging a parent should carry its children; the
   flat indented list could do neither.
 
+### Text boxes grow with their text
+
+Asked for because a recipe step opened two lines high and a longer step had to
+be read and edited through that slot. Every multi-line field is the shared
+`TextArea`, and `TextArea` fits its height to its text (`hooks/useAutoGrow.js`).
+
+- **The fitting is media's.** `AutoGrowTextarea` already collapses the box to
+  `auto`, reads `scrollHeight` and adds the border back, in a layout effect on
+  the value; food does the same. It is a hook inside `TextArea` rather than a
+  second component, so no field can be left on the old box by importing the
+  wrong one.
+- **No height cap, where media stops at `max-h-80` and scrolls inside.** A
+  long step read through an inner scrollbar is exactly what was asked to go,
+  and a recipe's longest field is a step or a note body, not a wall of text.
+  So `overflow-y: hidden`, and `resize: none` because the height always fits
+  and the next keystroke would undo a drag.
+- **A ResizeObserver re-fits on a change of width**, which media lacks: the
+  same text wraps onto more lines when a phone rotates or a window narrows,
+  and a box hidden on its first render (a collapsed section) gets its real
+  height the moment it is shown. Height changes are ignored, since fitting
+  makes them and re-fitting on them would loop.
+- **JavaScript, not CSS `field-sizing: content`.** That property does the job
+  in one line where it is supported, but iOS Safari and Firefox do not support
+  it reliably, and a phone in a shop is where this app is read. Adding it on
+  top as an enhancement was rejected: two mechanisms setting one height would
+  disagree about `rows` as the floor.
+
 ### The one that is not a divergence but reads like one
 
 **Single-column unique name indexes use Postgres's DEFAULT null handling, not
