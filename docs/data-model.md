@@ -1,6 +1,6 @@
 # Data model
 
-What the database holds today: forty-four tables, at revision `l1abels`.
+What the database holds today: forty-four tables, at revision `h2omemade`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the nine managed
 vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
@@ -50,6 +50,7 @@ One thing you cook with.
 | `name_cn`, `name_en`, `name_alt` | at least one required |
 | `category_id` | **required**, `RESTRICT` |
 | `parent_id` | optional self-reference, `RESTRICT` |
+| `homemade_dish_id` | optional, → `dish`, `SET NULL`, indexed; its 自製版, the dish that makes it |
 | `description` | what it is |
 | `selection_notes` | how to pick a good one |
 | `sourcing_notes` | where to get it |
@@ -63,6 +64,13 @@ beneath it, and is itself stockable, cookable, and citable on a recipe line.
 There is no "this row is only a container" flag because there are no
 containers. The column exists so that a recipe line may name either level, and
 so that "what can I cook" can resolve between them in both directions.
+
+**A thing you can buy or make is two rows.** Caramel, 雞高湯 and 油蔥酥 are
+bought as ingredients and made as dishes (usually a 醬料); `homemade_dish_id`
+on the ingredient names the dish. It is **not unique** - making 油蔥酥 also
+yields 紅蔥油, so one dish may be the homemade version of several
+ingredients - and any dish `kind` may be named, as on a recipe line. A recipe
+line names whichever of the two the recipe means, usually the ingredient.
 
 **`name_alt` is a formal alternative worth showing** — another script, a
 romanisation. Anything you would merely *type* to find the row is an alias and
@@ -94,6 +102,12 @@ and appear in the tidy-up pass alongside `needs_detail`.
 where `name_cn` is not null.** The `coalesce` is load-bearing: a null parent
 means "top level", and without it two root categories sharing a name would not
 collide at all.
+
+**`description` is the family's own notes**, nullable `Text`: what is true of
+every member of a category that is never itself bought or cited - how to pick
+fresh chicken, how long chicken keeps, on 肉類 › 雞肉. An ingredient's notes
+are about the thing you buy; a category's are about the family. Blank is
+stored as null.
 
 **A category's own category is never inherited by a child ingredient.** The
 form may pre-fill it; the stored value is the row's own. Inheritance would mean
@@ -586,6 +600,7 @@ shared.
 | dish → its aliases, gallery rows, and serves-as and label links | `CASCADE` |
 | dish → its recipes | `RESTRICT` |
 | dish → the recipe lines that name it | `RESTRICT` |
+| dish → the ingredients naming it as their homemade version | `SET NULL` — the ingredient stays, its link null |
 | recipe → its sources, line and step groups, lines, steps, gallery rows, and method and equipment links | `CASCADE` |
 | recipe → its dish | none — deleting a recipe leaves the dish |
 | schedule day → its meals | `CASCADE` |
@@ -615,6 +630,12 @@ set `passive_deletes="all"`, because SQLAlchemy otherwise nulls the child's
 foreign key before issuing the DELETE and the database never gets to refuse.
 A delete the schema forbids then succeeds through the ORM and fails only
 through raw SQL.
+
+**A `SET NULL` key gets no collection on the side being deleted.**
+`Ingredient.homemade_dish` is a one-way many-to-one, and a dish's
+`bought_as` is a query, so when a dish is deleted the ORM has nothing loaded
+to null and the database's `SET NULL` does the work - the same outcome either
+way, but one place deciding it.
 
 ## Where the owner's references land
 

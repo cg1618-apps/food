@@ -33,11 +33,24 @@ describe('describeMerge', () => {
     expect(words.proseDropped).toEqual(['說明'])
   })
 
+  it("says whether the source's homemade version moves or is dropped", () => {
+    expect(describeMerge({ ...PREVIEW, homemade_dish: 'moved' }, STATES).homemade).toBe('moved')
+    expect(describeMerge({ ...PREVIEW, homemade_dish: 'dropped' }, STATES).homemade).toBe('dropped')
+    expect(describeMerge(PREVIEW, STATES).homemade).toBeNull()
+  })
+
   it('has empty lists for a merge that only deletes the source', () => {
     const words = describeMerge(
       { moves: {}, new_aliases: [], dropped_preservation: [], prose: {} },
       STATES,
     )
-    expect(words).toEqual({ moves: [], aliases: [], dropped: [], proseMoved: [], proseDropped: [] })
+    expect(words).toEqual({
+      moves: [],
+      aliases: [],
+      dropped: [],
+      proseMoved: [],
+      proseDropped: [],
+      homemade: null,
+    })
   })
 })

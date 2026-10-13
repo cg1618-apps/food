@@ -1079,6 +1079,71 @@ describe('IngredientForm', () => {
     expect(calls.some((c) => c.method === 'POST')).toBe(false)
   })
 
+  // 自製版: the dish that makes the bought thing, picked from the dish
+  // library only, any kind.
+  it('picks a dish as the homemade version and sends its id', async () => {
+    handler = ({ url, method }) => {
+      if (url === '/api/ingredient-categories') return json(TREE)
+      if (url.startsWith('/api/dishes?')) return json([STOCK])
+      if (method === 'POST') return json({ id: 50 }, 201)
+      return json([])
+    }
+    wrap(<AppRoutes />, '/edit/ingredients/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '雞高湯' } })
+    fireEvent.change(screen.getByRole('combobox', { name: '自製版' }), { target: { value: '雞高' } })
+    fireEvent.click(await screen.findByRole('option', { name: /雞高湯/ }))
+    expect(calls.some((c) => c.url.startsWith('/api/ingredients?q='))).toBe(false)
+    await waitFor(() => expect(screen.getByRole('button', { name: '儲存' }).disabled).toBe(false))
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST')).toBeTruthy())
+    expect(calls.find((c) => c.method === 'POST').body.homemade_dish_id).toBe(7)
+  })
+
+  it('starts from the stored homemade version, and sends null once it is removed', async () => {
+    const STORED = {
+      id: 50,
+      display_name: '雞高湯',
+      name_cn: '雞高湯',
+      category: { id: 1, display_name: '預設' },
+      parent: null,
+      children: [],
+      homemade_dish: { id: 7, display_name: '雞高湯', kind: 'sauce' },
+      aliases: [],
+      preservation: [],
+      heating: [],
+      links: [],
+      labels: [],
+      images: [],
+      used_in: [],
+      needs_detail: false,
+    }
+    handler = ({ url, method }) => {
+      if (url === '/api/ingredient-categories') return json(TREE)
+      if (url === '/api/ingredients/50') return json(STORED)
+      if (method === 'PATCH') return json(STORED)
+      return json([])
+    }
+    wrap(<AppRoutes />, '/edit/ingredients/50')
+    const picked = (await screen.findByText('雞高湯', { selector: 'span' })).parentElement
+    fireEvent.click(within(picked).getByRole('button', { name: '移除' }))
+    expect(screen.getByRole('combobox', { name: '自製版' })).toBeTruthy()
+    await waitFor(() => expect(screen.getByRole('button', { name: '儲存' }).disabled).toBe(false))
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(calls.find((c) => c.method === 'PATCH')).toBeTruthy())
+    expect(calls.find((c) => c.method === 'PATCH').body.homemade_dish_id).toBeNull()
+  })
+
+  it('refuses to save a homemade version that was typed but never picked', async () => {
+    handler = ({ url }) => (url === '/api/ingredient-categories' ? json(TREE) : json([]))
+    wrap(<AppRoutes />, '/edit/ingredients/new')
+    fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: '焦糖' } })
+    fireEvent.change(screen.getByRole('combobox', { name: '自製版' }), { target: { value: '焦糖醬' } })
+    await waitFor(() => expect(screen.getByRole('button', { name: '儲存' }).disabled).toBe(false))
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/自製版.*焦糖醬/)
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
+  })
+
   it('holds the save button until the categories it must choose from have loaded', async () => {
     let release
     handler = ({ url }) =>

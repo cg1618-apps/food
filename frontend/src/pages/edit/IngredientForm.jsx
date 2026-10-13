@@ -2,7 +2,8 @@
 // /edit/ingredients/:id.
 //
 // In the order the page reads: names and where it is filed (category, the
-// ingredient it is a variety of, rating, labels, aliases); the prose -
+// ingredient it is a variety of, rating, labels, aliases, 自製版 - the dish
+// that makes it at home, picked from the dish library); the prose -
 // what it is, picking one, where to get it, keeping it; storage rows (state,
 // method, a min-max range in days, notes); heating rows (method, °C with the
 // °F beside it, duration, preheat, flip, notes); links; the 待補 flag; the
@@ -32,10 +33,12 @@ import { reconcileMinDays } from './storageDuration'
 
 // An ingredient save moves more than the ingredient's own reads: category and
 // label counts, cooking-method usage (heating rows), the recipes whose lines
-// name it, the image library's usage counts, and 常用食材 (a renamed
-// ingredient is a renamed chip).
+// name it, the image library's usage counts, 常用食材 (a renamed
+// ingredient is a renamed chip), and the dishes (a dish's 市售版 lists the
+// ingredients naming it as their 自製版).
 const INVALIDATE = [
   endpoints.ingredients.list(),
+  endpoints.dishes.list(),
   endpoints.commonIngredients.list(),
   endpoints.categories.tree(),
   endpoints.labels.list(),
@@ -50,6 +53,7 @@ const EMPTY = {
   name_alt: '',
   category_id: '',
   parent: null,
+  homemade: null,
   rating: '',
   label_ids: [],
   aliases: '',
@@ -101,6 +105,9 @@ function fromIngredient(row) {
     name_alt: row.name_alt ?? '',
     category_id: row.category ? String(row.category.id) : '',
     parent: row.parent ? { id: row.parent.id, label: row.parent.display_name } : null,
+    homemade: row.homemade_dish
+      ? { id: row.homemade_dish.id, label: row.homemade_dish.display_name }
+      : null,
     rating: row.rating ?? '',
     label_ids: (row.labels ?? []).map((label) => label.id),
     aliases: (row.aliases ?? []).join('、'),
@@ -134,6 +141,8 @@ export default function IngredientForm() {
   const [deleting, setDeleting] = useState(false)
   // Typed into the parent box and not picked: refused on save, never dropped.
   const [parentTyped, setParentTyped] = useState('')
+  // The same for the homemade-version box.
+  const [homemadeTyped, setHomemadeTyped] = useState('')
   // The category select is required and the storage and heating rows' selects
   // are drawn from these lists: Save waits for them.
   const vocabulariesReady = Boolean(categories.data && fixed.data && methods.data)
@@ -161,6 +170,7 @@ export default function IngredientForm() {
       name_alt: blankToNull(form.name_alt),
       category_id: Number(categoryValue),
       parent_id: form.parent?.id ?? null,
+      homemade_dish_id: form.homemade?.id ?? null,
       rating: form.rating || null,
       label_ids: form.label_ids,
       aliases: splitAliases(form.aliases),
@@ -197,6 +207,12 @@ export default function IngredientForm() {
     if (!form.parent && parentTyped.trim()) {
       setError(
         new Error(`「是哪種食材的品種」打了「${parentTyped.trim()}」，但還沒從清單選：選一個，或把文字清掉。`),
+      )
+      return
+    }
+    if (!form.homemade && homemadeTyped.trim()) {
+      setError(
+        new Error(`「自製版」打了「${homemadeTyped.trim()}」，但還沒從清單選：選一道料理，或把文字清掉。`),
       )
       return
     }
@@ -278,6 +294,27 @@ export default function IngredientForm() {
                     exclude={{ ingredient: id ? [Number(id)] : [] }}
                     onSelect={(option) => setField('parent', { id: option.id, label: option.label })}
                     onQueryChange={setParentTyped}
+                  />
+                )}
+              </div>
+              <div className="space-y-1 sm:col-span-3">
+                <span className="text-sm font-medium text-text-muted">自製版</span>
+                {form.homemade ? (
+                  <Picked
+                    label={form.homemade.label}
+                    onClear={() => {
+                      setField('homemade', null)
+                      setHomemadeTyped('')
+                    }}
+                    clearLabel="移除"
+                  />
+                ) : (
+                  <Typeahead
+                    sources={['dish']}
+                    label="自製版"
+                    placeholder="自己做的話是哪道料理或醬料，沒有就留空"
+                    onSelect={(option) => setField('homemade', { id: option.id, label: option.label })}
+                    onQueryChange={setHomemadeTyped}
                   />
                 )}
               </div>

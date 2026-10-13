@@ -32,9 +32,11 @@ import { ErrorNote, Loading } from '../ui/states'
 // A merge moves recipe lines, varieties, labels, pictures and heating rows
 // onto the target and deletes the source: every read those touch is stale,
 // 常用食材 among them (the source's chip moves to the target, or goes), and
-// the recipe templates (their lines naming the source now name the target).
+// the recipe templates (their lines naming the source now name the target),
+// and the dishes (a 市售版 list names the source, or gains the target).
 const INVALIDATE = [
   endpoints.ingredients.list(),
+  endpoints.dishes.list(),
   endpoints.commonIngredients.list(),
   endpoints.templates.list(),
   endpoints.categories.tree(),
@@ -51,7 +53,8 @@ function PreviewWords({ preview, states }) {
     !words.aliases.length &&
     !words.dropped.length &&
     !words.proseMoved.length &&
-    !words.proseDropped.length
+    !words.proseDropped.length &&
+    !words.homemade
   return (
     <div className="space-y-2">
       <p>
@@ -72,8 +75,9 @@ function PreviewWords({ preview, states }) {
         ) : null}
         {words.aliases.length ? <li>成為別名：{words.aliases.join('、')}</li> : null}
         {words.proseMoved.length ? <li>筆記搬過去：{words.proseMoved.join('、')}</li> : null}
+        {words.homemade === 'moved' ? <li>自製版搬過去</li> : null}
       </ul>
-      {words.dropped.length || words.proseDropped.length ? (
+      {words.dropped.length || words.proseDropped.length || words.homemade === 'dropped' ? (
         <div className="space-y-1 rounded-md bg-warn-soft px-3 py-2 text-warn">
           <p>目標已經有自己的，這些會捨棄：</p>
           <ul className="list-disc pl-5">
@@ -81,6 +85,7 @@ function PreviewWords({ preview, states }) {
               <li key={text}>保存 {text}</li>
             ))}
             {words.proseDropped.length ? <li>筆記 {words.proseDropped.join('、')}</li> : null}
+            {words.homemade === 'dropped' ? <li>自製版</li> : null}
           </ul>
         </div>
       ) : null}

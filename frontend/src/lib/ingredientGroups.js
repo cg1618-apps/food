@@ -8,7 +8,8 @@
 // Two shapes are built from it:
 //
 //   arrangeIngredients - the list, cut into one section per category in the
-//     tree's order. Inside a section, a block per group present (the parent,
+//     tree's order - a chosen parent category lists its sub-categories too,
+//     each in its own section titled with its path. Inside a section, a block per group present (the parent,
 //     then its varieties depth-first), then groups whose varieties are not in
 //     the result, then everything else. A block sits in its PARENT's section
 //     even when a variety is filed elsewhere; a variety whose parent is not in
@@ -48,6 +49,14 @@ export function groupSizes(all) {
   }
   for (const id of varieties.keys()) sizes.set(id, size(id, new Set([id])))
   return sizes
+}
+
+/**
+ * The ingredients filed in a category and every category below it - what
+ * choosing it lists (the API's `category_id` reads the same subtree).
+ */
+export function subtreeCount(node) {
+  return (node.ingredient_count ?? 0) + (node.children ?? []).reduce((sum, child) => sum + subtreeCount(child), 0)
 }
 
 /** Each category's title, a child category carrying its path: 蔬菜 › 葉菜. */
@@ -127,7 +136,8 @@ export function arrangeIngredients(result, all, categories = []) {
 
 /**
  * The 分類 sidebar's nodes: [{ key, kind, id, label, count, children }].
- * `kind` is 'category' (count: its exact ingredient_count) or 'group'
+ * `kind` is 'category' (count: its subtree total, `subtreeCount` - what
+ * choosing it lists) or 'group'
  * (count: the group's size including itself - what choosing it lists). A
  * top-level group sits under its own category; a group that is itself a
  * variety sits under its parent group.
@@ -159,7 +169,7 @@ export function categoryGroupTree(categories = [], all = []) {
     kind: 'category',
     id: node.id,
     label: node.display_name,
-    count: node.ingredient_count,
+    count: subtreeCount(node),
     children: [
       ...(node.children ?? []).map(categoryNode),
       ...(topGroups.get(node.id) ?? []).map((row) => groupNode(row, new Set([row.id]))),

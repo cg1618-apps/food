@@ -49,6 +49,7 @@ def create_category(payload: schemas.CategoryCreate, db: Session = Depends(get_d
     category = IngredientCategory(
         name_cn=payload.name_cn,
         name_en=payload.name_en,
+        description=payload.description,
         parent_id=payload.parent_id,
         sort_order=payload.sort_order,
     )

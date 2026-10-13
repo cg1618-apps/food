@@ -10,7 +10,10 @@ cascades with it. What it NAMES - a course, a region - is RESTRICT. What names
 IT - a recipe's `dish_id`, a recipe line's `sub_dish_id`, a scheduled meal's
 `dish_id` - is RESTRICT too, so a dish with recipes, one a recipe uses as an
 ingredient, or one on the schedule cannot go from under them; the API refuses
-first, naming them.
+first, naming them. The one exception is an ingredient's `homemade_dish_id`,
+SET NULL: a cross-reference, not a usage, so the ingredient stays and loses
+only its link. There is no collection for it here, so the ORM never nulls it
+itself - the database does.
 """
 
 from sqlalchemy import (

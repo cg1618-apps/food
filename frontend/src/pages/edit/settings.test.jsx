@@ -514,6 +514,49 @@ describe('設定', () => {
     )
   })
 
+  it("edits a category's notes with its names, line breaks kept and an emptied box sent as null", async () => {
+    handler = (call) => (call.method === 'PATCH' ? json({}) : settingsData(call))
+    renderAt('/edit/settings')
+    fireEvent.click(await screen.findByRole('button', { name: '改名「蔬菜」' }))
+    const notes = screen.getByRole('textbox', { name: '蔬菜 的說明' })
+    expect(notes.value).toBe('')
+    fireEvent.change(notes, { target: { value: '挑選：葉子挺\n冷藏 3-5 天' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() =>
+      expect(writes()).toEqual([
+        {
+          url: '/api/edit/ingredient-categories/2',
+          method: 'PATCH',
+          body: { name_cn: '蔬菜', name_en: '', description: '挑選：葉子挺\n冷藏 3-5 天' },
+        },
+      ]),
+    )
+  })
+
+  it("starts from a category's stored notes, and clears them when the box is emptied", async () => {
+    handler = (call) => {
+      if (call.method === 'PATCH') return json({})
+      if (call.url === '/api/ingredient-categories')
+        return json([{ ...TREE[0], description: '還沒分好的先放這裡' }, TREE[1]])
+      return settingsData(call)
+    }
+    renderAt('/edit/settings')
+    fireEvent.click(await screen.findByRole('button', { name: '改名「未分類」' }))
+    const notes = screen.getByRole('textbox', { name: '未分類 的說明' })
+    expect(notes.value).toBe('還沒分好的先放這裡')
+    fireEvent.change(notes, { target: { value: '  ' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() =>
+      expect(writes()).toEqual([
+        {
+          url: '/api/edit/ingredient-categories/1',
+          method: 'PATCH',
+          body: { name_cn: '未分類', name_en: '', description: null },
+        },
+      ]),
+    )
+  })
+
   it('adds a child under the node it was asked for, after its siblings', async () => {
     handler = (call) => (call.method === 'POST' ? json({}, 201) : settingsData(call))
     renderAt('/edit/settings')

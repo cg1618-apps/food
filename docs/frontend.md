@@ -157,13 +157,23 @@ under `cg1618:food:dishes-view`. **A recipe card** is the recipe's display
 name, with its dish's name under it when the two differ - the table view
 draws the same subtitle under the name.
 
-**The ingredient category filter is exact.** Choosing 蔬菜 lists what is filed
-under 蔬菜 itself, not under its child categories; that is the API's
-`category_id`, the count beside each node is the same number, and it is the
-category the ingredient page links to (`/ingredients?category=<id>`). The
-tree says so under itself. The stub backlog's count (`只看待補`) shows whether
+**A category lists its sub-categories' ingredients too.** Choosing 肉類 lists
+what is filed under 肉類 itself and under 肉類 › 雞肉, 肉類 › 豬肉 and anything
+deeper; a leaf category lists only itself. That is the API's `category_id`
+(a subtree), and the count beside each node is the same subtree total -
+its `ingredient_count` plus its descendants', summed by
+`lib/ingredientGroups.js` `subtreeCount` - so the number and the list agree.
+The ingredient page's category link (`/ingredients?category=<id>`) lands on
+that category the same way. The tree says so under itself. The stub backlog's count (`只看待補`) shows whether
 or not the switch is on, read from the unfiltered list - which also names a
 variety's parent when the filtered list does not include it.
+
+**A chosen category's notes come first.** With `category` set to a category
+that has a `description` - its own, never its sub-categories' - the list opens with a panel titled with the
+category's name holding those notes, line breaks kept - under the search
+box, above the count. A category without notes, and no category chosen,
+draw nothing there. A group choice draws nothing either: the notes are the
+category's, not the ingredient's.
 
 **A group is an ingredient with varieties** (`lib/ingredientGroups.js`), and
 whether a row is one is read from the unfiltered list, never the filtered
@@ -181,7 +191,8 @@ one - under 只看主項 the varieties are gone and 雞肉 is still a group.
   only, varieties only.
 - **The list is sectioned by category**, in the tree's order, a child category
   titled with its path (蔬菜 › 葉菜) and anything outside the tree last under
-  其他. Inside a section: groups with varieties in the result, as a block
+  其他. Choosing a parent category gives its own section first, then one per
+  sub-category that holds a result (蛋豆製品, then 蛋豆製品 › 蛋 …). Inside a section: groups with varieties in the result, as a block
   with those varieties depth-first; then groups whose varieties are filtered
   out; then the rest. A block sits in its parent's section even when a
   variety is filed elsewhere, and that variety names its own category in the
@@ -215,6 +226,9 @@ which block, and which reads go stale:
   under 它的食譜： those in `recipes` (a dish's own) and under 用到它的食譜：
   those in `used_in` - and under 排了它的日子： the dates in `meals`, each
   linked to its week on `/schedule`;
+- what only loses its link and stays (`notices` in `deleteTargets.js`: on a
+  dish, `bought_as`, the ingredients naming it as their 自製版) is said in
+  plain words; it neither blocks the delete nor is echoed;
 - a recipe's dialog has nothing that blocks: lines name dishes, the dish
   stays, and a meal item on the schedule naming the recipe keeps its dish;
 - a kitchen note has no cascade, so its dialog is the plain question.
@@ -244,7 +258,8 @@ empties.
   whichever start is chosen - the one section drawn even when empty
   (還沒有食譜。), since its button is how a new dish gets a recipe; and
   **用在**, the recipes whose lines name this dish, which is what a sauce's
-  page is mostly for.
+  page is mostly for; and **市售版**, the ingredients naming this dish as
+  their 自製版, each a link to its page.
 - **Recipe**: its **dish, a link**, with the dish's kind (醬料 only), course,
   region and 也可以當作 beside it and the dish's labels under the status -
   shown read-only, since they are the dish's and edited there; 書籤 when not
@@ -281,7 +296,7 @@ empties.
   and how many varieties it has; labels. A stub adds a 待補 note linking to
   its form. Then 說明, 挑選, 品種 (each child with its rating and where it is
   bought - the full row's children carry `sourcing_notes` for this), 哪裡買,
-  保存, 加熱 (°C with the °F beside it, 要預熱, 中途翻面), 參考連結, 用在.
+  自製版 (the dish that makes it at home, a link to it), 保存, 加熱 (°C with the °F beside it, 要預熱, 中途翻面), 參考連結, 用在.
 - **保存 is a state x method grid** (`lib/storageGrid.js`): rows are the
   states and columns the methods, both in the fixed vocabularies' order, and
   only those in use - a fridge-only ingredient is one column, not seven. A
@@ -294,7 +309,8 @@ empties.
 (ingredients, never itself); read the preview in words
 (`lib/mergePreview.js` - counts that move, names that become aliases, and in
 a warning block the storage rows and notes the target already has and so
-drops); 合併 posts `{into, fingerprint}`. Text typed in the picker and not
+drops, and whether the source's 自製版 moves or is dropped); 合併 posts
+`{into, fingerprint}`. Text typed in the picker and not
 picked is said under it (從清單選一個), since 合併 stays off until there is a
 target. If either ingredient changed since
 the preview, the server's 409 carries a fresh preview: it replaces the one
@@ -402,8 +418,15 @@ shows the choice in its place, with 待補 for a stub and 更換 to search again
 **Typed but not picked is never dropped.** `onQueryChange(text)` tells the
 caller what is in the box ('' after a pick), and every caller refuses to save
 over it: a recipe line holding text is not blank (below); the ingredient's
-品種 parent and the recipe's 料理 refuse the save with a sentence naming the
-text; the merge picker says it under the box.
+品種 parent, its 自製版 and the recipe's 料理 refuse the save with a sentence
+naming the text; the merge picker says it under the box.
+
+**The ingredient form's 自製版** is a typeahead over the dish library only
+(`sources={['dish']}`, any kind), shown as `Picked` once chosen with 移除 to
+clear it; the save sends `homemade_dish_id`, null when none. An ingredient
+save, delete or merge marks the dish reads stale too, since a dish's 市售版
+lists the ingredients naming it, and a dish delete marks the ingredient
+reads stale.
 
 **A new recipe asks how to start** (`pages/edit/NewRecipeChooser.jsx`):
 `/edit/recipes/new` with none of `blank`, `template` or `from` in its query
@@ -620,7 +643,9 @@ Each value is a `components/settings/NameRow.jsx`:
 - **Add** is the line under each vocabulary (`AddNameForm.jsx`); a new value
   goes after the last one. A category row's ＋子分類 opens the same line
   under that node; renaming a category also offers 上層, its parent (never
-  itself or anything beneath it).
+  itself or anything beneath it), and 說明, the category's own notes in a
+  multi-line box - an emptied box clears them (sent as null). They are what
+  the ingredient library shows above the list when that category is chosen.
 
 **常用食材** (`components/settings/CommonIngredientsEditor.jsx`) is not a
 vocabulary but an ordered pick of ingredients: the chips the recipe form

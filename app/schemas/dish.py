@@ -14,7 +14,13 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from app.constants import DISH_KINDS
 from app.schemas.image import AttachedImage, CoverRef
 from app.schemas.ingredient import _clean_aliases
-from app.schemas.recipe import RecipeRef, RecipeSummary, _check_choice, _normalise
+from app.schemas.recipe import (
+    IngredientRef,
+    RecipeRef,
+    RecipeSummary,
+    _check_choice,
+    _normalise,
+)
 from app.schemas.vocabulary import VocabRef
 
 LIST_FIELDS = ("aliases", "serves_as_ids", "label_ids")
@@ -129,6 +135,9 @@ class DishResponse(BaseModel):
     recipes: list[RecipeSummary] = []
     # Recipes with a line naming this dish - what a sauce is used in.
     used_in: list[RecipeRef] = []
+    # Ingredients naming this dish as their homemade version (自製版) - the
+    # bought things it stands in for (市售版), by display name.
+    bought_as: list[IngredientRef] = []
 
     created_at: datetime | None = None
     updated_at: datetime | None = None

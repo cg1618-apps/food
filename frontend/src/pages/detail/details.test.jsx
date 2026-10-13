@@ -488,6 +488,53 @@ describe('the dish page', () => {
     expect(within(usedIn).getByRole('link', { name: '麻婆豆腐' }).getAttribute('href')).toBe('/recipes/5')
   })
 
+  it('lists the ingredients it is the homemade version of as 市售版, and nothing when none', async () => {
+    handler = ({ url, method }) => {
+      if (method !== 'GET') return null
+      if (url === '/api/dishes/7') {
+        return json({
+          ...SAUCE,
+          bought_as: [
+            { id: 31, display_name: '辣油', needs_detail: false },
+            { id: 32, display_name: '紅油', needs_detail: true },
+          ],
+        })
+      }
+      if (url === '/api/dishes/40') return json({ ...DISH, bought_as: [] })
+      return null
+    }
+    renderAt('/dishes/7')
+    const bought = (await screen.findByRole('heading', { name: '市售版' })).closest('section')
+    const links = within(bought).getAllByRole('link')
+    expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+      ['辣油', '/ingredients/31'],
+      ['紅油', '/ingredients/32'],
+    ])
+    cleanup()
+
+    renderAt('/dishes/40')
+    await screen.findByRole('heading', { level: 1, name: '麻婆豆腐' })
+    expect(screen.queryByRole('heading', { name: '市售版' })).toBeNull()
+  })
+
+  it('says the ingredients that lose their link when it is deleted, and still deletes', async () => {
+    handler = ({ url, method }) => {
+      if (method === 'GET' && url === '/api/dishes/7') return json(SAUCE)
+      if (method === 'GET' && url === '/api/dishes/7/cascade') {
+        return json({ aliases: 0, recipes: 0, used_in: 0, meals: 0, bought_as: 2 })
+      }
+      if (method === 'DELETE') return new Response(null, { status: 204 })
+      return null
+    }
+    renderAt('/dishes/7')
+    fireEvent.click(await screen.findByRole('button', { name: '刪除' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText(/有 2 種食材把它當自製版/)).toBeTruthy()
+    fireEvent.click(within(dialog).getByRole('button', { name: '刪除' }))
+    await waitFor(() => expect(location()).toBe('/dishes'))
+    expect(calls.find((c) => c.method === 'DELETE').url).toBe('/api/edit/dishes/7?aliases=0')
+  })
+
   it('lists the recipes, the recipes using it and its meals when a delete is refused', async () => {
     handler = ({ url, method }) => {
       if (method === 'GET' && url === '/api/dishes/40') return json(DISH)
@@ -530,6 +577,23 @@ describe('the dish page', () => {
 describe('the ingredient page', () => {
   beforeEach(() => {
     handler = ({ url, method }) => (method === 'GET' && url === '/api/ingredients/20' ? json(INGREDIENT) : null)
+  })
+
+  it('links its homemade version, and draws nothing without one', async () => {
+    handler = ({ url, method }) =>
+      method === 'GET' && url === '/api/ingredients/20'
+        ? json({ ...INGREDIENT, homemade_dish: { id: 7, display_name: '辣油', kind: 'sauce' } })
+        : method === 'GET' && url === '/api/ingredients/21'
+          ? json({ ...INGREDIENT, id: 21, homemade_dish: null })
+          : null
+    renderAt('/ingredients/20')
+    const homemade = (await screen.findByRole('heading', { name: '自製版' })).closest('section')
+    expect(within(homemade).getByRole('link', { name: '辣油' }).getAttribute('href')).toBe('/dishes/7')
+    cleanup()
+
+    renderAt('/ingredients/21')
+    await screen.findByRole('heading', { level: 1, name: '青蔥' })
+    expect(screen.queryByRole('heading', { name: '自製版' })).toBeNull()
   })
 
   it('draws storage as a state by method grid with only what is used', async () => {

@@ -23,12 +23,13 @@ class CategoryBase(BaseModel):
 
     name_cn: str | None = None
     name_en: str | None = None
+    description: str | None = None
     parent_id: int | None = None
     sort_order: int = 0
 
-    @field_validator("name_cn", "name_en", mode="before")
+    @field_validator("name_cn", "name_en", "description", mode="before")
     @classmethod
-    def normalise_names(cls, value):
+    def normalise_text(cls, value):
         return _blank_to_none(value)
 
     @model_validator(mode="after")
@@ -57,12 +58,13 @@ class CategoryUpdate(BaseModel):
 
     name_cn: str | None = None
     name_en: str | None = None
+    description: str | None = None
     parent_id: int | None = None
     sort_order: int | None = None
 
-    @field_validator("name_cn", "name_en", mode="before")
+    @field_validator("name_cn", "name_en", "description", mode="before")
     @classmethod
-    def normalise_names(cls, value):
+    def normalise_text(cls, value):
         return _blank_to_none(value)
 
 
@@ -73,6 +75,8 @@ class CategoryResponse(BaseModel):
     display_name: str = ""
     name_cn: str | None = None
     name_en: str | None = None
+    # The family's own notes, line breaks kept; null when there are none.
+    description: str | None = None
     parent_id: int | None = None
     sort_order: int
     is_fallback: bool
@@ -82,10 +86,12 @@ class CategoryNode(CategoryResponse):
     """A category with its subtree, and the count the editor needs.
 
     `ingredient_count` is the ingredients filed in this node alone, not in the
-    nodes beneath it - the library's category filter is exact, and this is the
-    number beside it. It is here because computing it in the browser would mean
-    shipping every ingredient to do it. A subtree total is not sent: the
-    `children` lists are there for whoever wants to sum them.
+    nodes beneath it - what 設定 needs, since a category with ingredients of
+    its own cannot be deleted. It is here because computing it in the browser
+    would mean shipping every ingredient to do it. A subtree total is not
+    sent: the `children` lists are there for whoever wants to sum them, and
+    the library's sidebar does - its count is the subtree total, which is
+    what the category filter lists.
     """
 
     children: list["CategoryNode"] = []

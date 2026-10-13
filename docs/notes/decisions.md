@@ -1021,13 +1021,82 @@ vanish exactly when someone asked to see only the groups.
 **A block sits in its parent's section.** A variety may be filed in another
 category than its parent (乾辣椒 is 乾貨, 辣椒 is 蔬菜). Splitting the block
 across two sections would undo the point of the block, so the variety stays
-with its parent and names its own category there. The category filter stays
-exact, so choosing 乾貨 still lists 乾辣椒 - alone, as 「辣椒 的品種」.
+with its parent and names its own category there. Choosing 乾貨 still lists
+乾辣椒 - alone, as 「辣椒 的品種」 - since its parent is filed outside 乾貨's
+subtree.
+
+**A category filter includes its sub-categories.** It was exact when it was
+set, because only top-level categories held ingredients then. Production now
+files them into sub-categories (肉類 › 雞肉 / 豬肉 / 牛肉, 海鮮 › 魚類, 蛋豆製品
+› 蛋), and the exact filter showed a parent as empty - 肉類 listed 0, and
+蛋豆製品 left out the eggs filed under 蛋. So `category_id` is a recursive
+query over the category tree, as `group_id` is over `parent_id`, and the
+sidebar's count is the subtree total, summed from the same tree, so the
+number and the list cannot disagree. Each sub-category keeps its own section
+under its path. `ingredient_count` on the tree stays the node's own: 設定
+refuses deleting a category with ingredients filed directly in it, and that
+is the number the refusal is about. Every caller of the filter wants the
+subtree - the library, and the ingredient page's category link - so there
+is no second, exact parameter.
 
 **品種 became a three-way choice, not a second switch.** 只看主項 and 只看品種
 contradict each other; two switches would allow both on and list nothing.
 The URL word for the old switch (`?variety=1`) is kept as an alias of
 `only`, so a link written before the change still lands.
+
+## A category's own notes
+
+**A category carries a `description`, for notes about a family as a whole.**
+The owner's rule draws the line between the two tables: an ingredient is
+something you buy, or write on a recipe line, as itself - 醬油, which also has
+varieties - and a category is a family name whose members you buy but which
+is never itself bought or cited - 雞肉, under 肉類, whose members are 雞腿 and
+雞胸肉. That leaves notes about the family ("how to pick fresh chicken",
+"chicken keeps 1-2 days in the fridge") with nowhere to live: on any one
+member they are hidden from the others, and copied onto each they drift.
+
+Rejected: making 雞肉 an ingredient to hang the notes on. It would be a row
+that is never bought or cited, which is exactly what the rule says an
+ingredient is not, and it would turn up in the typeahead and the stock list
+as if it could be.
+
+**One free-text column, not the ingredient's four.** An ingredient splits its
+notes into what it is, picking, sourcing and keeping because each is read at a
+different moment of an errand. A family's notes are short and few; splitting
+them before anyone has written them would be four empty boxes per category.
+
+**Shown where the family is browsed.** The ingredient library draws a chosen
+category's notes above its list, which is where a reader looking at 肉類 ›
+雞肉 is; the category is not a page of its own.
+
+## Bought or made: 自製版
+
+**Two rows, linked.** Caramel, 雞高湯 and 油蔥酥 can be bought or made. The
+bought thing is an ingredient - stocked, bought, cited on a recipe line - and
+the homemade one is a dish, usually a 醬料, with recipes of its own.
+`ingredient.homemade_dish_id` names the dish. A recipe line names whichever
+the recipe means, which is usually the ingredient: "add 雞高湯" is satisfied
+either way, and module 4 is where that is resolved (see "Rules with no
+referent yet"). Rejected: one row that is both, which would give every
+ingredient a recipe list or every dish a stock flag, each empty for almost
+every row.
+
+**Not unique, and any kind.** Making 油蔥酥 also yields 紅蔥油, so one dish may
+be the homemade version of several ingredients. Any dish `kind` may be named:
+`kind` is how the library files a dish, not a permission - the rule a recipe
+line follows too.
+
+**`ON DELETE SET NULL`, not `RESTRICT`.** The link is a cross-reference, not
+a usage: nothing about the ingredient stops being true when the dish goes,
+and deleting a dish should not require first unlinking it in another
+library. The delete dialog still says how many ingredients lose the link
+(`bought_as` in the cascade), as a notice rather than a blocker or an echoed
+count. The ORM side has no collection on `Dish`, so the database does the
+nulling (`docs/data-model.md`).
+
+**Merge keeps the target's.** As with a prose field, the target's own link
+wins and the source's moves only when the target has none; the preview says
+which, and the link is in the fingerprint.
 
 ## Every label in one library
 
@@ -1115,6 +1184,12 @@ Written down where the next person will look rather than where they were
 learned. Each is dormant today and goes live the moment food grows the feature
 it is about — which is exactly when nobody will remember it.
 
+- **An ingredient with a homemade version is available when it is in stock
+  OR its dish is cookable.** "What can I cook" (module 4) resolves a recipe
+  line naming 雞高湯 the ingredient; with `homemade_dish_id` set, the line is
+  satisfied by the bought thing on the shelf or by being able to make the
+  dish. Answering on stock alone would rank a recipe as missing something the
+  kitchen can make.
 - **A row-hiding filter belongs in SQL, not in Python after the page was
   cut.** food hides nothing today. The moment it has a discontinued ingredient
   or an archived recipe, filtering after `limit`/`offset` silently shortens
@@ -1150,6 +1225,6 @@ it is about — which is exactly when nobody will remember it.
   media has one, and deleting a duplicate instead is on its own list of
   mistakes. Module 1 adds nothing that makes merging hard: no name is copied
   into another table.
-- **Whether a bought-and-makeable thing is one row or two** — caramel is an
-  ingredient you can buy and a general recipe you can make. Module 1 adds no
-  link column and assumes nothing either way.
+- **A bought-and-makeable thing is two rows.** Caramel is an ingredient you
+  can buy and a dish (a 醬料) you can make; the ingredient's
+  `homemade_dish_id` links the two. See "Bought or made: 自製版" below.

@@ -11,17 +11,24 @@
 // varieties drawn under it. Choosing a group lists it and every variety below
 // it (the API's group_id); a group and a category are never both chosen.
 //
-// The category filter is EXACT: an ingredient filed under a child category is
-// not listed under its parent. That is the API's `category_id`, the count the
-// tree shows beside each node, and the category the detail page links to, so
-// the three agree; the tree's hint says it in a sentence.
+// A chosen category's own notes - its `description`, what is true of the whole
+// family (how to pick fresh chicken, how long it keeps) - are drawn above the
+// list, line breaks kept; a category without notes draws nothing there. Only
+// the chosen one's: a parent's panel does not repeat its sub-categories'.
+//
+// A category lists its sub-categories' ingredients too: choosing 肉類 lists
+// what is filed under 肉類 › 雞肉 and 肉類 › 豬肉, each sub-category in its
+// own section. That is the API's `category_id` (a subtree), and the count
+// beside each node is the same subtree total (lib/ingredientGroups.js
+// `subtreeCount`), so the two agree; the tree's hint says it in a sentence.
 import { keepPreviousData } from '@tanstack/react-query'
 import { useMemo } from 'react'
 
 import { endpoints } from '../../api/endpoints'
 import { FilterGroup, FilterOptions, FilterSwitch, FilterTree } from '../../components/layout/FilterPanel'
+import { Prose } from '../../components/layout/Detail'
 import LibraryLayout from '../../components/layout/LibraryLayout'
-import { Badge, Toggle } from '../../components/ui/primitives'
+import { Badge, Card, Toggle } from '../../components/ui/primitives'
 import { useApiQuery, useFixedVocabularies, useLabels } from '../../hooks/useApi'
 import { useUrlFilters } from '../../hooks/useUrlFilters'
 import { formatDays } from '../../lib/format'
@@ -62,10 +69,14 @@ export default function IngredientLibrary() {
   const labels = useLabels('ingredient')
   const fixed = useFixedVocabularies()
 
+  const flatCategories = useMemo(() => flatten(categories.data ?? []), [categories.data])
   const categoryNames = useMemo(
-    () => new Map(flatten(categories.data ?? []).map((node) => [node.id, node.display_name])),
-    [categories.data],
+    () => new Map(flatCategories.map((node) => [node.id, node.display_name])),
+    [flatCategories],
   )
+  const chosenCategory = values.category
+    ? flatCategories.find((node) => String(node.id) === values.category)
+    : null
   const ingredientNames = useMemo(
     () => new Map((everything.data ?? []).map((row) => [row.id, row.display_name])),
     [everything.data],
@@ -144,11 +155,18 @@ export default function IngredientLibrary() {
     else setValues({ category: values.category === value ? '' : value, group: '' })
   }
 
+  const intro = chosenCategory?.description ? (
+    <Card role="region" aria-label={`${chosenCategory.display_name}的說明`} className="space-y-1">
+      <h2 className="text-sm font-medium text-text-muted">{chosenCategory.display_name}</h2>
+      <Prose>{chosenCategory.description}</Prose>
+    </Card>
+  ) : null
+
   const sidebar = (
     <>
       <FilterGroup
         title="分類"
-        hint="分類只列出直接歸在該分類下的食材，不含子分類。○ 是有品種的食材，選它會列出它和它所有的品種。"
+        hint="分類會列出歸在它和它所有子分類下的食材，數字也是這樣算。○ 是有品種的食材，選它會列出它和它所有的品種。"
       >
         <FilterTree nodes={tree} selectedKey={selectedKey} onSelect={choose} />
       </FilterGroup>
@@ -203,6 +221,7 @@ export default function IngredientLibrary() {
       columns={columns}
       itemTo={(row) => `/ingredients/${row.id}`}
       arrange={arrange}
+      intro={intro}
       searchPlaceholder="搜尋名稱或別名…"
       emptyText="還沒有任何食材。"
       noMatchText="沒有符合條件的食材。"
