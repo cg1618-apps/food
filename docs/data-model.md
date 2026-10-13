@@ -79,6 +79,12 @@ belongs in `ingredient_alias`. Without that line the two hold the same strings.
 **`needs_detail` is explicit, never derived from "has no notes".** Salt needs no
 selection guide and must be able to say so.
 
+**An ingredient's name is never a category's.** Its `name_cn` and
+`name_en` may not equal a category's `name_cn` or `name_en`, trimmed and
+ignoring case - see "A name is a category or an ingredient, never both"
+under `ingredient_category`, where the rule and its enforcement are.
+`name_alt` and aliases are not part of it.
+
 **`rating` grades one variety**, mostly a child — 愛文芒果 under 芒果 — and is
 validated against `RATINGS` in `app/constants.py`. It is a `String`, like every
 closed list here, so the grades are a one-line edit.
@@ -108,6 +114,35 @@ every member of a category that is never itself bought or cited - how to pick
 fresh chicken, how long chicken keeps, on 肉類 › 雞肉. An ingredient's notes
 are about the thing you buy; a category's are about the family. Blank is
 stored as null.
+
+**A name is a category or an ingredient, never both.** A category is a
+family whose members are bought but which is never bought or cited itself
+(雞肉); an ingredient is bought or cited as itself (醬油), its kinds under it
+as varieties through `parent_id`. So no category's `name_cn` or `name_en`
+equals an ingredient's `name_cn` or `name_en`, compared trimmed and ignoring
+case. Names only: an ingredient's aliases and its `name_alt` (a category has
+neither) are not compared.
+
+**It is held on the write path, not by a constraint, because no constraint
+can hold it.** It spans two tables, and a unique index - like any index -
+covers one; PostgreSQL has no cross-table unique, and the alternative, a
+trigger on each table querying the other, would be a second copy of the rule
+answering with a bare SQL error instead of the conversion offer. So
+`app/services/category_clash.py` checks every write that sets a name: an
+ingredient save (create, or an update changing `name_cn` or `name_en`) under a
+category's name is refused with an offer to convert the category into it; a
+category save (create, or a rename) under an ingredient's name is refused; a
+recipe save never makes a stub under a category's name. A clash older than
+the rule is not refused by a save that leaves the names alone. `docs/api.md`
+has the statuses and bodies.
+
+**Converting a category** happens in the ingredient save's transaction:
+its ingredients are re-filed into its parent (a top-level category's into a
+category the owner picks), those that were top-level become varieties of the
+saved ingredient unless that would be a cycle, its child categories move up
+to its parent with their own ingredients and children, its `description`
+becomes the ingredient's when the ingredient has none, and the row is
+deleted. The fallback category is never converted.
 
 **A category's own category is never inherited by a child ingredient.** The
 form may pre-fill it; the stored value is the row's own. Inheritance would mean

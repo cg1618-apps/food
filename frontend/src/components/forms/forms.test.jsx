@@ -2,7 +2,8 @@
 // its 「新增」, the delete dialog correcting itself on a 409 and listing what
 // blocks a refusal, the recipe form's save - its dish, picked or new or
 // preset from ?dish=, one target per line, and a new recipe's gallery PUT only
-// after the POST has answered with an id - and the dish form's save.
+// after the POST has answered with an id - the dish form's save, and the
+// ingredient form's 「轉成食材」 dialog when its name is a category's.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
@@ -1222,6 +1223,154 @@ describe('IngredientForm', () => {
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
     expect((await screen.findByRole('alert')).textContent).toMatch(/自製版.*焦糖醬/)
     expect(calls.some((c) => c.method === 'POST')).toBe(false)
+  })
+
+  // A name is a category or an ingredient, never both. A save under a
+  // category's name is refused with a preview; the dialog says it and
+  // approving resends the same save with the conversion.
+  describe('a name a category already has', () => {
+    const CLASH_TREE = [
+      { id: 1, display_name: '預設', is_fallback: true, children: [] },
+      {
+        id: 2,
+        display_name: '肉類',
+        children: [{ id: 3, display_name: '雞肉', children: [{ id: 4, display_name: '土雞', children: [] }] }],
+      },
+      { id: 5, display_name: '海鮮', children: [{ id: 6, display_name: '魚類', children: [] }] },
+    ]
+    const PREVIEW = {
+      category: { id: 3, display_name: '雞肉' },
+      target: { id: 2, display_name: '肉類' },
+      choose_target: false,
+      takes_target: true,
+      adopted: [{ id: 20, display_name: '雞腿' }],
+      varieties: [{ id: 21, display_name: '雞胸肉' }],
+      kept_top_level: [],
+      child_categories: [{ id: 4, display_name: '土雞' }],
+      child_parent: { id: 2, display_name: '肉類' },
+      blocked_by: [],
+      description: 'moved',
+      fingerprint: 'fp-1',
+    }
+    const refuse = (preview) =>
+      json({ detail: '「雞肉」是分類，食材不能同名。', category_clash: preview }, 409)
+
+    async function saveNamed(name, category = '雞肉') {
+      wrap(<AppRoutes />, '/edit/ingredients/new')
+      fireEvent.change(await screen.findByLabelText('中文名'), { target: { value: name } })
+      await waitFor(() => expect(screen.getByRole('button', { name: '儲存' }).disabled).toBe(false))
+      fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+      return screen.findByRole('dialog', { name: `「${category}」是分類` })
+    }
+
+    const posts = () => calls.filter((c) => c.method === 'POST')
+
+    it('says what converting does, and approving resends the save with the conversion', async () => {
+      handler = ({ url, method, body }) => {
+        if (url === '/api/ingredient-categories') return json(CLASH_TREE)
+        if (method === 'POST') return body.convert_category ? json({ id: 50 }, 201) : refuse(PREVIEW)
+        return json([])
+      }
+      const dialog = await saveNamed('雞肉')
+      const text = dialog.textContent
+      expect(text).toContain('刪除分類「雞肉」')
+      expect(text).toContain('這個食材改放在「肉類」')
+      expect(text).toContain('「雞腿」 移到「肉類」，成為「雞肉」的品種')
+      expect(text).toContain('「雞胸肉」 移到「肉類」，仍是原本那個食材的品種')
+      expect(text).toContain('子分類 「土雞」 移上一層')
+      expect(text).toContain('分類的說明變成這個食材的「是什麼」')
+      // Its category has a parent, so there is nothing to choose.
+      expect(within(dialog).queryByRole('combobox')).toBeNull()
+
+      fireEvent.click(within(dialog).getByRole('button', { name: '轉成食材' }))
+      await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/ingredients/50'))
+      expect(posts()).toHaveLength(2)
+      expect(posts()[1].body).toEqual({
+        ...posts()[0].body,
+        convert_category: { category_id: 3, target_category_id: null, fingerprint: 'fp-1' },
+      })
+    })
+
+    it('cancelling leaves the form unsaved, as it was', async () => {
+      handler = ({ url, method }) => {
+        if (url === '/api/ingredient-categories') return json(CLASH_TREE)
+        if (method === 'POST') return refuse(PREVIEW)
+        return json([])
+      }
+      const dialog = await saveNamed('雞肉')
+      fireEvent.click(within(dialog).getByRole('button', { name: '取消' }))
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(screen.getByLabelText('中文名').value).toBe('雞肉')
+      expect(screen.getByTestId('location').textContent).toBe('/edit/ingredients/new')
+      expect(posts()).toHaveLength(1)
+    })
+
+    it('asks where a top-level category’s ingredients go, offering nothing inside it', async () => {
+      const topLevel = {
+        ...PREVIEW,
+        category: { id: 5, display_name: '海鮮' },
+        target: null,
+        choose_target: true,
+        child_parent: null,
+        child_categories: [{ id: 6, display_name: '魚類' }],
+      }
+      handler = ({ url, method, body }) => {
+        if (url === '/api/ingredient-categories') return json(CLASH_TREE)
+        if (method === 'POST') return body.convert_category ? json({ id: 51 }, 201) : refuse(topLevel)
+        return json([])
+      }
+      const dialog = await saveNamed('海鮮', '海鮮')
+      const select = within(dialog).getByRole('combobox', { name: /它的食材移到哪個分類/ })
+      // The fallback by default; the category and what is below it never.
+      expect(select.value).toBe('1')
+      const offered = within(select).getAllByRole('option').map((o) => o.value)
+      expect(offered).not.toContain('5')
+      expect(offered).not.toContain('6')
+      expect(dialog.textContent).toContain('移上一層，到最上層')
+
+      fireEvent.change(select, { target: { value: '2' } })
+      fireEvent.click(within(dialog).getByRole('button', { name: '轉成食材' }))
+      await waitFor(() => expect(posts()).toHaveLength(2))
+      expect(posts()[1].body.convert_category).toEqual({
+        category_id: 5,
+        target_category_id: 2,
+        fingerprint: 'fp-1',
+      })
+    })
+
+    it('blocks the conversion when a child category’s name is taken one level up', async () => {
+      const blocked = {
+        ...PREVIEW,
+        blocked_by: [{ category: { id: 4, display_name: '土雞' }, sibling: { id: 9, display_name: '土雞' } }],
+      }
+      handler = ({ url, method }) => {
+        if (url === '/api/ingredient-categories') return json(CLASH_TREE)
+        if (method === 'POST') return refuse(blocked)
+        return json([])
+      }
+      const dialog = await saveNamed('雞肉')
+      expect(within(dialog).getByRole('alert').textContent).toMatch(/不能轉換.*土雞/)
+      expect(within(dialog).getByRole('button', { name: '轉成食材' }).disabled).toBe(true)
+    })
+
+    it('replaces a stale preview with the fresh one and asks again', async () => {
+      const fresh = { ...PREVIEW, adopted: [...PREVIEW.adopted, { id: 22, display_name: '雞翅' }], fingerprint: 'fp-2' }
+      handler = ({ url, method, body }) => {
+        if (url === '/api/ingredient-categories') return json(CLASH_TREE)
+        if (method === 'POST') {
+          if (!body.convert_category) return refuse(PREVIEW)
+          return body.convert_category.fingerprint === 'fp-2' ? json({ id: 52 }, 201) : refuse(fresh)
+        }
+        return json([])
+      }
+      const dialog = await saveNamed('雞肉')
+      fireEvent.click(within(dialog).getByRole('button', { name: '轉成食材' }))
+      expect((await within(dialog).findByRole('status')).textContent).toContain('有人改過')
+      expect(dialog.textContent).toContain('「雞翅」')
+      fireEvent.click(within(dialog).getByRole('button', { name: '確認轉換' }))
+      await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/ingredients/52'))
+      expect(posts().map((c) => c.body.convert_category?.fingerprint)).toEqual([undefined, 'fp-1', 'fp-2'])
+    })
   })
 
   it('holds the save button until the categories it must choose from have loaded', async () => {

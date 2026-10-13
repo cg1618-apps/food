@@ -55,7 +55,7 @@ from app.models import (
     StepGroup,
 )
 from app.schemas.recipe import LIST_FIELDS
-from app.services import dishes
+from app.services import category_clash, dishes
 from app.services.hierarchy import MAX_DEPTH
 from app.services.lookup import fetch_all
 from app.services.search import ESCAPE, contains
@@ -608,6 +608,25 @@ def _find_by_name(db: Session, names: list[str]) -> Ingredient | None:
     )
 
 
+def _refuse_category_name(db: Session, names: list[str]) -> None:
+    """422 when a stub would take a category's name.
+
+    A name is a category or an ingredient, never both. Saving an ingredient
+    offers to convert the category; a recipe save does not - a dialog about
+    the category tree in the middle of writing a recipe is the interruption a
+    stub exists to avoid. So the save is refused, naming the category.
+    """
+    clash = category_clash.categories_named(db, names)
+    if clash:
+        category = clash[0]
+        raise AppError(
+            422,
+            f"「{category.display_name}」是食材分類，不能當成新食材：請選一個現有的食材，"
+            "或先在食材頁把這個分類轉成食材。",
+            category={"id": category.id, "display_name": category.display_name},
+        )
+
+
 def _resolve_new_ingredients(db: Session, entries) -> dict[int, int]:
     """Line index -> ingredient id, for every `new_ingredient` line.
 
@@ -628,6 +647,7 @@ def _resolve_new_ingredients(db: Session, entries) -> dict[int, int]:
         if row is None:
             row = _find_by_name(db, names)
         if row is None:
+            _refuse_category_name(db, names)
             if fallback is None:
                 fallback = db.query(IngredientCategory).filter_by(is_fallback=True).first()
                 if fallback is None:

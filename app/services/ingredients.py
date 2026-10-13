@@ -35,7 +35,7 @@ from app.models import (
     RecipeLine,
     RecipeLineAlternative,
 )
-from app.services import recipe_templates
+from app.services import category_clash, recipe_templates
 from app.services.hierarchy import check_parent, is_descendant
 from app.services.lookup import fetch_all, fetch_labels
 from app.services.recipes import distinct_alternatives
@@ -246,12 +246,25 @@ def create(db: Session, payload) -> Ingredient:
     _check_homemade_dish(db, payload.homemade_dish_id)
     # Resolved before anything is added, so a refused label writes nothing.
     labels = fetch_labels(db, payload.label_ids, "ingredient")
+    # A name a category already has is a 409 offering to convert it, unless
+    # this save carries that conversion (services/category_clash.py).
+    conversion = category_clash.plan(
+        db,
+        ingredient_id=None,
+        names=(payload.name_cn, payload.name_en),
+        category_id=payload.category_id,
+        parent_id=payload.parent_id,
+        description=payload.description,
+    )
+    target_id = category_clash.settle(db, conversion, payload.convert_category)
 
     ingredient = Ingredient(
         name_cn=payload.name_cn,
         name_en=payload.name_en,
         name_alt=payload.name_alt,
-        category_id=payload.category_id,
+        category_id=target_id
+        if conversion is not None and conversion.takes_target
+        else payload.category_id,
         parent_id=payload.parent_id,
         homemade_dish_id=payload.homemade_dish_id,
         description=payload.description,
@@ -267,6 +280,8 @@ def create(db: Session, payload) -> Ingredient:
     _apply_links(ingredient, payload.links)
     db.add(ingredient)
     db.flush()
+    if conversion is not None:
+        category_clash.convert(db, conversion, ingredient, target_id)
     ingredient.labels = labels
     db.commit()
     return get(db, ingredient.id)
@@ -283,6 +298,9 @@ def update(db: Session, ingredient_id: int, payload) -> Ingredient:
     if "homemade_dish_id" in changes:
         _check_homemade_dish(db, changes["homemade_dish_id"])
 
+    # The conversion stays a model, not the dict `model_dump` made of it.
+    changes.pop("convert_category", None)
+    names_before = (ingredient.name_cn, ingredient.name_en)
     aliases = changes.pop("aliases", None)
     preservation = changes.pop("preservation", None)
     heating = changes.pop("heating", None)
@@ -312,6 +330,25 @@ def update(db: Session, ingredient_id: int, payload) -> Ingredient:
         _apply_links(ingredient, _as_entries(links, schemas.LinkIn))
     if labels is not None:
         ingredient.labels = labels
+
+    # Only a save that changes a name can make a new clash. The merged row's
+    # names are checked, so a rename also surfaces a clash its other name
+    # already had.
+    if (ingredient.name_cn, ingredient.name_en) != names_before:
+        conversion = category_clash.plan(
+            db,
+            ingredient_id=ingredient.id,
+            names=(ingredient.name_cn, ingredient.name_en),
+            category_id=ingredient.category_id,
+            parent_id=ingredient.parent_id,
+            description=ingredient.description,
+        )
+        target_id = category_clash.settle(db, conversion, payload.convert_category)
+        if conversion is not None:
+            if conversion.takes_target:
+                ingredient.category_id = target_id
+            db.flush()
+            category_clash.convert(db, conversion, ingredient, target_id)
 
     db.commit()
     return get(db, ingredient_id)

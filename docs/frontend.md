@@ -452,6 +452,31 @@ save, delete or merge marks the dish reads stale too, since a dish's 市售版
 lists the ingredients naming it, and a dish delete marks the ingredient
 reads stale.
 
+**A name a category already has** stops the ingredient form's save in
+`components/modals/CategoryClashDialog.jsx`. A name is a category or an
+ingredient, never both, so the server answers such a save with 409 and a
+`category_clash` preview, and the form opens the dialog, 「「雞肉」是分類」,
+instead of showing an error. It says, item by item, what turning the
+category into this ingredient does: the category is deleted; where its
+ingredients go (its parent); whether this ingredient goes there too (its own
+category is the one going); which ingredients become its varieties, which
+keep the parent they have, and which stay top-level because they sit above
+it; which child categories move up, and to where; whether the category's
+notes become its 「是什麼」 or are dropped because it has its own. A
+top-level category has no parent to take its ingredients, so the dialog
+asks for one - a category select, 未分類 by default, never offering the
+category itself or anything below it. A child category whose name is
+already taken one level up blocks it: the dialog names it and 轉成食材 stays
+off. **轉成食材** resends the same save with `convert_category`; a 409 with a
+fresh preview (something changed since) replaces the one shown, says so, and
+the button becomes 確認轉換, as the merge dialog does. **取消** closes it and
+leaves the form unsaved, exactly as it was. Any other refusal - the fallback
+category's name, or a name two categories answer to - is the ordinary error
+above 儲存.
+
+A recipe save never opens this dialog: a 新增 line under a category's name
+is refused with a sentence above the recipe's 儲存, naming the category.
+
 **A new recipe asks how to start** (`pages/edit/NewRecipeChooser.jsx`):
 `/edit/recipes/new` with none of `blank`, `template` or `from` in its query
 string shows three sections instead of the form - **空白** (「空白食譜」),
@@ -662,7 +687,8 @@ Each value is a `components/settings/NameRow.jsx`:
 
 - **改名** turns the row into its two name slots in place; Enter saves,
   Escape puts the row back. A 409 (a duplicate name) or 422 is said under
-  the boxes.
+  the boxes - for a category, also an ingredient's name (「醬油」已是食材，
+  分類不能同名。), which the add line says the same way.
 - **The drag handle** reorders by `sort_order` (`lib/vocabulary.js`
   `reorderPatches`): when every sibling's number is distinct the siblings
   keep the same set of numbers, handed out again in the new order - a

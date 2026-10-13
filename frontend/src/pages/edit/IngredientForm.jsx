@@ -10,7 +10,10 @@
 // gallery. Every list is the shared RowEditor; every closed list comes from
 // the backend (useFixedVocabularies), not a copy.
 //
-// Saving goes to the ingredient's page.
+// Saving goes to the ingredient's page. A name a category already has is
+// refused with a `category_clash` preview, and the save waits behind
+// CategoryClashDialog: approving resends it with `convert_category`,
+// cancelling leaves the form unsaved as it was.
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
@@ -19,6 +22,7 @@ import ChipPicker from '../../components/forms/ChipPicker'
 import DeleteDialog from '../../components/forms/DeleteDialog'
 import FormActions from '../../components/forms/FormActions'
 import GalleryPicker from '../../components/forms/GalleryPicker'
+import CategoryClashDialog from '../../components/modals/CategoryClashDialog'
 import RowEditor from '../../components/forms/RowEditor'
 import Typeahead, { Picked } from '../../components/forms/Typeahead'
 import { Field, Input, Section, Select, TextArea } from '../../components/ui/primitives'
@@ -139,6 +143,8 @@ export default function IngredientForm() {
   const [loaded, setLoaded] = useState(null)
   const [error, setError] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  // The `category_clash` preview of a refused save, while its dialog is open.
+  const [clash, setClash] = useState(null)
   // Typed into the parent box and not picked: refused on save, never dropped.
   const [parentTyped, setParentTyped] = useState('')
   // The same for the homemade-version box.
@@ -217,16 +223,29 @@ export default function IngredientForm() {
       return
     }
     try {
-      const saved = await save({
-        id,
-        body: payload(),
-        gallery: form.gallery,
-        galleryDirty: galleryChanged(galleryFromImages(loaded?.images), form.gallery),
-      })
-      navigate(`/ingredients/${saved.id}`)
+      await persist()
     } catch (caught) {
-      setError(caught)
+      if (caught.status === 409 && caught.body?.category_clash) {
+        setClash(caught.body.category_clash)
+      } else {
+        setError(caught)
+      }
     }
+  }
+
+  // The save, optionally converting the clashing category with it. The
+  // dialog catches what this throws: a fresh preview, or a refusal.
+  async function persist(conversion = null) {
+    const body = payload()
+    if (conversion) body.convert_category = conversion
+    const saved = await save({
+      id,
+      body,
+      gallery: form.gallery,
+      galleryDirty: galleryChanged(galleryFromImages(loaded?.images), form.gallery),
+    })
+    setClash(null)
+    navigate(`/ingredients/${saved.id}`)
   }
 
   const options = (list) =>
@@ -551,6 +570,16 @@ export default function IngredientForm() {
             onDelete={isNew ? null : () => setDeleting(true)}
           />
         </>
+      ) : null}
+
+      {clash ? (
+        <CategoryClashDialog
+          preview={clash}
+          ingredientName={form.name_cn.trim() || form.name_en.trim() || clash.category.display_name}
+          categories={categories.data}
+          onConfirm={persist}
+          onClose={() => setClash(null)}
+        />
       ) : null}
 
       {deleting ? (

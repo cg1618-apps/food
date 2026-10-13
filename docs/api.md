@@ -274,6 +274,75 @@ that names nothing. A missing source — the id in the URL — is 404. The body
 refuses unknown fields. These are checked before the fingerprint, so a merge
 that could never run is a 422 or 404, not a 409.
 
+**A name a category already has.** A name is a category or an ingredient,
+never both (`docs/data-model.md`). A `POST`, or a `PATCH` changing `name_cn`
+or `name_en`, whose `name_cn` or `name_en` equals a category's `name_cn` or
+`name_en` - trimmed, ignoring case; `name_alt` and aliases do not count - is
+refused with **409** and nothing written, with the preview of turning that
+category into this ingredient beside the detail. As everywhere in this API
+the body carries data to act on rather than an error code; `category_clash`
+is it:
+
+```json
+{"detail": "「雞肉」是分類，食材不能同名。可以把這個分類轉成這個食材。",
+ "category_clash": {
+   "category": {"id": 3, "display_name": "雞肉"},
+   "target": {"id": 2, "display_name": "肉類"},
+   "choose_target": false,
+   "takes_target": true,
+   "adopted": [{"id": 20, "display_name": "雞腿"}],
+   "varieties": [{"id": 21, "display_name": "雞胸肉"}],
+   "kept_top_level": [],
+   "child_categories": [{"id": 4, "display_name": "土雞"}],
+   "child_parent": {"id": 2, "display_name": "肉類"},
+   "blocked_by": [],
+   "description": "moved",
+   "fingerprint": "9b0e…"}}
+```
+
+The same save sent again with `"convert_category": {"category_id": 3,
+"target_category_id": null, "fingerprint": "9b0e…"}` does it, in the save's
+transaction - anything refused leaves nothing changed:
+
+- `target` is where the category's ingredients are re-filed: its parent. A
+  top-level category has none, so `target` is null, `choose_target` true,
+  and `target_category_id` names one; it may not be the category or anything
+  below it. For a category with a parent, a `target_category_id` other than
+  null or that parent is refused;
+- `takes_target`: the ingredient's own `category_id` is the category being
+  converted, so it is filed in the target instead;
+- the ingredients filed directly in the category are re-filed in the target.
+  Those that were top-level become varieties of the saved ingredient
+  (`adopted`), except any above it in its own parent chain, which stay
+  top-level (`kept_top_level`) since adopting one would be a cycle; those
+  that were varieties keep their parent (`varieties`);
+- the category's child categories move up to its parent (`child_parent`,
+  null for the top level) with their own ingredients and children;
+- its `description` becomes the ingredient's when the ingredient's own is
+  empty (`"moved"`) and is dropped otherwise (`"dropped"`; null when it has
+  none);
+- the category is deleted.
+
+Refused with **422**, checked before the fingerprint so a conversion that
+could never run is not offered again: a child whose `name_cn` is already
+taken one level up - `blocked_by` lists each as `{category, sibling}`, and
+the detail names them; the preview carries the same list, so the dialog can
+say it before anything is sent - and a missing, inside or disallowed
+`target_category_id`. A `fingerprint` that is not the plan's any more (a
+row it moves, or the category itself, changed since the preview) is 409 with
+the fresh `category_clash`. A `convert_category` naming another category
+than the clashing one is the plain 409 offer again; one sent when the name no
+longer clashes is ignored and the save runs.
+
+Two clashes no conversion resolves:
+
+- **the fallback category** (未分類) is never converted: **422**, with
+  `category: {id, display_name}`;
+- **a name two categories answer to** (one's `name_cn`, another's `name_en`,
+  or the same name under two parents): **409** with `categories: [{id,
+  display_name}]` and no `category_clash` - which one is meant is the
+  owner's to say, by renaming the other first.
+
 **`PUT /api/edit/ingredients/{id}/images`** takes a list of
 `{"image_id": 12, "focus": "50% 30%"}` and makes it the gallery, in that order;
 index 0 is the cover. `[]` clears it. An unknown `image_id` is 422 naming the
@@ -552,7 +621,15 @@ author, not a stub an earlier line asked for:
   which the recipe's own dish is reachable, at any depth and through any recipe of each dish. The recipe's
   own stored lines are left out of the walk - they are being replaced;
 - **moving a recipe to a dish its lines or their alternatives name**, or to
-  one that would close a loop through the lines it keeps.
+  one that would close a loop through the lines it keeps;
+- **a `new_ingredient` that would make a stub under a category's name** -
+  its `name_cn` or `name_en` equal to a category's, trimmed and ignoring case,
+  with no ingredient answering to it. A name is a category or an ingredient,
+  never both; the ingredient save offers to convert the category, but a recipe
+  save does not stop to ask, so it is refused with `category: {id,
+  display_name}` on the body and the detail says to pick an existing
+  ingredient or convert the category first. A typed name an existing
+  ingredient answers to is reused as ever.
 
 **`GET .../cascade` answers `{sources, lines, steps}`**, what the delete
 removes; `lines` and `steps` count every row, grouped or not, and the groups
@@ -1009,6 +1086,21 @@ family, 雞肉's "how to pick fresh chicken" - with its line breaks. `POST`
 and `PATCH` take it beside `name_cn`, `name_en`, `parent_id` and
 `sort_order`; on `PATCH` an absent `description` is left alone and `null`
 clears it. Blank or whitespace-only is stored as null.
+
+**A category may not take an ingredient's name.** A `POST`, or a `PATCH`
+changing `name_cn` or `name_en`, setting a name equal to an ingredient's
+`name_cn` or `name_en` (trimmed, ignoring case; not its `name_alt` or
+aliases) is refused with **409** - a name conflict, as a sibling-name
+collision is - with the ingredient on the body:
+
+```json
+{"detail": "「醬油」已是食材，分類不能同名。", "ingredient": {"id": 4, "display_name": "醬油"}}
+```
+
+Only the names a `PATCH` changes are checked, so a drag (`sort_order`) or a
+rename of the other slot is not refused for a clash older than the rule.
+There is no conversion this way round: turning an ingredient into a category
+would throw away its storage notes, pictures and recipe references.
 
 **`is_fallback` cannot be set through the API.** There is exactly one fallback
 category, the migration seeds it, and moving it would re-file every stub ever
