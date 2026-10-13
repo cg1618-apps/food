@@ -271,6 +271,24 @@ is load-bearing and says so. Some examples worth knowing about:
   mirror in a line naming an existing ingredient, and the unique-name
   refusal in a template renamed to its own name in another case.
 
+- `chicken_tree` (`tests/api/test_category_clash.py`) gives the clashing
+  category 雞肉 every kind of row a conversion touches - a top-level
+  ingredient, one already a variety of an ingredient filed elsewhere, a child
+  category with its own ingredient, and notes - so the conversion test
+  asserts each outcome rather than passing on an empty category, and the
+  preview's lists are checked against real rows. Every refusal has its
+  mirror with the same rows: a name no category has saves (an ingredient, a
+  category, a recipe's stub), a save not changing a name is not checked, a
+  freed sibling name lets the blocked conversion run, the fresh fingerprint
+  goes through after the stale one is refused, and one clash alone is the
+  ordinary offer beside the two-category refusal. The blocked and stale
+  tests commit their rows and roll the session back after the refusal - what
+  closing the request session does - then assert every row where it was: a
+  refusal that had committed part of the conversion first would fail them.
+  The update test rolls back the refused rename for the same reason; left in
+  the shared session it makes the resend change no name, and the conversion
+  silently does not run.
+
 One more that is weaker than it looks unless read carefully:
 `test_uvicorns_own_loggers_are_taken_over` asserts the handler **by identity**
 against the root console handler. Asserting merely that a handler exists passes
@@ -302,6 +320,7 @@ the entire failure.
 | `tests/api/test_kitchen_notes.py` | every named kitchen-note constraint with its mirror, CASCADE on delete, the round trip, title, kind, link and label refusals, newest-first order, `q` over title and body (wildcards literal), the "any of" filters, the query count, the gallery and the image 409 naming a note |
 | `tests/api/test_ingredient_used_in.py` | "used in" over descendants, the list filter agreeing with it, the delete refusal, the query count |
 | `tests/api/test_homemade_version.py` | an ingredient's 自製版: the round trip and `PATCH` set / change / clear, any dish kind, one dish named by several ingredients as the dish's `bought_as`, the 422 for an id naming no dish (writing nothing), SET NULL through the API and in raw SQL, the cascade's `bought_as`, and the merge keeping the target's or taking the source's, with its preview word and fingerprint |
+| `tests/api/test_category_clash.py` | a name is a category or an ingredient, never both: the 409 and its `category_clash` preview (English name and case included; aliases and `name_alt` not), the conversion's every outcome, the ingredient keeping its own category and description, the ancestor kept top-level, conversion on update and no check on an update leaving the names, a top-level category's target and its 422s, a parent's other target refused, the sibling-name block (422, nothing changed), a child sharing the category's name moving up, the stale fingerprint (409, nothing changed), the fallback's 422, two clashing categories' 409, a category created or renamed under an ingredient's name refused (409) and a drag not, the recipe stub's 422 |
 | `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, ordering after the target's rows, the fingerprint and its 409, refusals |
 | `tests/api/test_common_ingredients.py` | 常用食材: the whole-list `PUT` and its order, the unknown-id and duplicate 422s that change nothing, the write only under the gated prefix, CASCADE on an ingredient's delete, and a merge moving or dropping the source's entry |
 | `tests/api/test_heating.py` | 加熱: the blank-name CHECK, the round trip with line breaks kept, a blank body stored as null, the no-name 422 on create and the blank-name `PATCH` 422 with the mirror that renames, a `PATCH` applying only what it sends, a new note last, the delete, the order `PUT` and each of its 422s against three real notes, the writes only under the gated prefix |
@@ -424,6 +443,15 @@ links by label or by address, each `target="_blank"` with
 `rel="noopener noreferrer"`, the 備註 with its line break - and its
 mirror: no panel for an author with neither, nor for two authors, once the
 authors have loaded) and `lib/authors.test.js` (the draft and the body).
+
+The category clash is covered in: `components/forms/forms.test.jsx` (the
+ingredient form's 409 opening 「轉成食材」 with each outcome in words, 轉成食材
+resending the same body with `convert_category`, 取消 leaving the form unsaved
+with one request sent, a top-level category's target select defaulting to the
+fallback and never offering the category or its subtree, the sibling block
+turning the button off, a stale preview replaced and confirmed with the fresh
+fingerprint) and `pages/edit/settings.test.jsx` (a category rename refused
+for an ingredient's name, said in the row with the typing kept).
 
 The recipe form's own tests in `components/forms/forms.test.jsx`
 open it at `/edit/recipes/new?blank=1` and are otherwise unchanged by the

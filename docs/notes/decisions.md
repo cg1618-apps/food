@@ -1120,6 +1120,81 @@ them before anyone has written them would be four empty boxes per category.
 category's notes above its list, which is where a reader looking at 肉類 ›
 雞肉 is; the category is not a page of its own.
 
+## A name is a category or an ingredient, never both
+
+**The owner's rule, held on the write path.** "A category's own notes" draws
+the line - a category is a family never bought or cited itself (雞肉), an
+ingredient is bought or cited as itself (醬油), its kinds hanging under it as
+varieties - and this makes it hard: no category's `name_cn` or `name_en`
+equals an ingredient's, trimmed and ignoring case. Two rows called 雞肉, one
+in each table, would mean the library cannot say which it is, and the
+typeahead offers one while the sidebar filters by the other. No constraint
+can hold a rule across two tables, so `app/services/category_clash.py` checks
+every write that sets a name (`docs/data-model.md`).
+
+**An ingredient taking a category's name converts the category, rather than
+being refused.** The clash almost always means the category was the mistake:
+雞肉 was made a category to hold 雞腿 and 雞胸肉, then turns out to be bought
+as itself. A plain refusal would leave the owner to do the conversion by
+hand - re-file every member, re-parent each, move the child categories,
+copy the notes, delete the category - across several pages, with the tree
+half-done in between. So the save is refused with 409 and a preview of
+exactly that, and the same save sent back with the preview's fingerprint
+does it in one transaction. The shape is the merge's: the preview and the
+conversion are one function, so they cannot disagree, and a stale preview is
+a 409 with the fresh one rather than a conversion the owner was not shown.
+**Not an error code**: the app carries data to act on beside the detail, never
+a code, and the presence of `category_clash` is that data.
+
+**A category taking an ingredient's name is refused, with no offer.**
+Converting an ingredient into a category would throw away its storage notes,
+heating rows, pictures, labels and every recipe line naming it - a category
+has none of them. The rare real case (醬油 should have been a family) is a
+rename of the ingredient first, which loses nothing. 409, as a sibling-name
+collision is: a name already taken.
+
+**Names only.** An alias is anything typed to find the row and is never
+shown, and `name_alt` is a catch-all two ingredients may share; neither is a
+claim about what the thing *is*, and comparing them would refuse a category
+named 雞 because some ingredient answers to 雞 when typed.
+
+**Child categories move up, not down into the ingredient.** An ingredient
+has no categories under it, and a child category (肉類 › 雞肉 › 土雞) is
+still a family; its parent becomes the converted category's parent, its own
+ingredients and children with it. Moving up can collide with a sibling's
+name (`uq_ingredient_category_sibling_cn`); the preview finds the same pairs
+the index would refuse, says them as a blocking message, and the conversion
+is refused with 422 rather than run halfway.
+
+**Where the members go.** Into the converted category's parent - the family
+it was in - and a top-level category has none, so the owner picks one, 未分類
+by default, never the category itself or below it. A top-level member
+becomes a variety of the new ingredient (雞腿 under 雞肉), unless it is
+above the ingredient in its own parent chain, where that would be a cycle;
+it stays top-level and the preview says so. A member already a variety keeps
+its parent: it was filed in 雞肉 but is a kind of something else.
+
+**Refused outright, with no conversion:**
+
+- **the fallback category** (422). Every stub is filed there; it cannot be
+  deleted, so it cannot be converted.
+- **a name two categories answer to** (409, listing them). Converting one
+  would leave the other clash; converting both would merge two families
+  silently. Which is meant is the owner's to say, by renaming one - so one
+  conversion converts exactly one category.
+- **a recipe line's new stub under a category's name** (422, naming the
+  category). Stubs exist so that writing a recipe never stops for a taxonomy
+  question, and a conversion dialog mid-recipe is exactly that question. The
+  owner picks an existing ingredient, or converts the category from the
+  ingredient page and comes back. A typed name an existing ingredient
+  answers to is reused as before.
+
+**A clash older than the rule is not refused by an unrelated save.** Only a
+save changing a name is checked - on a category, only the slots it changes -
+so dragging a category or editing an ingredient's notes never trips over
+data from before. Renaming an ingredient checks both of its names, so the
+old clash surfaces with its offer at the moment it is cheapest to fix.
+
 ## Bought or made: 自製版
 
 **Two rows, linked.** Caramel, 雞高湯 and 油蔥酥 can be bought or made. The

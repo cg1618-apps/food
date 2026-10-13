@@ -627,6 +627,23 @@ describe('設定', () => {
     )
   })
 
+  // A name is a category or an ingredient, never both: the server refuses a
+  // category named as an ingredient, and the row says so where it was typed.
+  it("says in the row that a category cannot take an ingredient's name", async () => {
+    handler = (call) =>
+      call.method === 'PATCH'
+        ? json({ detail: '「醬油」已是食材，分類不能同名。', ingredient: { id: 4, display_name: '醬油' } }, 409)
+        : settingsData(call)
+    renderAt('/edit/settings')
+    fireEvent.click(await screen.findByRole('button', { name: '改名「蔬菜」' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '蔬菜 的中文名' }), { target: { value: '醬油' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    const row = screen.getByRole('listitem', { name: '蔬菜' })
+    expect((await within(row).findByRole('alert')).textContent).toBe('「醬油」已是食材，分類不能同名。')
+    // The box keeps what was typed, to change.
+    expect(screen.getByRole('textbox', { name: '蔬菜 的中文名' }).value).toBe('醬油')
+  })
+
   it('adds a child under the node it was asked for, after its siblings', async () => {
     handler = (call) => (call.method === 'POST' ? json({}, 201) : settingsData(call))
     renderAt('/edit/settings')

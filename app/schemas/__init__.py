@@ -27,6 +27,8 @@ from app.schemas.image import (
     ImageSummary,
 )
 from app.schemas.ingredient import (
+    CategoryClashPreview,
+    CategoryConversionIn,
     HeatingIn,
     HeatingResponse,
     IngredientCreate,
@@ -151,6 +153,8 @@ __all__ = [
     "ImageSummary",
     "HeatingIn",
     "HeatingResponse",
+    "CategoryClashPreview",
+    "CategoryConversionIn",
     "CategoryCreate",
     "CategoryNode",
     "CategoryResponse",

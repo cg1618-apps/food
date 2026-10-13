@@ -50,6 +50,10 @@ the weekly schedule, 加熱 and TBD.** The schema is at revision `r2eheat`
 - **Category notes** - a category's own `description`, the family's notes
   (how to pick fresh chicken, how long it keeps), edited on 設定 and shown
   above the ingredient library when that category is chosen.
+- **A name is a category or an ingredient, never both** - an ingredient
+  saved under a category's name offers to convert the category into it (one
+  transaction, previewed and fingerprinted); a category under an
+  ingredient's name, or a recipe stub under a category's, is refused.
 - **自製版** - an ingredient's homemade version, `homemade_dish_id` naming
   the dish that makes it (油蔥酥 the sauce for 油蔥酥 and 紅蔥油); the dish
   lists those ingredients as 市售版. Deleting the dish unlinks them.
