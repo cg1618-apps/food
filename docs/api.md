@@ -418,7 +418,8 @@ Query parameters:
 exactly as an ingredient's does, and answers the full recipe.
 
 **The full recipe** is `id`, `display_name`, `name`, `status`, `servings`,
-`time`, `storage_notes`, `notes`, `created_at`, `updated_at`, and:
+`time`, `storage_notes`, `reheating_notes` (加熱, how to reheat what it
+makes), `notes`, `created_at`, `updated_at`, and:
 
 - `dish` - a `DishBrief`: the `DishRef` fields plus `course`, `region`,
   `labels` and `serves_as`, so the page can show what the dish says without
@@ -456,7 +457,7 @@ takes a place in the order and no number.
 
 **`POST` takes the whole recipe; `PATCH` takes any subset.** The fields are
 `dish_id` or `new_dish`, `name`, `status_id`, `servings`, `time`,
-`storage_notes`, `notes`, and the lists `sources`, `lines`, `line_groups`,
+`storage_notes`, `reheating_notes`, `notes`, and the lists `sources`, `lines`, `line_groups`,
 `steps`, `step_groups`, `method_ids` and `equipment_ids`. The fields that live
 on the dish - name slots, `kind`, `course_id`, `serves_as_ids`, `label_ids`,
 `aliases`, `description` - and the removed `variant_of_id` are unknown fields

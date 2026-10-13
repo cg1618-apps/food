@@ -8,7 +8,7 @@
 // recipes; the ingredients and the steps, each in its groups
 // (lib/recipeGroups.js) - the ungrouped rows first, then a block per group
 // under its name, ordinary steps numbered through every group, an optional
-// step marked 可省略 and a 備註 drawn as a callout; storage and notes. A line
+// step marked 可省略 and a 備註 drawn as a callout; 保存, 加熱 and 筆記. A line
 // naming a dish links to the dish. A line's alternatives follow it on its
 // row - 雞腿 300g 或 雞胸肉 250g - each linked as a line's target is, with
 // its own amount and note when it has them; such a line's amount moves next
@@ -388,6 +388,12 @@ export default function Recipe() {
       {recipe.storage_notes ? (
         <Section title="保存">
           <Prose>{recipe.storage_notes}</Prose>
+        </Section>
+      ) : null}
+
+      {recipe.reheating_notes ? (
+        <Section title="加熱">
+          <Prose>{recipe.reheating_notes}</Prose>
         </Section>
       ) : null}
 

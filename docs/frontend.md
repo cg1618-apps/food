@@ -286,7 +286,9 @@ empties.
   block per group under its name, in the recipe's group order; an empty group
   is left out; ordinary steps numbered through every group, an optional
   step carrying a 可省略 chip in the number's place with its text muted, a
-  備註 drawn as a ruled, tinted callout with no number); 保存; 筆記. A line
+  備註 drawn as a ruled, tinted callout with no number); 保存; 加熱, how to
+  reheat what the recipe makes; 筆記 - each with its line breaks kept and
+  left out when empty. A line
   links to its ingredient or to its dish (`/dishes/:id`); an optional line is
   drawn faint with （可省略）; a stub ingredient carries 待補. A line's
   alternatives follow it on its row - 「豆腐 300g 或 板豆腐 250g 較硬」 - each
@@ -466,7 +468,7 @@ it draws, so nothing typed is overwritten, and fills it in once:
 - **from a template**: 份量, 時間, 材料 and 步驟 in their groups (steps with
   their kinds), 做法 and 器材. The header says 「從範本「…」開始。」 and, when
   the server left references out, 「範本裡有 n 個項目已不存在，已略過。」.
-- **from another recipe**: all of that, and 保存 and 筆記; its dish is chosen
+- **from another recipe**: all of that, and 保存, 加熱 and 筆記; its dish is chosen
   unless `?dish=` names one. **Not its name, sources, status or pictures**:
   the header says 「複製自「…」」, linking to it, and that those were not
   copied. The new recipe starts on the first status, as any new recipe.

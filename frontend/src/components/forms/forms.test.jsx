@@ -694,6 +694,32 @@ describe('RecipeForm', () => {
     expect(client.getQueryState(['/api/ingredient-categories', null]).isInvalidated).toBe(true)
   })
 
+  it('puts 加熱 between 保存 and 筆記 and sends it as storage notes are sent', async () => {
+    handler = ({ url, method }) => {
+      if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
+      return json([])
+    }
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
+    await chooseNewDish('湯')
+
+    const about = screen.getByRole('heading', { name: '說明' }).closest('section')
+    const boxes = within(about).getAllByRole('textbox')
+    expect(boxes.map((box) => box.closest('label').querySelector('span').textContent)).toEqual([
+      '保存',
+      '加熱',
+      '筆記',
+    ])
+    fireEvent.change(screen.getByLabelText('加熱'), { target: { value: '微波 2 分鐘\n中途翻面' } })
+    fireEvent.change(screen.getByLabelText('保存'), { target: { value: '   ' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+
+    const body = calls.find((c) => c.method === 'POST').body
+    expect(body.reheating_notes).toBe('微波 2 分鐘\n中途翻面')
+    // Blank is null, for both.
+    expect(body.storage_notes).toBeNull()
+  })
+
   it('shows the server sentence beside the save button and stays on the form', async () => {
     handler = ({ url, method }) =>
       url === '/api/edit/recipes' && method === 'POST'

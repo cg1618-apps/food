@@ -150,6 +150,7 @@ def _response(row: Recipe) -> schemas.RecipeResponse:
         servings=row.servings,
         time=row.time,
         storage_notes=row.storage_notes,
+        reheating_notes=row.reheating_notes,
         notes=row.notes,
         sources=[
             schemas.SourceResponse(

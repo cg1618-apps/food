@@ -1,6 +1,6 @@
 # Data model
 
-What the database holds today: forty-six tables, at revision `a2lternatives`.
+What the database holds today: forty-six tables, at revision `r2eheat`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the nine managed
 vocabularies and an author's links (`author_link`), `ingredient_heating`, `ingredient_link`, the image library and
@@ -383,7 +383,7 @@ One specific way of making a dish - 照燒雞腿排 as one author makes it.
 | `name` | optional - what tells this recipe from its dish's others |
 | `status_id` | **required**, → `recipe_status`, `RESTRICT`. No server default: a recipe created without one is given the first status in sort order by the write path |
 | `servings`, `time` | free text — `2-3 人`, `1hr` |
-| `storage_notes`, `notes` | |
+| `storage_notes`, `reheating_notes`, `notes` | free text - 保存, 加熱 (how to reheat what the recipe makes, `r2eheat`) and 筆記 |
 | `created_at`, `updated_at` | |
 
 **A recipe's `display_name` is its own `name`, else its dish's display name**

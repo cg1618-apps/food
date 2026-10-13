@@ -281,6 +281,25 @@ describe('the recipe page', () => {
     ])
   })
 
+  it('shows 保存, 加熱 and 筆記 in that order, line breaks kept', async () => {
+    const recipe = { ...RECIPE, storage_notes: '冷藏三天', reheating_notes: '微波 2 分鐘\n中途翻面' }
+    handler = ({ url, method }) => (method === 'GET' && url === '/api/recipes/5' ? json(recipe) : null)
+    renderAt('/recipes/5')
+    await screen.findByRole('heading', { level: 1, name: '麻婆豆腐' })
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
+    const order = ['保存', '加熱', '筆記'].map((name) => headings.indexOf(name))
+    expect(order.every((index) => index >= 0)).toBe(true)
+    expect([...order].sort((a, b) => a - b)).toEqual(order)
+    const reheat = screen.getByRole('heading', { name: '加熱' }).closest('section')
+    expect(reheat.textContent).toContain('微波 2 分鐘\n中途翻面')
+    // Left out when there is none.
+    cleanup()
+    handler = ({ url, method }) => (method === 'GET' && url === '/api/recipes/5' ? json(RECIPE) : null)
+    renderAt('/recipes/5')
+    await screen.findByRole('heading', { level: 1, name: '麻婆豆腐' })
+    expect(screen.queryByRole('heading', { name: '加熱' })).toBeNull()
+  })
+
   it('shows a line’s alternatives after it, linked, with their own amount and note', async () => {
     const recipe = {
       ...RECIPE,

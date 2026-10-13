@@ -383,6 +383,7 @@ class RecipeCreate(BaseModel):
     servings: str | None = None
     time: str | None = None
     storage_notes: str | None = None
+    reheating_notes: str | None = None
     notes: str | None = None
     sources: list[SourceIn] = []
     lines: list[LineIn] = []
@@ -428,6 +429,7 @@ class RecipeUpdate(BaseModel):
     servings: str | None = None
     time: str | None = None
     storage_notes: str | None = None
+    reheating_notes: str | None = None
     notes: str | None = None
     sources: list[SourceIn] | None = None
     lines: list[LineIn] | None = None
@@ -502,6 +504,7 @@ class RecipeResponse(BaseModel):
     servings: str | None = None
     time: str | None = None
     storage_notes: str | None = None
+    reheating_notes: str | None = None
     notes: str | None = None
 
     sources: list[SourceResponse] = []

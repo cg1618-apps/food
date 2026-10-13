@@ -72,6 +72,8 @@ class Recipe(Base):
     time = Column(String, nullable=True)
 
     storage_notes = Column(Text, nullable=True)
+    # 加熱: how to reheat what this recipe makes. Free text, as storage_notes.
+    reheating_notes = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=get_taipei_now)
