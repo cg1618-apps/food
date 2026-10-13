@@ -1,9 +1,9 @@
 # Data model
 
-What the database holds today: forty-four tables, at revision `h2omemade`.
+What the database holds today: forty-five tables, at revision `a2uthor`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the nine managed
-vocabularies, `ingredient_heating`, `ingredient_link`, the image library and
+vocabularies and an author's links (`author_link`), `ingredient_heating`, `ingredient_link`, the image library and
 its four galleries (`image`, `ingredient_image`, `dish_image`, `recipe_image`,
 `kitchen_note_image`), the dish family's four (`dish`, `dish_alias`,
 `dish_serves_as`, `dish_label`), the recipe family's eight (`recipe`,
@@ -240,6 +240,18 @@ it from the free-text `recipe_source.creator` it replaced — one author per
 distinct creator, trimmed and compared case-insensitively, the spelling of the
 first source saved kept, and a name containing Han characters, kana or Hangul
 filed as `name_cn`, anything else as `name_en`.
+
+**`author` is the one vocabulary with more than names**: `notes`, an
+optional Text remark (line breaks kept; blank is stored as null), and
+`author_link`, its links. `author_link` is `tbd_link`'s shape and rules
+exactly: `author_id` (indexed, `ON DELETE CASCADE`), a NOT NULL `position`
+(the order sent), a NOT NULL `url` and an optional `label` - the link's
+name, YouTube, IG, 部落格. `ck_author_link_has_a_url` refuses a blank url;
+the API gives a url with no scheme `https://` and refuses any scheme but
+`http` and `https`. A save replaces an author's links wholesale, which is
+why `position` has no unique constraint, as on `tbd_link`. Nothing
+references `author_link`. An author made by a recipe save starts with
+neither.
 
 **The migration seeds them, and the ingredient categories and labels with
 them:**
@@ -611,6 +623,7 @@ shared.
 | line or step group → the lines or steps in it | `SET NULL` — they become ungrouped |
 | kitchen note → its label links and gallery rows | `CASCADE` |
 | TBD entry → its links | `CASCADE` |
+| author → its links | `CASCADE` |
 | course or region → the dishes filed in it | `RESTRICT` |
 | status → the recipes in it; source platform or author → the sources naming it | `RESTRICT` |
 | course → its serves-as links; label → any link | `CASCADE` |

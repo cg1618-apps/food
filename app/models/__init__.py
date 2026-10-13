@@ -39,6 +39,7 @@ from app.models.schedule import ScheduleDay, ScheduleMeal, ScheduleMealItem
 from app.models.tbd import TbdEntry, TbdLink
 from app.models.vocabulary import (
     Author,
+    AuthorLink,
     CookingMethod,
     Equipment,
     LineGroup,
@@ -51,6 +52,7 @@ from app.models.vocabulary import (
 
 __all__ = [
     "Author",
+    "AuthorLink",
     "CommonIngredient",
     "CookingMethod",
     "Dish",

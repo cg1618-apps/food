@@ -124,6 +124,10 @@ them, until all but one of each is renamed or deleted. Its upgrade stops
 likewise, before changing anything, on a label more than one library
 carries.
 
+`a2uthor`'s downgrade drops `author_link` and `author.notes`, and every
+author's links and remark with them. The authors themselves, and the
+sources naming them, are untouched.
+
 **`d1ishes` restructures every recipe**, so its two directions are worth
 reading before either runs.
 
@@ -218,7 +222,8 @@ they ever do not, believe the box.
 | 加熱 | `h1eating` — forty-four tables |
 | Every label in one library | `l1abels` — no new table |
 | A category's own notes | `c2ategory` — no new table |
-| An ingredient's homemade version | `h2omemade` — no new table, the current head |
+| An ingredient's homemade version | `h2omemade` — no new table |
+| An author's links and remark | `a2uthor` — forty-five tables, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

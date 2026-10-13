@@ -15,6 +15,8 @@
 //   onRename      async ({ name_cn, name_en, ...extra }) => void
 //   renameExtra   (draft, setDraft) => more controls in rename mode (parent)
 //   initialExtra  extra draft fields rename mode starts from
+//   renameLabel   the button's word: 改名, or 編輯 for a row whose rename
+//                 mode holds more than its names (an author's links)
 //   sortable      whether the row has a drag handle (its id is `item.id`)
 //   onDelete      async () => void, or absent when the row cannot be deleted
 //   confirmText   what the delete question says
@@ -36,6 +38,7 @@ export default function NameRow({
   onRename,
   renameExtra,
   initialExtra,
+  renameLabel = '改名',
   sortable = false,
   onDelete,
   confirmText,
@@ -131,8 +134,8 @@ export default function NameRow({
             </span>
             <div className="flex shrink-0 flex-wrap gap-1">
               {children}
-              <Button kind="ghost" size="sm" onClick={startRename} disabled={busy} aria-label={`改名「${name}」`}>
-                改名
+              <Button kind="ghost" size="sm" onClick={startRename} disabled={busy} aria-label={`${renameLabel}「${name}」`}>
+                {renameLabel}
               </Button>
               {onDelete ? (
                 <Button

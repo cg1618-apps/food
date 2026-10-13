@@ -23,19 +23,37 @@
 // the recipe form's chips - and makes only its own list stale. 範本 is not a
 // vocabulary either: the recipe templates a new recipe can start from,
 // ordered, renamed and deleted here and edited on their own form.
+//
+// 作者 is a factory vocabulary with more than names: its row's 編輯 opens
+// the names, the author's links and 備註 together
+// (components/settings/AuthorDetails.jsx), shown above the recipe library
+// when it is filtered to that author.
 import { endpoints } from '../../api/endpoints'
 import CategoryEditor from '../../components/settings/CategoryEditor'
+import AuthorDetails from '../../components/settings/AuthorDetails'
 import CommonIngredientsEditor from '../../components/settings/CommonIngredientsEditor'
 import LabelEditor from '../../components/settings/LabelEditor'
 import TemplatesEditor from '../../components/settings/TemplatesEditor'
 import VocabularyEditor from '../../components/settings/VocabularyEditor'
 import { LinkButton, Tabs } from '../../components/ui/primitives'
 import { useUrlTab } from '../../hooks/useUrlTab'
+import { authorBody, authorDraft } from '../../lib/authors'
 import { inUseMessage } from '../../lib/vocabulary'
 
 const DISHES = endpoints.dishes.list()
 const RECIPES = endpoints.recipes.list()
 const INGREDIENTS = endpoints.ingredients.list()
+
+// What an author's row opens beyond its names: its links and 備註.
+const AUTHOR_DETAILS = {
+  label: '編輯',
+  initial: authorDraft,
+  render: (row) =>
+    function AuthorDetailsFields(draft, setDraft) {
+      return <AuthorDetails name={row.display_name} draft={draft} setDraft={setDraft} />
+    },
+  body: authorBody,
+}
 
 // The nine factory vocabularies: one shape, one count (`usage_count`, the
 // RESTRICT references that would stop a delete). Authors are listed by name
@@ -73,9 +91,10 @@ const FACTORY = [
   {
     key: 'authors',
     title: '作者',
-    hint: '食譜來源的作者，依名稱排列。在食譜表單打一個還沒有的名字，存檔時也會加進來。',
+    hint: '食譜來源的作者，依名稱排列。在食譜表單打一個還沒有的名字，存檔時也會加進來。按「編輯」可以加連結和備註，食譜依作者篩選時會顯示在上面。',
     addLabel: '新增作者',
     ordered: false,
+    details: AUTHOR_DETAILS,
     invalidate: [endpoints.authors.list(), RECIPES],
   },
   {
