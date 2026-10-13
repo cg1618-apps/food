@@ -117,6 +117,68 @@ afterEach(() => {
 })
 
 describe('the ingredient library', () => {
+  // 雞肉 is a family name, never bought itself: what is true of every member
+  // is the category's own notes, read where the family is browsed.
+  const WITH_NOTES = [
+    {
+      id: 4,
+      display_name: '肉類',
+      parent_id: null,
+      description: null,
+      ingredient_count: 0,
+      children: [
+        {
+          id: 7,
+          display_name: '雞肉',
+          parent_id: 4,
+          description: '挑選：肉色粉紅\n冷藏 1-2 天',
+          ingredient_count: 2,
+          children: [],
+        },
+      ],
+    },
+  ]
+
+  it("shows the chosen category's notes above the list, line breaks kept", async () => {
+    responses['/api/ingredient-categories'] = WITH_NOTES
+    responses['/api/ingredients'] = [CABBAGE]
+    renderAt('/ingredients?category=7')
+    const notes = await screen.findByRole('region', { name: '雞肉的說明' })
+    const text = notes.querySelector('p')
+    expect(text.textContent).toBe('挑選：肉色粉紅\n冷藏 1-2 天')
+    expect(text.className).toContain('whitespace-pre-line')
+  })
+
+  // 肉類 holds nothing itself; its count is 雞肉's, and choosing it lists
+  // 雞肉's ingredients under their own 肉類 › 雞肉 section.
+  it('counts a parent category by its subtree and lists its sub-categories in their sections', async () => {
+    const THIGH = { ...CABBAGE, id: 3, display_name: '雞腿', name_en: null, category_id: 7, needs_detail: false }
+    responses['/api/ingredient-categories'] = WITH_NOTES
+    responses['/api/ingredients'] = [THIGH]
+    renderAt('/ingredients?category=4')
+    const sidebar = screen.getByRole('complementary', { name: '篩選' })
+    const meat = await within(sidebar).findByRole('button', { name: /肉類/, pressed: true })
+    expect(meat.textContent).toContain('2')
+    await waitFor(() =>
+      expect(listRequests('/api/ingredients')).toContain('/api/ingredients?category_id=4'),
+    )
+    const section = await screen.findByRole('region', { name: '肉類 › 雞肉' })
+    expect(within(section).getByText('雞腿')).toBeTruthy()
+  })
+
+  it('draws no notes for a category without any, nor when no category is chosen', async () => {
+    responses['/api/ingredient-categories'] = WITH_NOTES
+    responses['/api/ingredients'] = [CABBAGE]
+    renderAt('/ingredients?category=4')
+    await screen.findByRole('button', { name: /肉類/, pressed: true })
+    expect(screen.queryByRole('region', { name: /的說明$/ })).toBeNull()
+    cleanup()
+
+    renderAt('/ingredients')
+    await screen.findAllByText('高麗菜')
+    expect(screen.queryByRole('region', { name: /的說明$/ })).toBeNull()
+  })
+
   // The known defect: the ingredient page links to /ingredients?category=N
   // and the library ignored the query.
   it('filters by the category in the URL, as the detail page links it', async () => {
@@ -368,6 +430,58 @@ describe('the recipe library', () => {
     fireEvent.click(await within(sidebar).findByRole('button', { name: /詹姆士/ }))
     expect(location()).toBe('/recipes?author=8')
     await waitFor(() => expect(listRequests('/api/recipes')).toContain('/api/recipes?author_id=8'))
+  })
+
+  describe("the chosen author's panel", () => {
+    const AUTHORS = [
+      {
+        id: 6,
+        display_name: '阿基師',
+        sort_order: 0,
+        usage_count: 1,
+        notes: '台菜。\n影片比較詳細。',
+        links: [
+          { label: 'YouTube', url: 'https://youtube.com/@a' },
+          { label: null, url: 'https://blog.example/a' },
+        ],
+      },
+      { id: 8, display_name: '詹姆士', sort_order: 0, usage_count: 1, notes: null, links: [] },
+    ]
+
+    it('draws the name, the links opening in a new tab, and the 備註 above the list', async () => {
+      responses['/api/authors'] = AUTHORS
+      responses['/api/recipes'] = [RECIPE]
+      renderAt('/recipes?author=6')
+      const panel = await screen.findByRole('region', { name: '關於阿基師' })
+      expect(within(panel).getByRole('heading', { name: '阿基師' })).toBeTruthy()
+      const links = within(panel).getAllByRole('link')
+      // The label when there is one, else the address as words.
+      expect(links.map((link) => link.textContent)).toEqual(['YouTube', 'blog.example/a'])
+      expect(links.map((link) => link.getAttribute('href'))).toEqual([
+        'https://youtube.com/@a',
+        'https://blog.example/a',
+      ])
+      for (const link of links) {
+        expect(link.getAttribute('target')).toBe('_blank')
+        expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+      }
+      // Line breaks kept.
+      expect(within(panel).getByText(/台菜。/).textContent).toBe('台菜。\n影片比較詳細。')
+    })
+
+    it('draws nothing for an author with neither links nor 備註, or for two authors', async () => {
+      responses['/api/authors'] = AUTHORS
+      renderAt('/recipes?author=8')
+      // The filter options have loaded, so the panel had what it needed.
+      const sidebar = screen.getByRole('complementary', { name: '篩選' })
+      expect(await within(sidebar).findByRole('button', { name: /詹姆士/ })).toBeTruthy()
+      expect(screen.queryByRole('region', { name: /^關於/ })).toBeNull()
+      cleanup()
+
+      renderAt('/recipes?author=6&author=8')
+      expect(await within(screen.getByRole('complementary', { name: '篩選' })).findByRole('button', { name: /阿基師/ })).toBeTruthy()
+      expect(screen.queryByRole('region', { name: /^關於/ })).toBeNull()
+    })
   })
 
   it('shows the status and the authors by name in the table', async () => {

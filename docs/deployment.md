@@ -17,6 +17,15 @@ The platform's `bin/deploy food` does it, from `~/cg1618` on the box:
 4. Probes `/health`, which answers 200 only when the database is reachable *and*
    its Alembic revision matches the one the running code expects.
 
+**A release that adds or modifies a revision under `alembic/versions/` waits
+for the owner after the merge.** The platform's workflow sends it down the
+gated lane, which holds the deploy until it is approved in this repository's
+`production` environment; any other release deploys unattended.
+`./deploy/migrations added origin/main origin/dev` answers which lane a
+release will take before it is opened — any output means gated — and the
+release PR says so when its text is proposed and again when it is opened (the
+platform's `CLAUDE.md`, "Git Branches").
+
 `apps.yml` declares `gated_paths: ["/api/edit", "/edit"]`, and `bin/deploy`
 refuses when that disagrees with this repository's `deploy/gated-paths` in
 either direction. Both must name the same prefixes, and `deploy/gated-paths` is
@@ -100,6 +109,13 @@ TBD page with them. Nothing else is touched.
 `h1eating`'s downgrade drops `heating_note`, and every note on the 加熱 page
 with it. Nothing else is touched.
 
+`h2omemade`'s downgrade drops `ingredient.homemade_dish_id`, its index and
+its foreign key, and every ingredient's 自製版 link with them. Nothing else is
+touched.
+
+`c2ategory`'s downgrade drops `ingredient_category.description`, and every
+category's notes with it. Nothing else is touched.
+
 `l1abels`'s downgrade drops `label.scope` and restores the global
 case-insensitive name indexes. The labels its upgrade deleted (every label
 nothing carried) are not restored. Two labels of one name in different
@@ -107,6 +123,18 @@ libraries cannot both fit the global index, so the downgrade stops, naming
 them, until all but one of each is renamed or deleted. Its upgrade stops
 likewise, before changing anything, on a label more than one library
 carries.
+
+`a2uthor`'s downgrade drops `author_link` and `author.notes`, and every
+author's links and remark with them. The authors themselves, and the
+sources naming them, are untouched.
+
+`a2lternatives`'s downgrade drops `recipe_line_alternative`, and every
+recipe line's alternatives with it. The lines themselves, and the `alternatives`
+lists inside recipe templates' JSONB bodies, are untouched; the older code
+ignores the latter.
+
+`r2eheat`'s downgrade drops `recipe.reheating_notes`, and every recipe's
+加熱 text with it. Nothing else is touched.
 
 **`d1ishes` restructures every recipe**, so its two directions are worth
 reading before either runs.
@@ -200,7 +228,12 @@ they ever do not, believe the box.
 | The weekly schedule | `s3chedule` — forty-two tables |
 | Schedule marks as booleans, several dishes per meal | `s4chedule` — forty-three tables |
 | 加熱 | `h1eating` — forty-four tables |
-| Every label in one library | `l1abels` — no new table, the current head |
+| Every label in one library | `l1abels` — no new table |
+| A category's own notes | `c2ategory` — no new table |
+| An ingredient's homemade version | `h2omemade` — no new table |
+| An author's links and remark | `a2uthor` — forty-five tables |
+| Recipe line alternatives | `a2lternatives` — forty-six tables |
+| A recipe's 加熱 notes | `r2eheat` — no new table, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

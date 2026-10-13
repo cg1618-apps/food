@@ -393,6 +393,33 @@ replaced its own chevrons with drag, and food followed at the owner's request.
   contiguous on screen, and dragging a parent should carry its children; the
   flat indented list could do neither.
 
+### Text boxes grow with their text
+
+Asked for because a recipe step opened two lines high and a longer step had to
+be read and edited through that slot. Every multi-line field is the shared
+`TextArea`, and `TextArea` fits its height to its text (`hooks/useAutoGrow.js`).
+
+- **The fitting is media's.** `AutoGrowTextarea` already collapses the box to
+  `auto`, reads `scrollHeight` and adds the border back, in a layout effect on
+  the value; food does the same. It is a hook inside `TextArea` rather than a
+  second component, so no field can be left on the old box by importing the
+  wrong one.
+- **No height cap, where media stops at `max-h-80` and scrolls inside.** A
+  long step read through an inner scrollbar is exactly what was asked to go,
+  and a recipe's longest field is a step or a note body, not a wall of text.
+  So `overflow-y: hidden`, and `resize: none` because the height always fits
+  and the next keystroke would undo a drag.
+- **A ResizeObserver re-fits on a change of width**, which media lacks: the
+  same text wraps onto more lines when a phone rotates or a window narrows,
+  and a box hidden on its first render (a collapsed section) gets its real
+  height the moment it is shown. Height changes are ignored, since fitting
+  makes them and re-fitting on them would loop.
+- **JavaScript, not CSS `field-sizing: content`.** That property does the job
+  in one line where it is supported, but iOS Safari and Firefox do not support
+  it reliably, and a phone in a shop is where this app is read. Adding it on
+  top as an enhancement was rejected: two mechanisms setting one height would
+  disagree about `rows` as the floor.
+
 ### The one that is not a divergence but reads like one
 
 **Single-column unique name indexes use Postgres's DEFAULT null handling, not
@@ -491,8 +518,8 @@ What the branch after module 1 chose, and what it turned down.
   typeahead shows it before the user chooses "new", which is the one moment a
   person is there to decide.
 - **"Used in" for a dish is depth zero through sub-dishes.** A recipe using a
-  sauce whose recipe uses this sauce is not listed; only recipes with a line
-  naming this dish directly. An ingredient's "used in" takes the same depth
+  sauce whose recipe uses this sauce is not listed; only recipes with a line,
+  or a line's alternative, naming this dish directly. An ingredient's "used in" takes the same depth
   through sub-dishes, so the two cannot disagree about what "uses" means.
 - **"Used in" for an ingredient goes all the way DOWN its own tree and not at
   all through sub-dishes.** It counts distinct recipes with a line naming the
@@ -607,6 +634,56 @@ What the branch after module 1 chose, and what it turned down.
   kept; a name with Han characters, kana or Hangul in `name_cn`, otherwise
   `name_en` - the rule `lib/recipeLines.js` applies to any typed name, copied
   into the migration because a revision imports nothing from the app.
+
+### Line alternatives
+
+- **What the owner asked for.** A line may list alternatives - substitutes
+  across families: 雞腿 or 雞胸肉, 米酒 or 清酒, a homemade sauce or a bought
+  one. Varieties already cover close substitutes - a line naming 醬油 accepts
+  its varieties, which is what "used in" going down the tree means - so an
+  alternative is only for what a variety cannot say. The owner confirmed an
+  alternative may carry its own amount (雞胸肉 250g where the line says 雞腿
+  300g); blank means the line's.
+- **A child table, `recipe_line_alternative`, not an "alternative of" line.**
+  An alternative is not a separate requirement of the recipe. Made a line of
+  its own, it would take a place in the recipe-wide positions, sit in a group
+  of its own choosing, carry a 可省略 that means nothing for it, and count in
+  `written_up` and the line count - and every future "what does this recipe
+  need" (the shopping list, module 4's "what can I cook") would have to filter
+  it back out, which is exactly the kind of rule that is forgotten once. As a
+  child of its line it has none of those by construction, goes with its line
+  on every save and every delete, and is read only by what asks for it.
+- **An alternative names what a line names, by the line's code.** The same
+  four targets on the wire (`AlternativeIn` and `LineIn` share one base), the
+  same `ck_..._one_target` CHECK, `RESTRICT` on both targets, and the save
+  resolves new names for lines and alternatives in one pass over one list
+  (`recipes._targets`), so a new name typed on a line and on an alternative is
+  one stub, and the own-dish rule and the cycle guard see both. A dish named
+  as an alternative is an edge of the nesting graph: the recipe may be made
+  with it, so the recipe is inside it all the same.
+- **Redundant alternatives are dropped, not refused.** One naming its line's
+  own target, or one an earlier alternative of the line already names, says
+  nothing more, and a new name may only turn out to be one of those after it
+  is resolved - by which point the save has started writing, and a refusal
+  then would leave rows behind. So every save (recipe and template) and an
+  ingredient merge apply one rule, `recipes.distinct_alternatives`: the first
+  of a repeat is kept. A merge reports what it drops (`dropped_alternatives`)
+  and fingerprints it, as it does every row it touches.
+- **"Used in" counts an alternative, and says so.** A recipe that could be
+  made with 雞胸肉 uses 雞胸肉 - deleting it would take something from that
+  recipe - so the ingredient's and the dish's "used in", the recipe filter and
+  both delete refusals count alternatives, still as distinct recipes at the
+  same depths. `alternative_only` marks a recipe that names the row only that
+  way, so the page can say 替代 rather than imply the recipe needs it.
+- **Position is unique per line, unlike `tbd_link.position`.** TBD replaces a
+  link list in place inside one flush, where a unique would collide with the
+  rows being replaced. Alternatives are never replaced in place: a save
+  replaces the lines, and the alternatives go with them, so the unique only
+  ever sees new rows - the rule `recipe_line.position` already follows.
+- **No drag to reorder alternatives.** They keep the order they were added
+  in. The lines already sit in a drag board across groups, and a second
+  sortable inside each row is the costly part; the order of two or three
+  substitutes rarely matters.
 
 ### Line and step groups
 
@@ -823,7 +900,8 @@ What the branch after module 1 chose, and what it turned down.
   be a surprise, and the next save writes what the form holds anyway.
 - **An ingredient merge rewrites template bodies.** A merge is the fix for a
   duplicate, so the duplicate's id must not turn into a dropped line in every
-  template. It is not in the merge preview or its fingerprint, as the
+  template - lines and alternatives alike, dropping an alternative that then
+  repeats its line or a sibling. It is not in the merge preview or its fingerprint, as the
   常用食材 move is not: a template is a starting point, not content the merge
   moves. A dish has no merge, so nothing rewrites dish ids.
 - **Copying another recipe copies its structure and its notes, not what makes
@@ -994,13 +1072,157 @@ vanish exactly when someone asked to see only the groups.
 **A block sits in its parent's section.** A variety may be filed in another
 category than its parent (乾辣椒 is 乾貨, 辣椒 is 蔬菜). Splitting the block
 across two sections would undo the point of the block, so the variety stays
-with its parent and names its own category there. The category filter stays
-exact, so choosing 乾貨 still lists 乾辣椒 - alone, as 「辣椒 的品種」.
+with its parent and names its own category there. Choosing 乾貨 still lists
+乾辣椒 - alone, as 「辣椒 的品種」 - since its parent is filed outside 乾貨's
+subtree.
+
+**A category filter includes its sub-categories.** It was exact when it was
+set, because only top-level categories held ingredients then. Production now
+files them into sub-categories (肉類 › 雞肉 / 豬肉 / 牛肉, 海鮮 › 魚類, 蛋豆製品
+› 蛋), and the exact filter showed a parent as empty - 肉類 listed 0, and
+蛋豆製品 left out the eggs filed under 蛋. So `category_id` is a recursive
+query over the category tree, as `group_id` is over `parent_id`, and the
+sidebar's count is the subtree total, summed from the same tree, so the
+number and the list cannot disagree. Each sub-category keeps its own section
+under its path. `ingredient_count` on the tree stays the node's own: 設定
+refuses deleting a category with ingredients filed directly in it, and that
+is the number the refusal is about. Every caller of the filter wants the
+subtree - the library, and the ingredient page's category link - so there
+is no second, exact parameter.
 
 **品種 became a three-way choice, not a second switch.** 只看主項 and 只看品種
 contradict each other; two switches would allow both on and list nothing.
 The URL word for the old switch (`?variety=1`) is kept as an alias of
 `only`, so a link written before the change still lands.
+
+## A category's own notes
+
+**A category carries a `description`, for notes about a family as a whole.**
+The owner's rule draws the line between the two tables: an ingredient is
+something you buy, or write on a recipe line, as itself - 醬油, which also has
+varieties - and a category is a family name whose members you buy but which
+is never itself bought or cited - 雞肉, under 肉類, whose members are 雞腿 and
+雞胸肉. That leaves notes about the family ("how to pick fresh chicken",
+"chicken keeps 1-2 days in the fridge") with nowhere to live: on any one
+member they are hidden from the others, and copied onto each they drift.
+
+Rejected: making 雞肉 an ingredient to hang the notes on. It would be a row
+that is never bought or cited, which is exactly what the rule says an
+ingredient is not, and it would turn up in the typeahead and the stock list
+as if it could be.
+
+**One free-text column, not the ingredient's four.** An ingredient splits its
+notes into what it is, picking, sourcing and keeping because each is read at a
+different moment of an errand. A family's notes are short and few; splitting
+them before anyone has written them would be four empty boxes per category.
+
+**Shown where the family is browsed.** The ingredient library draws a chosen
+category's notes above its list, which is where a reader looking at 肉類 ›
+雞肉 is; the category is not a page of its own.
+
+## A name is a category or an ingredient, never both
+
+**The owner's rule, held on the write path.** "A category's own notes" draws
+the line - a category is a family never bought or cited itself (雞肉), an
+ingredient is bought or cited as itself (醬油), its kinds hanging under it as
+varieties - and this makes it hard: no category's `name_cn` or `name_en`
+equals an ingredient's, trimmed and ignoring case. Two rows called 雞肉, one
+in each table, would mean the library cannot say which it is, and the
+typeahead offers one while the sidebar filters by the other. No constraint
+can hold a rule across two tables, so `app/services/category_clash.py` checks
+every write that sets a name (`docs/data-model.md`).
+
+**An ingredient taking a category's name converts the category, rather than
+being refused.** The clash almost always means the category was the mistake:
+雞肉 was made a category to hold 雞腿 and 雞胸肉, then turns out to be bought
+as itself. A plain refusal would leave the owner to do the conversion by
+hand - re-file every member, re-parent each, move the child categories,
+copy the notes, delete the category - across several pages, with the tree
+half-done in between. So the save is refused with 409 and a preview of
+exactly that, and the same save sent back with the preview's fingerprint
+does it in one transaction. The shape is the merge's: the preview and the
+conversion are one function, so they cannot disagree, and a stale preview is
+a 409 with the fresh one rather than a conversion the owner was not shown.
+**Not an error code**: the app carries data to act on beside the detail, never
+a code, and the presence of `category_clash` is that data.
+
+**A category taking an ingredient's name is refused, with no offer.**
+Converting an ingredient into a category would throw away its storage notes,
+heating rows, pictures, labels and every recipe line naming it - a category
+has none of them. The rare real case (醬油 should have been a family) is a
+rename of the ingredient first, which loses nothing. 409, as a sibling-name
+collision is: a name already taken.
+
+**Names only.** An alias is anything typed to find the row and is never
+shown, and `name_alt` is a catch-all two ingredients may share; neither is a
+claim about what the thing *is*, and comparing them would refuse a category
+named 雞 because some ingredient answers to 雞 when typed.
+
+**Child categories move up, not down into the ingredient.** An ingredient
+has no categories under it, and a child category (肉類 › 雞肉 › 土雞) is
+still a family; its parent becomes the converted category's parent, its own
+ingredients and children with it. Moving up can collide with a sibling's
+name (`uq_ingredient_category_sibling_cn`); the preview finds the same pairs
+the index would refuse, says them as a blocking message, and the conversion
+is refused with 422 rather than run halfway.
+
+**Where the members go.** Into the converted category's parent - the family
+it was in - and a top-level category has none, so the owner picks one, 未分類
+by default, never the category itself or below it. A top-level member
+becomes a variety of the new ingredient (雞腿 under 雞肉), unless it is
+above the ingredient in its own parent chain, where that would be a cycle;
+it stays top-level and the preview says so. A member already a variety keeps
+its parent: it was filed in 雞肉 but is a kind of something else.
+
+**Refused outright, with no conversion:**
+
+- **the fallback category** (422). Every stub is filed there; it cannot be
+  deleted, so it cannot be converted.
+- **a name two categories answer to** (409, listing them). Converting one
+  would leave the other clash; converting both would merge two families
+  silently. Which is meant is the owner's to say, by renaming one - so one
+  conversion converts exactly one category.
+- **a recipe line's new stub under a category's name** (422, naming the
+  category). Stubs exist so that writing a recipe never stops for a taxonomy
+  question, and a conversion dialog mid-recipe is exactly that question. The
+  owner picks an existing ingredient, or converts the category from the
+  ingredient page and comes back. A typed name an existing ingredient
+  answers to is reused as before.
+
+**A clash older than the rule is not refused by an unrelated save.** Only a
+save changing a name is checked - on a category, only the slots it changes -
+so dragging a category or editing an ingredient's notes never trips over
+data from before. Renaming an ingredient checks both of its names, so the
+old clash surfaces with its offer at the moment it is cheapest to fix.
+
+## Bought or made: 自製版
+
+**Two rows, linked.** Caramel, 雞高湯 and 油蔥酥 can be bought or made. The
+bought thing is an ingredient - stocked, bought, cited on a recipe line - and
+the homemade one is a dish, usually a 醬料, with recipes of its own.
+`ingredient.homemade_dish_id` names the dish. A recipe line names whichever
+the recipe means, which is usually the ingredient: "add 雞高湯" is satisfied
+either way, and module 4 is where that is resolved (see "Rules with no
+referent yet"). Rejected: one row that is both, which would give every
+ingredient a recipe list or every dish a stock flag, each empty for almost
+every row.
+
+**Not unique, and any kind.** Making 油蔥酥 also yields 紅蔥油, so one dish may
+be the homemade version of several ingredients. Any dish `kind` may be named:
+`kind` is how the library files a dish, not a permission - the rule a recipe
+line follows too.
+
+**`ON DELETE SET NULL`, not `RESTRICT`.** The link is a cross-reference, not
+a usage: nothing about the ingredient stops being true when the dish goes,
+and deleting a dish should not require first unlinking it in another
+library. The delete dialog still says how many ingredients lose the link
+(`bought_as` in the cascade), as a notice rather than a blocker or an echoed
+count. The ORM side has no collection on `Dish`, so the database does the
+nulling (`docs/data-model.md`).
+
+**Merge keeps the target's.** As with a prose field, the target's own link
+wins and the source's moves only when the target has none; the preview says
+which, and the link is in the fingerprint.
 
 ## Every label in one library
 
@@ -1052,6 +1274,46 @@ refuses two labels of one name in different libraries for the same reason:
 the global index it restores cannot hold both, and deleting one is not the
 migration's to decide.
 
+## An author's links and remark
+
+- **Links are a child table, `tbd_link`'s shape copied.** An author has
+  any number of links - a channel, an IG, a blog - each with a name the
+  owner chooses, in an order the owner chooses. TBD had already settled
+  exactly that: a row per link with a `position`, a NOT NULL url a CHECK
+  refuses blank, an optional label, CASCADE from the owner, and a save
+  that replaces the rows wholesale (so `position` carries no unique
+  constraint). Copying a shape that is tested and understood beats
+  inventing one. A column per platform (`youtube_url`, `ig_url`) was
+  rejected because the owner names the links, and the next platform would
+  be a migration; a JSONB list was rejected because the database could no
+  longer refuse a blank url, and the two link lists would differ for no
+  reason.
+- **The link rules are TBD's by inheritance, not by copy.**
+  `AuthorLinkIn` subclasses `TbdLinkIn`, so `https://` for a bare host and
+  the refusal of every scheme but `http` and `https` - which is what keeps
+  a `javascript:` link off a public page - cannot drift between the two.
+  The response omits a link's id: nothing addresses one link, since a save
+  replaces them all.
+- **Authors stay on the vocabulary factory.** `build` takes a `Shape` - the
+  schemas, how a write is applied, what the list loads - and only authors
+  pass a non-default one. A router of their own would have repeated the
+  list order, the in-use 409 and the name rules; widening the shared
+  schemas would have let the other eight accept and silently drop `notes`.
+  As it is they refuse it as an extra field, and a test says so.
+- **The panel lives on the filtered recipe library, not on an author
+  page.** A source's author on a recipe already linked to
+  `/recipes?author=<id>`, and that list - the author's recipes - is what an
+  author page would mostly be. Putting the links and 備註 above it adds the
+  one thing missing without a route, a detail page and a second list of
+  the same recipes. It is drawn only for exactly one author, because with
+  two the page is about neither, and not at all for an author with nothing
+  to say: a box holding only the name repeats the filter chip.
+- **Edited on 設定's row, not on a form of its own.** The row's rename mode
+  already held the two names; it now holds the links (TBD's
+  `RowEditor`) and the 備註 under them, and the button says 編輯 because it
+  opens more than a name. An author is a short record, and a separate
+  page for three fields would be a round trip for every one.
+
 ## The starting ingredient list
 
 - **Loaded by a migration, not by a script or the API.** Production receives
@@ -1088,6 +1350,12 @@ Written down where the next person will look rather than where they were
 learned. Each is dormant today and goes live the moment food grows the feature
 it is about — which is exactly when nobody will remember it.
 
+- **An ingredient with a homemade version is available when it is in stock
+  OR its dish is cookable.** "What can I cook" (module 4) resolves a recipe
+  line naming 雞高湯 the ingredient; with `homemade_dish_id` set, the line is
+  satisfied by the bought thing on the shelf or by being able to make the
+  dish. Answering on stock alone would rank a recipe as missing something the
+  kitchen can make.
 - **A row-hiding filter belongs in SQL, not in Python after the page was
   cut.** food hides nothing today. The moment it has a discontinued ingredient
   or an archived recipe, filtering after `limit`/`offset` silently shortens
@@ -1103,6 +1371,11 @@ it is about — which is exactly when nobody will remember it.
   write responses whose counts disagree with a GET of the same object. A
   required parameter fails loudly; an optional one fails as a wrong number
   nobody notices.
+- **Module 4's "what can I cook" counts a line covered when its target or any
+  of its alternatives is available** (an ingredient through its varieties, as
+  "used in" reads the tree). An alternative is a way of meeting the line, not
+  a requirement of its own, so it never makes a line uncovered, and a recipe
+  whose only gap is a line with an available alternative is cookable.
 
 ## What module 1 hands module 2
 
@@ -1114,7 +1387,10 @@ it is about — which is exactly when nobody will remember it.
   and there an authorization helper was incidentally the only thing resolving
   a type from an id. food has no such helper, so nothing would catch it.
 - **"What uses this ingredient" counts distinct recipes, not lines**, and must
-  state its recursion depth explicitly. 生抽 in one line and 老抽 in another is
+  state its recursion depth explicitly. A line's alternatives count as its
+  lines do - a recipe naming the ingredient only as an alternative uses it,
+  once, marked `alternative_only` - at the same depths: down the ingredient's
+  own tree, zero through sub-dishes. 生抽 in one line and 老抽 in another is
   one recipe using 醬油; a one-level join and a recursive CTE look equally
   correct in review, and the wrong one under-counts silently.
 - **Stub creation files the new row in the fallback category** and sets
@@ -1123,6 +1399,6 @@ it is about — which is exactly when nobody will remember it.
   media has one, and deleting a duplicate instead is on its own list of
   mistakes. Module 1 adds nothing that makes merging hard: no name is copied
   into another table.
-- **Whether a bought-and-makeable thing is one row or two** — caramel is an
-  ingredient you can buy and a general recipe you can make. Module 1 adds no
-  link column and assumes nothing either way.
+- **A bought-and-makeable thing is two rows.** Caramel is an ingredient you
+  can buy and a dish (a 醬料) you can make; the ingredient's
+  `homemade_dish_id` links the two. See "Bought or made: 自製版" below.

@@ -21,6 +21,7 @@ without the other is a 422 rather than a guess about the half it left out.
 """
 
 from datetime import datetime
+from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
@@ -148,11 +149,13 @@ class SourceResponse(BaseModel):
     sort_order: int
 
 
-class LineIn(BaseModel):
-    """One line: `ingredient_id` or `new_ingredient`, `sub_dish_id` or
-    `new_dish` - exactly one of the four."""
+class _TargetIn(BaseModel):
+    """What a line and an alternative both name: `ingredient_id` or
+    `new_ingredient`, `sub_dish_id` or `new_dish` - exactly one of the four -
+    with an optional amount and note."""
 
     model_config = ConfigDict(extra="forbid")
+    what: ClassVar[str] = "A target"
 
     ingredient_id: int | None = None
     sub_dish_id: int | None = None
@@ -160,7 +163,6 @@ class LineIn(BaseModel):
     new_dish: NewSubDishIn | None = None
     amount: str | None = None
     note: str | None = None
-    is_optional: bool = False
 
     @field_validator("amount", "note", mode="before")
     @classmethod
@@ -169,15 +171,33 @@ class LineIn(BaseModel):
 
     @model_validator(mode="after")
     def exactly_one_target(self):
-        # Mirrors ck_recipe_line_one_target, with new_ingredient and new_dish
-        # counted as an ingredient and a dish that do not exist yet.
+        # Mirrors ck_recipe_line_one_target and
+        # ck_recipe_line_alternative_one_target, with new_ingredient and
+        # new_dish counted as an ingredient and a dish that do not exist yet.
         targets = (self.ingredient_id, self.sub_dish_id, self.new_ingredient, self.new_dish)
         if sum(t is not None for t in targets) != 1:
             raise ValueError(
-                "A line names exactly one of ingredient_id, sub_dish_id, "
-                "new_ingredient or new_dish"
+                f"{self.what} names exactly one of "
+                "ingredient_id, sub_dish_id, new_ingredient or new_dish"
             )
         return self
+
+
+class AlternativeIn(_TargetIn):
+    """Something that may stand in for its line's target - 或 on the page.
+    `amount` left blank means the same as the line's. No `is_optional`, no
+    group and no alternatives of its own: those are the line's."""
+
+    what: ClassVar[str] = "An alternative"
+
+
+class LineIn(_TargetIn):
+    """One line, and what may stand in for its target, in order."""
+
+    what: ClassVar[str] = "A line"
+
+    is_optional: bool = False
+    alternatives: list[AlternativeIn] = []
 
 
 class StepIn(BaseModel):
@@ -283,6 +303,24 @@ class RecipeRef(BaseModel):
     dish: DishRef
 
 
+class AlternativeResponse(BaseModel):
+    id: int
+    position: int
+    ingredient: IngredientRef | None = None
+    sub_dish: DishRef | None = None
+    # Null is "the same as the line".
+    amount: str | None = None
+    note: str | None = None
+
+
+class UsedInRef(RecipeRef):
+    """A recipe in an ingredient's or a dish's "used in". `alternative_only`
+    is true when the recipe names it only as an alternative (替代) - never on
+    a line of its own."""
+
+    alternative_only: bool = False
+
+
 class LineResponse(BaseModel):
     id: int
     position: int
@@ -291,6 +329,7 @@ class LineResponse(BaseModel):
     amount: str | None = None
     note: str | None = None
     is_optional: bool
+    alternatives: list[AlternativeResponse] = []
 
 
 class StepResponse(BaseModel):
@@ -344,6 +383,7 @@ class RecipeCreate(BaseModel):
     servings: str | None = None
     time: str | None = None
     storage_notes: str | None = None
+    reheating_notes: str | None = None
     notes: str | None = None
     sources: list[SourceIn] = []
     lines: list[LineIn] = []
@@ -389,6 +429,7 @@ class RecipeUpdate(BaseModel):
     servings: str | None = None
     time: str | None = None
     storage_notes: str | None = None
+    reheating_notes: str | None = None
     notes: str | None = None
     sources: list[SourceIn] | None = None
     lines: list[LineIn] | None = None
@@ -463,6 +504,7 @@ class RecipeResponse(BaseModel):
     servings: str | None = None
     time: str | None = None
     storage_notes: str | None = None
+    reheating_notes: str | None = None
     notes: str | None = None
 
     sources: list[SourceResponse] = []

@@ -114,7 +114,16 @@ const TREE = [
 // As the server sends them: every author at sort_order 0, so in name order.
 const AUTHORS = [
   { id: 4, display_name: 'Babish', name_cn: null, name_en: 'Babish', sort_order: 0, usage_count: 0 },
-  { id: 3, display_name: '阿基師', name_cn: '阿基師', name_en: null, sort_order: 0, usage_count: 2 },
+  {
+    id: 3,
+    display_name: '阿基師',
+    name_cn: '阿基師',
+    name_en: null,
+    sort_order: 0,
+    usage_count: 2,
+    notes: '台菜。',
+    links: [{ label: 'YouTube', url: 'https://youtube.com/@a' }],
+  },
 ]
 
 const STEP_GROUPS = [
@@ -452,6 +461,67 @@ describe('設定', () => {
     )
   })
 
+  it("opens an author's names, links and 備註 together, and sends them in one PATCH", async () => {
+    handler = (call) => (call.method === 'PATCH' ? json(AUTHORS[1]) : settingsData(call))
+    renderAt('/edit/settings?tab=authors')
+    // An author's row edits more than its name, so it says 編輯, not 改名.
+    expect(await screen.findByRole('button', { name: '編輯「阿基師」' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '改名「阿基師」' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '編輯「阿基師」' }))
+
+    const row = screen.getByRole('listitem', { name: '阿基師' })
+    expect(within(row).getByRole('textbox', { name: '連結 1 網址' }).value).toBe('https://youtube.com/@a')
+    expect(within(row).getByRole('textbox', { name: '連結 1 名稱' }).value).toBe('YouTube')
+    const notes = within(row).getByRole('textbox', { name: '阿基師 的備註' })
+    expect(notes.value).toBe('台菜。')
+
+    fireEvent.change(notes, { target: { value: '台菜。\n影片比較詳細。' } })
+    fireEvent.click(within(row).getByRole('button', { name: '＋ 新增連結' }))
+    fireEvent.change(within(row).getByRole('textbox', { name: '連結 2 網址' }), {
+      target: { value: 'blog.example' },
+    })
+    fireEvent.change(within(row).getByRole('textbox', { name: '連結 2 名稱' }), {
+      target: { value: '部落格' },
+    })
+    fireEvent.click(within(row).getByRole('button', { name: '儲存' }))
+    await waitFor(() =>
+      expect(writes()).toEqual([
+        {
+          url: '/api/edit/authors/3',
+          method: 'PATCH',
+          body: {
+            name_cn: '阿基師',
+            name_en: '',
+            notes: '台菜。\n影片比較詳細。',
+            links: [
+              { url: 'https://youtube.com/@a', label: 'YouTube' },
+              { url: 'blog.example', label: '部落格' },
+            ],
+          },
+        },
+      ]),
+    )
+  })
+
+  it("clears an author's links and 備註 with an empty list and null", async () => {
+    handler = (call) => (call.method === 'PATCH' ? json(AUTHORS[1]) : settingsData(call))
+    renderAt('/edit/settings?tab=authors')
+    fireEvent.click(await screen.findByRole('button', { name: '編輯「阿基師」' }))
+    const row = screen.getByRole('listitem', { name: '阿基師' })
+    fireEvent.click(within(row).getByRole('button', { name: '移除連結 1' }))
+    fireEvent.change(within(row).getByRole('textbox', { name: '阿基師 的備註' }), { target: { value: ' ' } })
+    fireEvent.click(within(row).getByRole('button', { name: '儲存' }))
+    await waitFor(() =>
+      expect(writes()).toEqual([
+        {
+          url: '/api/edit/authors/3',
+          method: 'PATCH',
+          body: { name_cn: '阿基師', name_en: '', notes: null, links: [] },
+        },
+      ]),
+    )
+  })
+
   it('keeps 步驟分組 in hand order on a tab of its own, with its usage', async () => {
     handler = settingsData
     renderAt('/edit/settings?tab=step-groups')
@@ -512,6 +582,66 @@ describe('設定', () => {
     await waitFor(() =>
       expect(screen.getByRole('alert').textContent).toBe('「蔬菜」底下還有 4 種食材、1 個子分類，先移走再刪。'),
     )
+  })
+
+  it("edits a category's notes with its names, line breaks kept and an emptied box sent as null", async () => {
+    handler = (call) => (call.method === 'PATCH' ? json({}) : settingsData(call))
+    renderAt('/edit/settings')
+    fireEvent.click(await screen.findByRole('button', { name: '改名「蔬菜」' }))
+    const notes = screen.getByRole('textbox', { name: '蔬菜 的說明' })
+    expect(notes.value).toBe('')
+    fireEvent.change(notes, { target: { value: '挑選：葉子挺\n冷藏 3-5 天' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() =>
+      expect(writes()).toEqual([
+        {
+          url: '/api/edit/ingredient-categories/2',
+          method: 'PATCH',
+          body: { name_cn: '蔬菜', name_en: '', description: '挑選：葉子挺\n冷藏 3-5 天' },
+        },
+      ]),
+    )
+  })
+
+  it("starts from a category's stored notes, and clears them when the box is emptied", async () => {
+    handler = (call) => {
+      if (call.method === 'PATCH') return json({})
+      if (call.url === '/api/ingredient-categories')
+        return json([{ ...TREE[0], description: '還沒分好的先放這裡' }, TREE[1]])
+      return settingsData(call)
+    }
+    renderAt('/edit/settings')
+    fireEvent.click(await screen.findByRole('button', { name: '改名「未分類」' }))
+    const notes = screen.getByRole('textbox', { name: '未分類 的說明' })
+    expect(notes.value).toBe('還沒分好的先放這裡')
+    fireEvent.change(notes, { target: { value: '  ' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() =>
+      expect(writes()).toEqual([
+        {
+          url: '/api/edit/ingredient-categories/1',
+          method: 'PATCH',
+          body: { name_cn: '未分類', name_en: '', description: null },
+        },
+      ]),
+    )
+  })
+
+  // A name is a category or an ingredient, never both: the server refuses a
+  // category named as an ingredient, and the row says so where it was typed.
+  it("says in the row that a category cannot take an ingredient's name", async () => {
+    handler = (call) =>
+      call.method === 'PATCH'
+        ? json({ detail: '「醬油」已是食材，分類不能同名。', ingredient: { id: 4, display_name: '醬油' } }, 409)
+        : settingsData(call)
+    renderAt('/edit/settings')
+    fireEvent.click(await screen.findByRole('button', { name: '改名「蔬菜」' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '蔬菜 的中文名' }), { target: { value: '醬油' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    const row = screen.getByRole('listitem', { name: '蔬菜' })
+    expect((await within(row).findByRole('alert')).textContent).toBe('「醬油」已是食材，分類不能同名。')
+    // The box keeps what was typed, to change.
+    expect(screen.getByRole('textbox', { name: '蔬菜 的中文名' }).value).toBe('醬油')
   })
 
   it('adds a child under the node it was asked for, after its siblings', async () => {

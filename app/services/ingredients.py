@@ -12,6 +12,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 
+from sqlalchemy import delete as delete_rows
 from sqlalchemy import func, or_, select
 from sqlalchemy import inspect as inspect_row
 from sqlalchemy import update as update_rows
@@ -21,8 +22,10 @@ from app.errors import AppError
 from app.models import (
     CommonIngredient,
     CookingMethod,
+    Dish,
     Ingredient,
     IngredientAlias,
+    IngredientCategory,
     IngredientHeating,
     IngredientImage,
     IngredientLabel,
@@ -30,10 +33,12 @@ from app.models import (
     IngredientPreservation,
     Label,
     RecipeLine,
+    RecipeLineAlternative,
 )
-from app.services import recipe_templates
+from app.services import category_clash, recipe_templates
 from app.services.hierarchy import check_parent, is_descendant
-from app.services.lookup import fetch_labels
+from app.services.lookup import fetch_all, fetch_labels
+from app.services.recipes import distinct_alternatives
 from app.services.search import ESCAPE, contains
 
 
@@ -49,6 +54,7 @@ def _loaded(query):
         selectinload(Ingredient.category),
         selectinload(Ingredient.parent),
         selectinload(Ingredient.children),
+        selectinload(Ingredient.homemade_dish),
         selectinload(Ingredient.aliases),
         selectinload(Ingredient.preservation),
         selectinload(Ingredient.heating).selectinload(IngredientHeating.method),
@@ -78,6 +84,25 @@ def group_member_ids(group_id: int):
         select(Ingredient.id).where(Ingredient.parent_id == members.c.id)
     )
     return select(members.c.id)
+
+
+def category_subtree_ids(category_id: int):
+    """A category and every category below it, at any depth.
+
+    The category filter's set: an ingredient filed under 肉類 › 雞肉 is
+    listed when 肉類 is chosen. A recursive CTE over `parent_id`, as
+    `group_member_ids` is over the ingredient's; the write path refuses a
+    cycle, and UNION stops the recursion even if one existed.
+    """
+    subtree = (
+        select(IngredientCategory.id)
+        .where(IngredientCategory.id == category_id)
+        .cte("category_subtree", recursive=True)
+    )
+    subtree = subtree.union(
+        select(IngredientCategory.id).where(IngredientCategory.parent_id == subtree.c.id)
+    )
+    return select(subtree.c.id)
 
 
 def search(
@@ -114,7 +139,7 @@ def search(
         )
 
     if category_id is not None:
-        query = query.filter(Ingredient.category_id == category_id)
+        query = query.filter(Ingredient.category_id.in_(category_subtree_ids(category_id)))
     if parent_id is not None:
         query = query.filter(Ingredient.parent_id == parent_id)
     if group_id is not None:
@@ -209,17 +234,39 @@ def _apply_links(ingredient: Ingredient, entries) -> None:
     ]
 
 
+def _check_homemade_dish(db: Session, dish_id: int | None) -> None:
+    """422 when the homemade version names no dish. Any kind is accepted:
+    `kind` is how the library files a dish, not a permission."""
+    if dish_id is not None:
+        fetch_all(db, Dish, [dish_id], "dish")
+
+
 def create(db: Session, payload) -> Ingredient:
     check_parent(db, Ingredient, None, payload.parent_id, "ingredient")
+    _check_homemade_dish(db, payload.homemade_dish_id)
     # Resolved before anything is added, so a refused label writes nothing.
     labels = fetch_labels(db, payload.label_ids, "ingredient")
+    # A name a category already has is a 409 offering to convert it, unless
+    # this save carries that conversion (services/category_clash.py).
+    conversion = category_clash.plan(
+        db,
+        ingredient_id=None,
+        names=(payload.name_cn, payload.name_en),
+        category_id=payload.category_id,
+        parent_id=payload.parent_id,
+        description=payload.description,
+    )
+    target_id = category_clash.settle(db, conversion, payload.convert_category)
 
     ingredient = Ingredient(
         name_cn=payload.name_cn,
         name_en=payload.name_en,
         name_alt=payload.name_alt,
-        category_id=payload.category_id,
+        category_id=target_id
+        if conversion is not None and conversion.takes_target
+        else payload.category_id,
         parent_id=payload.parent_id,
+        homemade_dish_id=payload.homemade_dish_id,
         description=payload.description,
         selection_notes=payload.selection_notes,
         sourcing_notes=payload.sourcing_notes,
@@ -233,6 +280,8 @@ def create(db: Session, payload) -> Ingredient:
     _apply_links(ingredient, payload.links)
     db.add(ingredient)
     db.flush()
+    if conversion is not None:
+        category_clash.convert(db, conversion, ingredient, target_id)
     ingredient.labels = labels
     db.commit()
     return get(db, ingredient.id)
@@ -246,7 +295,12 @@ def update(db: Session, ingredient_id: int, payload) -> Ingredient:
 
     if "parent_id" in changes:
         check_parent(db, Ingredient, ingredient.id, changes["parent_id"], "ingredient")
+    if "homemade_dish_id" in changes:
+        _check_homemade_dish(db, changes["homemade_dish_id"])
 
+    # The conversion stays a model, not the dict `model_dump` made of it.
+    changes.pop("convert_category", None)
+    names_before = (ingredient.name_cn, ingredient.name_en)
     aliases = changes.pop("aliases", None)
     preservation = changes.pop("preservation", None)
     heating = changes.pop("heating", None)
@@ -276,6 +330,25 @@ def update(db: Session, ingredient_id: int, payload) -> Ingredient:
         _apply_links(ingredient, _as_entries(links, schemas.LinkIn))
     if labels is not None:
         ingredient.labels = labels
+
+    # Only a save that changes a name can make a new clash. The merged row's
+    # names are checked, so a rename also surfaces a clash its other name
+    # already had.
+    if (ingredient.name_cn, ingredient.name_en) != names_before:
+        conversion = category_clash.plan(
+            db,
+            ingredient_id=ingredient.id,
+            names=(ingredient.name_cn, ingredient.name_en),
+            category_id=ingredient.category_id,
+            parent_id=ingredient.parent_id,
+            description=ingredient.description,
+        )
+        target_id = category_clash.settle(db, conversion, payload.convert_category)
+        if conversion is not None:
+            if conversion.takes_target:
+                ingredient.category_id = target_id
+            db.flush()
+            category_clash.convert(db, conversion, ingredient, target_id)
 
     db.commit()
     return get(db, ingredient_id)
@@ -342,12 +415,17 @@ class MergePlan:
 
     The target wins every collision: a name or alias it already answers to, a
     `(state, method)` it already has a note for, a label or an image it already
-    carries, a prose field it already filled. What only the source has moves.
+    carries, a prose field it already filled, a homemade version it already
+    names. What only the source has moves.
     """
 
     source: Ingredient
     target: Ingredient
     line_ids: list[int]
+    # Alternatives naming the source that move to the target, and those the
+    # merge deletes because they would repeat their line or a sibling.
+    alternative_ids: list[int]
+    dropped_alternative_ids: list[int]
     child_ids: list[int]
     links: list[IngredientLink]
     labels: list[Label]
@@ -357,10 +435,13 @@ class MergePlan:
     dropped_preservation: list[IngredientPreservation]
     new_aliases: list[str]
     prose: dict[str, str]
+    # "moved" / "dropped" for the source's homemade version; None without one.
+    homemade_dish: str | None
 
     def moves(self) -> dict[str, int]:
         return {
             "lines": len(self.line_ids),
+            "alternatives": len(self.alternative_ids),
             "children": len(self.child_ids),
             "links": len(self.links),
             "labels": len(self.labels),
@@ -382,6 +463,8 @@ class MergePlan:
             "source": self.source.id,
             "target": self.target.id,
             "lines": sorted(self.line_ids),
+            "alternatives": sorted(self.alternative_ids),
+            "dropped_alternatives": sorted(self.dropped_alternative_ids),
             "children": sorted(self.child_ids),
             "links": [_columns(r) for r in self.links],
             "labels": sorted(label.id for label in self.labels),
@@ -394,6 +477,7 @@ class MergePlan:
                 name: [outcome, getattr(self.source, name)]
                 for name, outcome in self.prose.items()
             },
+            "homemade_dish": [self.homemade_dish, self.source.homemade_dish_id],
         }
         text_form = json.dumps(
             canonical, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str
@@ -410,6 +494,48 @@ def _answers_to(ingredient: Ingredient) -> list[str]:
     """Every string an ingredient answers to: its name slots, then its aliases."""
     slots = [ingredient.name_cn, ingredient.name_en, ingredient.name_alt]
     return [n for n in slots if n] + sorted(alias.value for alias in ingredient.aliases)
+
+
+def _alternatives_plan(db: Session, source_id: int, target_id: int) -> tuple[list, list]:
+    """`(moved, dropped)` alternative ids for a merge of source into target.
+
+    Only alternatives naming either of the two can change: once the source
+    is the target, one may name what its own line names (a line naming
+    either) or what an earlier alternative of the line names. Those are
+    dropped, by the rule every save applies (`distinct_alternatives`); of
+    the rest, the ones naming the source move.
+    """
+    rows = db.execute(
+        select(
+            RecipeLineAlternative.id,
+            RecipeLineAlternative.line_id,
+            RecipeLineAlternative.ingredient_id,
+            RecipeLine.ingredient_id,
+            RecipeLine.sub_dish_id,
+        )
+        .join(RecipeLine, RecipeLine.id == RecipeLineAlternative.line_id)
+        .where(RecipeLineAlternative.ingredient_id.in_([source_id, target_id]))
+        .order_by(RecipeLineAlternative.line_id, RecipeLineAlternative.position)
+    ).all()
+    by_line: dict[int, list] = {}
+    for row in rows:
+        by_line.setdefault(row[1], []).append(row)
+
+    def merged(ingredient_id):
+        return target_id if ingredient_id == source_id else ingredient_id
+
+    moved, dropped = [], []
+    for alternatives in by_line.values():
+        _, _, _, line_ingredient, line_dish = alternatives[0]
+        kept = distinct_alternatives(
+            (merged(line_ingredient), line_dish),
+            alternatives,
+            lambda row: (merged(row[2]), None),
+        )
+        kept_ids = {row[0] for row in kept}
+        dropped.extend(row[0] for row in alternatives if row[0] not in kept_ids)
+        moved.extend(row[0] for row in kept if row[2] == source_id)
+    return moved, dropped
 
 
 def merge_plan(db: Session, source_id: int, target_id: int) -> MergePlan:
@@ -442,11 +568,14 @@ def merge_plan(db: Session, source_id: int, target_id: int) -> MergePlan:
     kept_labels = {label.id for label in target.labels}
     kept_images = {row.image_id for row in target.images}
     line_ids = db.execute(select(RecipeLine.id).where(RecipeLine.ingredient_id == source_id))
+    alternative_ids, dropped_alternative_ids = _alternatives_plan(db, source_id, target_id)
 
     return MergePlan(
         source=source,
         target=target,
         line_ids=[line_id for (line_id,) in line_ids],
+        alternative_ids=alternative_ids,
+        dropped_alternative_ids=dropped_alternative_ids,
         child_ids=[child.id for child in source.children],
         links=list(source.links),
         labels=[label for label in source.labels if label.id not in kept_labels],
@@ -460,7 +589,16 @@ def merge_plan(db: Session, source_id: int, target_id: int) -> MergePlan:
             for name in PROSE_FIELDS
             if getattr(source, name)
         },
+        homemade_dish=_homemade_outcome(source, target),
     )
+
+
+def _homemade_outcome(source: Ingredient, target: Ingredient) -> str | None:
+    """The target keeps its own homemade version; without one it takes the
+    source's."""
+    if source.homemade_dish_id is None:
+        return None
+    return "dropped" if target.homemade_dish_id is not None else "moved"
 
 
 def _move_after(db: Session, model, rows, target_id: int, order: str, taken: list[int]) -> None:
@@ -491,8 +629,12 @@ def merge(db: Session, plan: MergePlan) -> Ingredient:
     re-read and hold only what stayed behind - the dropped notes, the images
     the target already had, its aliases - which go with it.
 
-    Recipe templates follow too: every template line naming the source names
-    the target (`recipe_templates.rewrite_ingredient`). Like a 常用食材 entry,
+    A line's alternatives follow as the plan says: the redundant ones are
+    deleted, the rest naming the source name the target.
+
+    Recipe templates follow too: every template line and alternative naming
+    the source names the target, with the same alternatives dropped
+    (`recipe_templates.rewrite_ingredient`). Like a 常用食材 entry,
     that is not in the plan - a template is a starting point, not content the
     merge moves.
 
@@ -507,6 +649,16 @@ def merge(db: Session, plan: MergePlan) -> Ingredient:
     db.execute(
         update_rows(RecipeLine)
         .where(RecipeLine.id.in_(plan.line_ids))
+        .values(ingredient_id=target_id)
+    )
+    db.execute(
+        delete_rows(RecipeLineAlternative).where(
+            RecipeLineAlternative.id.in_(plan.dropped_alternative_ids)
+        )
+    )
+    db.execute(
+        update_rows(RecipeLineAlternative)
+        .where(RecipeLineAlternative.id.in_(plan.alternative_ids))
         .values(ingredient_id=target_id)
     )
     db.execute(
@@ -537,6 +689,8 @@ def merge(db: Session, plan: MergePlan) -> Ingredient:
     for name, outcome in plan.prose.items():
         if outcome == "moved":
             setattr(target, name, getattr(plan.source, name))
+    if plan.homemade_dish == "moved":
+        target.homemade_dish_id = plan.source.homemade_dish_id
     db.flush()
 
     db.expire_all()

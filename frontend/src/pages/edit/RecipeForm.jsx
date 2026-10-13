@@ -7,14 +7,14 @@
 //     (steps keeping their kinds), methods and equipment. A reference the
 //     template still holds to something since deleted is left out by the
 //     server, and the form says how many (「範本裡有 n 個項目已不存在，已略過」).
-//   - from another recipe: all of that, and its storage notes and notes, with
+//   - from another recipe: all of that, and its 保存, 加熱 and 筆記, with
 //     its dish chosen unless ?dish= names another. Not its name, sources,
 //     status or pictures - and the form says which recipe it was copied from.
 // Nothing is saved until 儲存, and what is saved is a new recipe.
 //
 // In the order the page reads: the dish this is a recipe of, and the
 // recipe's own optional name; status, servings, time; sources; ingredient
-// lines; steps; methods, equipment; storage and notes; the gallery. What is
+// lines; steps; methods, equipment; 保存, 加熱 and 筆記; the gallery. What is
 // true of the dish whoever cooks it - names, kind, course, region, labels,
 // serves-as, a description - is the dish's form's, not this one's.
 //
@@ -92,6 +92,7 @@ const empty = () => ({
   ...emptyStructure(),
   sources: [],
   storage_notes: '',
+  reheating_notes: '',
   notes: '',
   gallery: [],
 })
@@ -113,17 +114,19 @@ function fromRecipe(row) {
     ...structureFromResponse(row),
     sources: (row.sources ?? []).map(sourceRow),
     storage_notes: row.storage_notes ?? '',
+    reheating_notes: row.reheating_notes ?? '',
     notes: row.notes ?? '',
     gallery: galleryFromImages(row.images),
   }
 }
 
-// What a copy of another recipe carries: its structure and its two notes.
+// What a copy of another recipe carries: its structure and its notes.
 // Not its name, sources, status or pictures - those are what make it that
 // recipe rather than this one.
 const copiedFrom = (row) => ({
   ...structureFromResponse(row),
   storage_notes: row.storage_notes ?? '',
+  reheating_notes: row.reheating_notes ?? '',
   notes: row.notes ?? '',
 })
 
@@ -224,6 +227,7 @@ function RecipeEditor({ id, start }) {
       sources: sourcesPayload(form.sources, platformOf),
       ...structurePayload(form),
       storage_notes: blankToNull(form.storage_notes),
+      reheating_notes: blankToNull(form.reheating_notes),
       notes: blankToNull(form.notes),
     }
   }
@@ -426,6 +430,9 @@ function RecipeEditor({ id, start }) {
           <Section title="說明">
             <Field label="保存">
               <TextArea rows={3} value={form.storage_notes} onChange={set('storage_notes')} />
+            </Field>
+            <Field label="加熱">
+              <TextArea rows={3} value={form.reheating_notes} onChange={set('reheating_notes')} />
             </Field>
             <Field label="筆記">
               <TextArea value={form.notes} onChange={set('notes')} />

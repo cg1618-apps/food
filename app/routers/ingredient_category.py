@@ -15,6 +15,7 @@ from app.database import get_db
 from app.errors import AppError
 from app.models import Ingredient, IngredientCategory
 from app.routing import read_router, write_router
+from app.services.category_clash import refuse_ingredient_names
 from app.services.hierarchy import build_tree, check_parent
 
 router = read_router("ingredient-categories", "Categories")
@@ -46,9 +47,11 @@ def category_tree(db: Session = Depends(get_db)):
 @edit.post("", response_model=schemas.CategoryResponse, status_code=201)
 def create_category(payload: schemas.CategoryCreate, db: Session = Depends(get_db)):
     check_parent(db, IngredientCategory, None, payload.parent_id, "category")
+    refuse_ingredient_names(db, (payload.name_cn, payload.name_en))
     category = IngredientCategory(
         name_cn=payload.name_cn,
         name_en=payload.name_en,
+        description=payload.description,
         parent_id=payload.parent_id,
         sort_order=payload.sort_order,
     )
@@ -69,6 +72,15 @@ def update_category(
     changes = payload.model_dump(exclude_unset=True)
     if "parent_id" in changes:
         check_parent(db, IngredientCategory, category.id, changes["parent_id"], "category")
+
+    # Only the names this save changes: a drag sends none, and a rename is
+    # not refused for what its other slot already held.
+    renamed = [
+        changes[slot]
+        for slot in ("name_cn", "name_en")
+        if slot in changes and changes[slot] != getattr(category, slot)
+    ]
+    refuse_ingredient_names(db, renamed)
 
     for field, value in changes.items():
         setattr(category, field, value)

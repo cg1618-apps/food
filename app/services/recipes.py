@@ -15,12 +15,18 @@ leave nothing behind even in a session that is never rolled back - the test
 session is one such, and an autoflush is all it takes to half-write a row.
 
 A line names a DISH, not a recipe of it, so the nesting graph is a graph of
-dishes: dish A uses dish B when a recipe of A has a line naming B. There are
-no reverse relationships from an ingredient or a dish to the lines that name
-them, so "used in" is always an explicit query.
+dishes: dish A uses dish B when a recipe of A has a line naming B, or a line
+offering B as an alternative. There are no reverse relationships from an
+ingredient or a dish to the lines and alternatives that name them, so "used
+in" is always an explicit query.
+
+A line's alternatives travel inside it on the wire and are resolved with the
+lines: every check and every new-name resolution reads `_targets` - the lines,
+then their alternatives - so an alternative names what a line may name, by
+the same code.
 """
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import false, func, or_, select, true, union_all
 from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.errors import AppError
@@ -38,6 +44,7 @@ from app.models import (
     RecipeEquipment,
     RecipeImage,
     RecipeLine,
+    RecipeLineAlternative,
     RecipeLineGroup,
     RecipeMethod,
     RecipeSource,
@@ -48,7 +55,7 @@ from app.models import (
     StepGroup,
 )
 from app.schemas.recipe import LIST_FIELDS
-from app.services import dishes
+from app.services import category_clash, dishes
 from app.services.hierarchy import MAX_DEPTH
 from app.services.lookup import fetch_all
 from app.services.search import ESCAPE, contains
@@ -75,6 +82,12 @@ def _loaded(query):
         selectinload(Recipe.sources).selectinload(RecipeSource.author),
         selectinload(Recipe.lines).selectinload(RecipeLine.ingredient),
         selectinload(Recipe.lines).selectinload(RecipeLine.sub_dish),
+        selectinload(Recipe.lines)
+        .selectinload(RecipeLine.alternatives)
+        .selectinload(RecipeLineAlternative.ingredient),
+        selectinload(Recipe.lines)
+        .selectinload(RecipeLine.alternatives)
+        .selectinload(RecipeLineAlternative.sub_dish),
         selectinload(Recipe.steps),
         selectinload(Recipe.line_groups).selectinload(RecipeLineGroup.group),
         selectinload(Recipe.step_groups).selectinload(RecipeStepGroup.group),
@@ -146,7 +159,9 @@ def _below(ingredient_ids: list[int]):
 
 
 def _usage(ingredient_ids: list[int]):
-    """`(root_id, recipe_id)` for every line naming a root or anything below it.
+    """`(root_id, recipe_id, alternative)` for every line naming a root or
+    anything below it, and every alternative doing so - `alternative` saying
+    which of the two the row is.
 
     THE definition of "uses" for an ingredient. The recipe list's
     `ingredient_id` filter, an ingredient's `used_in` and its `used_in_count`
@@ -155,11 +170,15 @@ def _usage(ingredient_ids: list[int]):
     sauce's recipes use.
     """
     tree = _below(ingredient_ids)
-    return (
-        select(tree.c.root_id, RecipeLine.recipe_id)
-        .join(RecipeLine, RecipeLine.ingredient_id == tree.c.ingredient_id)
-        .subquery()
+    lines = select(tree.c.root_id, RecipeLine.recipe_id, false().label("alternative")).join(
+        RecipeLine, RecipeLine.ingredient_id == tree.c.ingredient_id
     )
+    alternatives = (
+        select(tree.c.root_id, RecipeLine.recipe_id, true().label("alternative"))
+        .join(RecipeLineAlternative, RecipeLineAlternative.ingredient_id == tree.c.ingredient_id)
+        .join(RecipeLine, RecipeLine.id == RecipeLineAlternative.line_id)
+    )
+    return union_all(lines, alternatives).subquery()
 
 
 def recipe_ids_using_ingredients(ingredient_ids: list[int]):
@@ -168,14 +187,29 @@ def recipe_ids_using_ingredients(ingredient_ids: list[int]):
     return select(_usage(ingredient_ids).c.recipe_id).scalar_subquery()
 
 
-def recipes_using_ingredient(db: Session, ingredient_ids: list[int]) -> list[Recipe]:
-    """Distinct recipes using any of `ingredient_ids` or anything below them."""
-    rows = (
-        db.query(Recipe)
-        .options(selectinload(Recipe.dish))
-        .filter(Recipe.id.in_(recipe_ids_using_ingredients(ingredient_ids)))
+def _with_alternative_only(db: Session, usage) -> list[tuple[Recipe, bool]]:
+    """`(recipe, alternative_only)` for every distinct recipe in a usage
+    subquery carrying `recipe_id` and `alternative`, by name. Alternative-only
+    when every row naming it is an alternative."""
+    only = dict(
+        db.execute(
+            select(usage.c.recipe_id, func.bool_and(usage.c.alternative)).group_by(
+                usage.c.recipe_id
+            )
+        ).all()
     )
-    return _by_name(rows)
+    if not only:
+        return []
+    rows = db.query(Recipe).options(selectinload(Recipe.dish)).filter(Recipe.id.in_(only))
+    return [(row, only[row.id]) for row in _by_name(rows)]
+
+
+def recipes_using_ingredient(
+    db: Session, ingredient_ids: list[int]
+) -> list[tuple[Recipe, bool]]:
+    """Distinct recipes using any of `ingredient_ids` or anything below them,
+    each with whether it names them only as an alternative (替代)."""
+    return _with_alternative_only(db, _usage(ingredient_ids))
 
 
 def used_in_counts(db: Session, ingredient_ids: list[int]) -> dict[int, int]:
@@ -192,25 +226,39 @@ def used_in_counts(db: Session, ingredient_ids: list[int]) -> dict[int, int]:
     return dict(rows.all())
 
 
-def recipes_naming_ingredient(db: Session, ingredient_id: int) -> list[Recipe]:
-    """Distinct recipes with a line naming this ingredient ITSELF.
+def recipes_naming(
+    db: Session, line_column, alternative_column, row_id: int
+) -> list[tuple[Recipe, bool]]:
+    """`(recipe, alternative_only)` for every distinct recipe with a line
+    whose `line_column` is `row_id`, or an alternative whose
+    `alternative_column` is, by name.
 
-    Not "used in": this is what the foreign key refuses a delete over, and a
+    Directly, at depth zero: what a dish's "used in" and both delete refusals
+    read, so a line and an alternative count - and block a delete - alike.
+    """
+    lines = select(RecipeLine.recipe_id, false().label("alternative")).where(
+        line_column == row_id
+    )
+    alternatives = (
+        select(RecipeLine.recipe_id, true().label("alternative"))
+        .join(RecipeLineAlternative, RecipeLineAlternative.line_id == RecipeLine.id)
+        .where(alternative_column == row_id)
+    )
+    return _with_alternative_only(db, union_all(lines, alternatives).subquery())
+
+
+def recipes_naming_ingredient(db: Session, ingredient_id: int) -> list[Recipe]:
+    """Distinct recipes with a line or an alternative naming this ingredient
+    ITSELF.
+
+    Not "used in": this is what the foreign keys refuse a delete over, and a
     recipe naming only a child does not block deleting the parent - the child
     does that on its own.
     """
-    rows = (
-        db.query(Recipe)
-        .options(selectinload(Recipe.dish))
-        .filter(
-            Recipe.id.in_(
-                select(RecipeLine.recipe_id)
-                .where(RecipeLine.ingredient_id == ingredient_id)
-                .scalar_subquery()
-            )
-        )
+    found = recipes_naming(
+        db, RecipeLine.ingredient_id, RecipeLineAlternative.ingredient_id, ingredient_id
     )
-    return _by_name(rows)
+    return [recipe for recipe, _ in found]
 
 
 def _any_of(link, column, values):
@@ -317,6 +365,9 @@ def _reachable_from(db: Session, start_ids: set[int], skip_recipe: int | None) -
     """Every dish reachable from `start_ids` through the lines of their
     recipes, `start_ids` included. Breadth first, one query per level.
 
+    A line's alternative naming a dish is an edge as the line is: the recipe
+    may be made with it, so it is inside the dish all the same.
+
     `skip_recipe`'s own lines are left out: they are about to be replaced, and
     a path through them is not one the saved recipe will have.
 
@@ -331,13 +382,21 @@ def _reachable_from(db: Session, start_ids: set[int], skip_recipe: int | None) -
         depth += 1
         if depth > MAX_DEPTH:
             raise AppError(422, "Dishes nest deeper than this app allows.")
-        query = (
+        lines = (
             select(RecipeLine.sub_dish_id)
             .join(Recipe, Recipe.id == RecipeLine.recipe_id)
             .where(Recipe.dish_id.in_(frontier), RecipeLine.sub_dish_id.isnot(None))
         )
+        alternatives = (
+            select(RecipeLineAlternative.sub_dish_id)
+            .join(RecipeLine, RecipeLine.id == RecipeLineAlternative.line_id)
+            .join(Recipe, Recipe.id == RecipeLine.recipe_id)
+            .where(Recipe.dish_id.in_(frontier), RecipeLineAlternative.sub_dish_id.isnot(None))
+        )
         if skip_recipe is not None:
-            query = query.where(Recipe.id != skip_recipe)
+            lines = lines.where(Recipe.id != skip_recipe)
+            alternatives = alternatives.where(Recipe.id != skip_recipe)
+        query = union_all(lines, alternatives)
         frontier = {sub_id for (sub_id,) in db.execute(query)} - seen
         seen |= frontier
     return seen
@@ -359,6 +418,48 @@ def _flat(lists: dict, rows_field: str) -> list:
     for group in lists.get(groups_field) or []:
         rows.extend(getattr(group, inner))
     return rows
+
+
+def _targets(lists: dict) -> list:
+    """Every line in `_flat` order, then every line's alternatives, line by
+    line - everything in a save that names an ingredient or a dish.
+
+    The checks and the new-name resolution read this, so an alternative is
+    held to a line's rules by the same code. Indexes into it are what stub
+    resolution keys by; `_apply_lines` finds a line's alternatives from where
+    they start (`_alternative_offsets`).
+    """
+    lines = _flat(lists, "lines")
+    return lines + [alternative for line in lines for alternative in line.alternatives]
+
+
+def _alternative_offsets(lines: list) -> list[int]:
+    """Per line of `_flat`, where its alternatives start in `_targets`."""
+    offsets, start = [], len(lines)
+    for line in lines:
+        offsets.append(start)
+        start += len(line.alternatives)
+    return offsets
+
+
+def distinct_alternatives(line_target: tuple, alternatives: list, target) -> list:
+    """`alternatives` without any naming the line's own target or one an
+    earlier alternative names; the first of a repeat is kept.
+
+    `target(alternative)` is its `(ingredient_id, sub_dish_id)`, and
+    `line_target` the line's. Applied on every save of a recipe or a
+    template, and by an ingredient merge: a line accepts its own target
+    already, and naming one thing twice says nothing more.
+    """
+    seen = {line_target}
+    kept = []
+    for alternative in alternatives:
+        key = target(alternative)
+        if key in seen:
+            continue
+        seen.add(key)
+        kept.append(alternative)
+    return kept
 
 
 def resolve_groups(db: Session, rows_field: str, entries) -> list[tuple[int | None, str | None]]:
@@ -430,8 +531,9 @@ def _check_dish(db: Session, dish_id: int | None, new_dish) -> int | None:
 def _check_line_targets(
     db: Session, recipe_id: int | None, dish_id: int | None, new_dish, entries
 ) -> None:
-    """Every id a line names exists, no line names the recipe's own dish, and
-    no sub-dish makes a cycle.
+    """Every id a line or an alternative names exists, none names the
+    recipe's own dish, and no sub-dish makes a cycle. `entries` is
+    `_targets`: lines and alternatives alike.
 
     `dish_id` is the recipe's dish if it exists - None when the save creates
     it, and then nothing can reach it yet. A line's `new_dish` is checked as
@@ -460,14 +562,20 @@ def _check_line_targets(
 
 
 class _KeptLine:
-    """A stored line in the shape `_check_line_targets` reads, for a dish
-    move that keeps the lines."""
+    """A stored line or alternative in the shape `_check_line_targets` reads,
+    for a dish move that keeps the lines."""
 
     new_dish = None
 
     def __init__(self, line):
         self.ingredient_id = line.ingredient_id
         self.sub_dish_id = line.sub_dish_id
+
+
+def _kept_targets(recipe: Recipe) -> list[_KeptLine]:
+    """The stored lines, then their alternatives, as `_KeptLine`s."""
+    rows = list(recipe.lines) + [a for line in recipe.lines for a in line.alternatives]
+    return [_KeptLine(row) for row in rows]
 
 
 # --- resolution: may write (stubs), so runs only after validation -------------
@@ -500,6 +608,25 @@ def _find_by_name(db: Session, names: list[str]) -> Ingredient | None:
     )
 
 
+def _refuse_category_name(db: Session, names: list[str]) -> None:
+    """422 when a stub would take a category's name.
+
+    A name is a category or an ingredient, never both. Saving an ingredient
+    offers to convert the category; a recipe save does not - a dialog about
+    the category tree in the middle of writing a recipe is the interruption a
+    stub exists to avoid. So the save is refused, naming the category.
+    """
+    clash = category_clash.categories_named(db, names)
+    if clash:
+        category = clash[0]
+        raise AppError(
+            422,
+            f"「{category.display_name}」是食材分類，不能當成新食材：請選一個現有的食材，"
+            "或先在食材頁把這個分類轉成食材。",
+            category={"id": category.id, "display_name": category.display_name},
+        )
+
+
 def _resolve_new_ingredients(db: Session, entries) -> dict[int, int]:
     """Line index -> ingredient id, for every `new_ingredient` line.
 
@@ -520,6 +647,7 @@ def _resolve_new_ingredients(db: Session, entries) -> dict[int, int]:
         if row is None:
             row = _find_by_name(db, names)
         if row is None:
+            _refuse_category_name(db, names)
             if fallback is None:
                 fallback = db.query(IngredientCategory).filter_by(is_fallback=True).first()
                 if fallback is None:
@@ -653,19 +781,41 @@ def _apply_pair(db: Session, recipe: Recipe, lists: dict, rows_field: str, resol
 
 
 def _apply_lines(db: Session, recipe: Recipe, lists: dict, resolved, new_ids: dict) -> None:
-    """Replace the lines and their groups; a `new_ingredient` or `new_dish`
-    line takes its resolved id."""
+    """Replace the lines and their groups, each line with its alternatives; a
+    `new_ingredient` or `new_dish` line or alternative takes its resolved id.
+
+    The old alternatives go with the old lines. An alternative naming its
+    line's target, or one already listed, is dropped (`distinct_alternatives`):
+    only after resolution can a new name be seen to be one of those.
+    """
     ingredients, sub_dishes = new_ids["lines"], new_ids["line_dishes"]
+    offsets = _alternative_offsets(_flat(lists, "lines"))
+
+    def target(index, e) -> tuple:
+        return ingredients.get(index, e.ingredient_id), sub_dishes.get(index, e.sub_dish_id)
 
     def line(index, e, group):
+        own = target(index, e)
+        named = [(target(offsets[index] + i, a), a) for i, a in enumerate(e.alternatives)]
+        kept = distinct_alternatives(own, named, lambda pair: pair[0])
         return RecipeLine(
             position=index,
             group=group,
-            ingredient_id=ingredients.get(index, e.ingredient_id),
-            sub_dish_id=sub_dishes.get(index, e.sub_dish_id),
+            ingredient_id=own[0],
+            sub_dish_id=own[1],
             amount=e.amount,
             note=e.note,
             is_optional=e.is_optional,
+            alternatives=[
+                RecipeLineAlternative(
+                    position=position,
+                    ingredient_id=ids[0],
+                    sub_dish_id=ids[1],
+                    amount=a.amount,
+                    note=a.note,
+                )
+                for position, (ids, a) in enumerate(kept)
+            ],
         )
 
     _apply_pair(db, recipe, lists, "lines", resolved, line)
@@ -694,8 +844,9 @@ def _check_and_fetch(db: Session, lists: dict) -> dict:
 
 def _resolve_new(db: Session, lists: dict, new_dish) -> dict:
     """The first write of a save: new dishes, stubs for new ingredients, rows
-    for new authors. Runs only after every check has passed."""
-    lines = _flat(lists, "lines")
+    for new authors. Runs only after every check has passed. `lines` and
+    `line_dishes` are keyed by index into `_targets`, alternatives included."""
+    lines = _targets(lists)
     dish_id, line_dishes = _resolve_new_dishes(db, new_dish, lines)
     return {
         "dish": dish_id,
@@ -734,7 +885,7 @@ def create(db: Session, payload) -> Recipe:
         status_id = payload.status_id
         _check_status(db, status_id)
     fetched = _check_and_fetch(db, lists)
-    _check_line_targets(db, None, dish_id, payload.new_dish, _flat(lists, "lines"))
+    _check_line_targets(db, None, dish_id, payload.new_dish, _targets(lists))
     groups = _check_groups(db, lists)
     new_ids = _resolve_new(db, lists, payload.new_dish)  # the first write
 
@@ -768,10 +919,9 @@ def update(db: Session, recipe_id: int, payload) -> Recipe:
     # The lines are checked when they are sent - and when the dish moves, the
     # lines the recipe keeps, which may name the dish it is moving to.
     if "lines" in lists:
-        _check_line_targets(db, recipe.id, dish_id, new_dish, _flat(lists, "lines"))
+        _check_line_targets(db, recipe.id, dish_id, new_dish, _targets(lists))
     elif moving:
-        kept = [_KeptLine(line) for line in recipe.lines]
-        _check_line_targets(db, recipe.id, dish_id, new_dish, kept)
+        _check_line_targets(db, recipe.id, dish_id, new_dish, _kept_targets(recipe))
     groups = _check_groups(db, lists)
     new_ids = _resolve_new(db, lists, new_dish)  # the first write
 
@@ -793,7 +943,7 @@ def cascade_counts(db: Session, recipe_id: int) -> dict[str, int]:
     nothing the user would miss - and neither are gallery rows, as for an
     ingredient: the pictures survive. Nor are the line and step groups: the
     lines and steps inside them are counted, which is what the user would
-    miss. The dish is never taken: a dish outlives its last recipe.
+    miss - nor a line's alternatives, which are part of their line. The dish is never taken: a dish outlives its last recipe.
     """
     return {
         "sources": db.query(RecipeSource).filter(RecipeSource.recipe_id == recipe_id).count(),

@@ -28,6 +28,7 @@ from app.models.recipe import (
     Recipe,
     RecipeEquipment,
     RecipeLine,
+    RecipeLineAlternative,
     RecipeLineGroup,
     RecipeMethod,
     RecipeSource,
@@ -39,6 +40,7 @@ from app.models.schedule import ScheduleDay, ScheduleMeal, ScheduleMealItem
 from app.models.tbd import TbdEntry, TbdLink
 from app.models.vocabulary import (
     Author,
+    AuthorLink,
     CookingMethod,
     Equipment,
     LineGroup,
@@ -51,6 +53,7 @@ from app.models.vocabulary import (
 
 __all__ = [
     "Author",
+    "AuthorLink",
     "CommonIngredient",
     "CookingMethod",
     "Dish",
@@ -79,6 +82,7 @@ __all__ = [
     "RecipeEquipment",
     "RecipeImage",
     "RecipeLine",
+    "RecipeLineAlternative",
     "RecipeLineGroup",
     "RecipeMethod",
     "RecipeSource",

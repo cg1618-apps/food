@@ -4,7 +4,8 @@ making one from a recipe, and keeping them right through an ingredient merge.
 A body is stored in one canonical form, whatever shape it arrived in:
 
     {"servings", "time",
-     "lines": [{"ingredient_id", "sub_dish_id", "amount", "note", "is_optional"}],
+     "lines": [{"ingredient_id", "sub_dish_id", "amount", "note", "is_optional",
+                "alternatives": [{"ingredient_id", "sub_dish_id", "amount", "note"}]}],
      "line_groups": [{"line_group_id", "name", "lines": [...]}],
      "steps": [{"body", "kind"}],
      "step_groups": [{"step_group_id", "name", "steps": [...]}],
@@ -12,14 +13,19 @@ A body is stored in one canonical form, whatever shape it arrived in:
 
 Writes check everything a recipe save checks that a template can hold - every
 id names a row, every group follows the recipe's group rules - and refuse a
-line that would create a row. Every refusal comes before anything is written.
+line or alternative that would create a row. Every refusal comes before
+anything is written. An alternative repeating its line's target or a sibling
+is dropped, as a recipe save drops it.
 
 Reads are the other way round. Nothing in the database stops a row a body
 names from being deleted, so a read drops whatever is gone and counts it:
-a line whose ingredient or dish is gone, a method or a piece of equipment that
-is gone, and a group whose 設定 value is gone - that group's rows move to the
-end of the ungrouped ones, as removing a group in the form moves them. The
-stored body is left as it is; the next save writes what the form then holds.
+a line whose ingredient or dish is gone (its alternatives go with it, and are
+not counted again), an alternative whose ingredient or dish is gone, a method
+or a piece of equipment that is gone, and a group whose 設定 value is gone -
+that group's rows move to the end of the ungrouped ones, as removing a group
+in the form moves them. The stored body is left as it is; the next save
+writes what the form then holds. A body stored before alternatives existed
+has no `alternatives` key on its lines, and reads as having none.
 """
 
 import copy
@@ -41,7 +47,8 @@ from app.services import recipes
 from app.services.lookup import fetch_all
 
 NEW_REFUSED = (
-    "A template never creates an ingredient or a dish; pick an existing one for every line."
+    "A template never creates an ingredient or a dish; pick an existing one for every line"
+    " and every alternative."
 )
 NAME_TAKEN = "Another template already has that name."
 
@@ -66,6 +73,18 @@ def _all_lines(body: dict) -> list[dict]:
     return [*body["lines"], *(line for group in body["line_groups"] for line in group["lines"])]
 
 
+def _alternatives(line: dict) -> list[dict]:
+    """A stored line's alternatives; none on a body stored before they existed."""
+    return line.get("alternatives", [])
+
+
+def _target_key(entry) -> tuple:
+    """`(ingredient_id, sub_dish_id)` of a stored entry, an input or a row."""
+    if isinstance(entry, dict):
+        return entry["ingredient_id"], entry["sub_dish_id"]
+    return entry.ingredient_id, entry.sub_dish_id
+
+
 def counts(row: RecipeTemplate) -> tuple[int, int]:
     """Lines and steps as stored, grouped or not."""
     body = row.body
@@ -84,13 +103,27 @@ def _check_name(db: Session, name: str, template_id: int | None = None) -> None:
         raise AppError(422, NAME_TAKEN)
 
 
+def _alternative(entry) -> dict:
+    return {
+        "ingredient_id": entry.ingredient_id,
+        "sub_dish_id": entry.sub_dish_id,
+        "amount": entry.amount,
+        "note": entry.note,
+    }
+
+
 def _line(entry) -> dict:
+    """A line as stored, from a validated `LineIn` or a recipe's own row."""
+    alternatives = recipes.distinct_alternatives(
+        _target_key(entry), entry.alternatives, _target_key
+    )
     return {
         "ingredient_id": entry.ingredient_id,
         "sub_dish_id": entry.sub_dish_id,
         "amount": entry.amount,
         "note": entry.note,
         "is_optional": entry.is_optional,
+        "alternatives": [_alternative(a) for a in alternatives],
     }
 
 
@@ -102,10 +135,12 @@ def canonical(db: Session, body) -> dict:
     """A validated `TemplateBodyIn` as it is stored. Read-only: refuses with
     a 422 before anything is written, and writes nothing itself."""
     lines = [*body.lines, *(line for group in body.line_groups for line in group.lines)]
-    if any(line.new_ingredient is not None or line.new_dish is not None for line in lines):
+    targets = [*lines, *(a for line in lines for a in line.alternatives)]
+    if any(e.new_ingredient is not None or e.new_dish is not None for e in targets):
         raise AppError(422, NEW_REFUSED)
-    fetch_all(db, Ingredient, [e.ingredient_id for e in lines if e.ingredient_id is not None], "ingredient")
-    fetch_all(db, Dish, [e.sub_dish_id for e in lines if e.sub_dish_id is not None], "dish")
+    ingredient_ids = [e.ingredient_id for e in targets if e.ingredient_id is not None]
+    fetch_all(db, Ingredient, ingredient_ids, "ingredient")
+    fetch_all(db, Dish, [e.sub_dish_id for e in targets if e.sub_dish_id is not None], "dish")
     methods = fetch_all(db, CookingMethod, body.method_ids, "cooking method")
     equipment = fetch_all(db, Equipment, body.equipment_ids, "equipment")
     line_groups = recipes.resolve_groups(db, "lines", body.line_groups)
@@ -233,15 +268,18 @@ def resolve(db: Session, row: RecipeTemplate) -> tuple[dict, int]:
     no longer exists left out, and how many were. One query per table."""
     body = row.body
     lines = _all_lines(body)
-    ingredients = _by_id(db, Ingredient, [line["ingredient_id"] for line in lines])
-    dishes = _by_id(db, Dish, [line["sub_dish_id"] for line in lines])
+    targets = [*lines, *(a for line in lines for a in _alternatives(line))]
+    ingredients = _by_id(db, Ingredient, [entry["ingredient_id"] for entry in targets])
+    dishes = _by_id(db, Dish, [entry["sub_dish_id"] for entry in targets])
     line_values = _by_id(db, LineGroup, [g["line_group_id"] for g in body["line_groups"]])
     step_values = _by_id(db, StepGroup, [g["step_group_id"] for g in body["step_groups"]])
     methods = _by_id(db, CookingMethod, body["method_ids"])
     equipment = _by_id(db, Equipment, body["equipment_ids"])
     dropped = 0
 
-    def resolve_lines(entries) -> list[dict]:
+    def resolve_targets(entries, build) -> list[dict]:
+        """Each entry with its target resolved, or dropped and counted;
+        `build(entry)` adds what the kind of entry carries besides."""
         nonlocal dropped
         out = []
         for entry in entries:
@@ -261,10 +299,19 @@ def resolve(db: Session, row: RecipeTemplate) -> tuple[dict, int]:
                     "sub_dish": {**_ref(dish), "kind": dish.kind} if dish else None,
                     "amount": entry["amount"],
                     "note": entry["note"],
-                    "is_optional": entry["is_optional"],
+                    **build(entry),
                 }
             )
         return out
+
+    def resolve_lines(entries) -> list[dict]:
+        return resolve_targets(
+            entries,
+            lambda line: {
+                "is_optional": line["is_optional"],
+                "alternatives": resolve_targets(_alternatives(line), lambda _: {}),
+            },
+        )
 
     def resolve_pair(ungrouped, groups, values, id_field, inner, build):
         """Groups whose value is gone are dropped, their rows appended to the
@@ -322,8 +369,10 @@ def resolve(db: Session, row: RecipeTemplate) -> tuple[dict, int]:
 
 
 def rewrite_ingredient(db: Session, source_id: int, target_id: int) -> None:
-    """Point every template line naming `source_id` at `target_id` - part of
-    an ingredient merge, inside its transaction.
+    """Point every template line and alternative naming `source_id` at
+    `target_id` - part of an ingredient merge, inside its transaction. An
+    alternative that then repeats its line or a sibling is dropped, as the
+    merge drops a recipe's.
 
     The body is replaced with a changed copy rather than edited in place:
     a JSONB column does not see a mutation inside the dict it holds.
@@ -332,9 +381,14 @@ def rewrite_ingredient(db: Session, source_id: int, target_id: int) -> None:
         body = copy.deepcopy(row.body)
         changed = False
         for line in _all_lines(body):
-            if line["ingredient_id"] == source_id:
-                line["ingredient_id"] = target_id
-                changed = True
+            for entry in [line, *_alternatives(line)]:
+                if entry["ingredient_id"] == source_id:
+                    entry["ingredient_id"] = target_id
+                    changed = True
+            if _alternatives(line):
+                line["alternatives"] = recipes.distinct_alternatives(
+                    _target_key(line), line["alternatives"], _target_key
+                )
         if changed:
             row.body = body
     db.flush()

@@ -46,6 +46,11 @@ class IngredientCategory(Base, NameFallbackMixin):
     name_en = Column(String, nullable=True)
     sort_order = Column(Integer, nullable=False, server_default=text("0"))
 
+    # Notes about the family as a whole - how to pick fresh chicken, how long
+    # it keeps. A category like 雞肉 is never itself bought or cited, so what
+    # is true of every member has nowhere else to live.
+    description = Column(Text, nullable=True)
+
     # Exactly one row may set this, and stub ingredients created from a recipe
     # line are filed here. That is what lets `ingredient.category_id` be NOT
     # NULL without a required category interrupting recipe writing to ask a
@@ -128,6 +133,13 @@ class Ingredient(Base, NameFallbackMixin):
     parent_id = Column(
         Integer, ForeignKey("ingredient.id", ondelete="RESTRICT"), nullable=True
     )
+    # The dish that makes this bought thing at home - its 自製版: 油蔥酥 the
+    # sauce for 油蔥酥 and 紅蔥油 alike, so not unique. Any dish kind. SET
+    # NULL, not RESTRICT: it is a cross-reference, not a usage, and deleting
+    # a dish must not wait on unlinking it here first.
+    homemade_dish_id = Column(
+        Integer, ForeignKey("dish.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     description = Column(Text, nullable=True)
     selection_notes = Column(Text, nullable=True)
@@ -150,6 +162,10 @@ class Ingredient(Base, NameFallbackMixin):
     category = relationship("IngredientCategory", back_populates="ingredients")
     parent = relationship("Ingredient", remote_side=[id], back_populates="children")
     children = relationship("Ingredient", back_populates="parent", passive_deletes="all")
+    # One-way on purpose: with no collection on Dish, the ORM has nothing to
+    # null when a dish is deleted, and the database's SET NULL does it. The
+    # dish's `bought_as` is a query (services/dishes.py), as its "used in" is.
+    homemade_dish = relationship("Dish")
     aliases = relationship(
         "IngredientAlias", back_populates="ingredient", cascade="all, delete-orphan"
     )

@@ -281,6 +281,52 @@ describe('the recipe page', () => {
     ])
   })
 
+  it('shows 保存, 加熱 and 筆記 in that order, line breaks kept', async () => {
+    const recipe = { ...RECIPE, storage_notes: '冷藏三天', reheating_notes: '微波 2 分鐘\n中途翻面' }
+    handler = ({ url, method }) => (method === 'GET' && url === '/api/recipes/5' ? json(recipe) : null)
+    renderAt('/recipes/5')
+    await screen.findByRole('heading', { level: 1, name: '麻婆豆腐' })
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
+    const order = ['保存', '加熱', '筆記'].map((name) => headings.indexOf(name))
+    expect(order.every((index) => index >= 0)).toBe(true)
+    expect([...order].sort((a, b) => a - b)).toEqual(order)
+    const reheat = screen.getByRole('heading', { name: '加熱' }).closest('section')
+    expect(reheat.textContent).toContain('微波 2 分鐘\n中途翻面')
+    // Left out when there is none.
+    cleanup()
+    handler = ({ url, method }) => (method === 'GET' && url === '/api/recipes/5' ? json(RECIPE) : null)
+    renderAt('/recipes/5')
+    await screen.findByRole('heading', { level: 1, name: '麻婆豆腐' })
+    expect(screen.queryByRole('heading', { name: '加熱' })).toBeNull()
+  })
+
+  it('shows a line’s alternatives after it, linked, with their own amount and note', async () => {
+    const recipe = {
+      ...RECIPE,
+      line_groups: [],
+      lines: [
+        {
+          ...RECIPE.lines[0],
+          amount: '300g',
+          alternatives: [
+            { id: 1, position: 0, ingredient: { id: 12, display_name: '板豆腐', needs_detail: false }, sub_dish: null, amount: '250g', note: '較硬' },
+            { id: 2, position: 1, ingredient: null, sub_dish: { id: 7, display_name: '辣油', kind: 'sauce' }, amount: null, note: null },
+          ],
+        },
+        { id: 9, position: 1, ingredient: { id: 13, display_name: '蒜', needs_detail: false }, sub_dish: null, amount: '2 瓣', note: null, is_optional: false, alternatives: [] },
+      ],
+    }
+    handler = ({ url, method }) => (method === 'GET' && url === '/api/recipes/5' ? json(recipe) : null)
+    renderAt('/recipes/5')
+    const lines = (await screen.findByRole('heading', { name: '材料' })).closest('section')
+    const [first, second] = within(lines).getAllByRole('listitem')
+    expect(first.textContent).toBe('豆腐300g或板豆腐250g較硬或辣油')
+    expect(within(first).getByRole('link', { name: '板豆腐' }).getAttribute('href')).toBe('/ingredients/12')
+    expect(within(first).getByRole('link', { name: '辣油' }).getAttribute('href')).toBe('/dishes/7')
+    // A line without alternatives is drawn as before.
+    expect(second.textContent).toBe('蒜2 瓣')
+  })
+
   it('numbers only ordinary steps, marks an optional step and draws a note as a callout', async () => {
     const recipe = {
       ...RECIPE,
@@ -488,6 +534,67 @@ describe('the dish page', () => {
     expect(within(usedIn).getByRole('link', { name: '麻婆豆腐' }).getAttribute('href')).toBe('/recipes/5')
   })
 
+  it('lists the ingredients it is the homemade version of as 市售版, and nothing when none', async () => {
+    handler = ({ url, method }) => {
+      if (method !== 'GET') return null
+      if (url === '/api/dishes/7') {
+        return json({
+          ...SAUCE,
+          bought_as: [
+            { id: 31, display_name: '辣油', needs_detail: false },
+            { id: 32, display_name: '紅油', needs_detail: true },
+          ],
+        })
+      }
+      if (url === '/api/dishes/40') return json({ ...DISH, bought_as: [] })
+      return null
+    }
+    renderAt('/dishes/7')
+    const bought = (await screen.findByRole('heading', { name: '市售版' })).closest('section')
+    const links = within(bought).getAllByRole('link')
+    expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+      ['辣油', '/ingredients/31'],
+      ['紅油', '/ingredients/32'],
+    ])
+    cleanup()
+
+    renderAt('/dishes/40')
+    await screen.findByRole('heading', { level: 1, name: '麻婆豆腐' })
+    expect(screen.queryByRole('heading', { name: '市售版' })).toBeNull()
+  })
+
+  it('says the ingredients that lose their link when it is deleted, and still deletes', async () => {
+    handler = ({ url, method }) => {
+      if (method === 'GET' && url === '/api/dishes/7') return json(SAUCE)
+      if (method === 'GET' && url === '/api/dishes/7/cascade') {
+        return json({ aliases: 0, recipes: 0, used_in: 0, meals: 0, bought_as: 2 })
+      }
+      if (method === 'DELETE') return new Response(null, { status: 204 })
+      return null
+    }
+    renderAt('/dishes/7')
+    fireEvent.click(await screen.findByRole('button', { name: '刪除' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText(/有 2 種食材把它當自製版/)).toBeTruthy()
+    fireEvent.click(within(dialog).getByRole('button', { name: '刪除' }))
+    await waitFor(() => expect(location()).toBe('/dishes'))
+    expect(calls.find((c) => c.method === 'DELETE').url).toBe('/api/edit/dishes/7?aliases=0')
+  })
+
+  it('marks a recipe that uses it only as an alternative with 替代', async () => {
+    const sauce = {
+      ...SAUCE,
+      used_in: [
+        { ...SAUCE.used_in[0], alternative_only: false },
+        { id: 6, display_name: '擔擔麵', dish: { id: 41, display_name: '擔擔麵', kind: 'dish' }, alternative_only: true },
+      ],
+    }
+    handler = ({ url, method }) => (method === 'GET' && url === '/api/dishes/7' ? json(sauce) : null)
+    renderAt('/dishes/7')
+    const usedIn = (await screen.findByRole('heading', { name: '用在' })).closest('section')
+    expect(within(usedIn).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['麻婆豆腐', '擔擔麵替代'])
+  })
+
   it('lists the recipes, the recipes using it and its meals when a delete is refused', async () => {
     handler = ({ url, method }) => {
       if (method === 'GET' && url === '/api/dishes/40') return json(DISH)
@@ -530,6 +637,31 @@ describe('the dish page', () => {
 describe('the ingredient page', () => {
   beforeEach(() => {
     handler = ({ url, method }) => (method === 'GET' && url === '/api/ingredients/20' ? json(INGREDIENT) : null)
+  })
+
+  it('links its homemade version, and draws nothing without one', async () => {
+    handler = ({ url, method }) =>
+      method === 'GET' && url === '/api/ingredients/20'
+        ? json({ ...INGREDIENT, homemade_dish: { id: 7, display_name: '辣油', kind: 'sauce' } })
+        : method === 'GET' && url === '/api/ingredients/21'
+          ? json({ ...INGREDIENT, id: 21, homemade_dish: null })
+          : null
+    renderAt('/ingredients/20')
+    const homemade = (await screen.findByRole('heading', { name: '自製版' })).closest('section')
+    expect(within(homemade).getByRole('link', { name: '辣油' }).getAttribute('href')).toBe('/dishes/7')
+    cleanup()
+
+    renderAt('/ingredients/21')
+    await screen.findByRole('heading', { level: 1, name: '青蔥' })
+    expect(screen.queryByRole('heading', { name: '自製版' })).toBeNull()
+  })
+
+  it('marks a recipe that uses it only as an alternative with 替代', async () => {
+    const ingredient = { ...INGREDIENT, used_in: [{ ...INGREDIENT.used_in[0], alternative_only: true }] }
+    handler = ({ url, method }) => (method === 'GET' && url === '/api/ingredients/20' ? json(ingredient) : null)
+    renderAt('/ingredients/20')
+    const usedIn = (await screen.findByRole('heading', { name: '用在' })).closest('section')
+    expect(within(usedIn).getByRole('listitem').textContent).toBe('麻婆豆腐替代')
   })
 
   it('draws storage as a state by method grid with only what is used', async () => {

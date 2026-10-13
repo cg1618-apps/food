@@ -2,14 +2,18 @@
 // /edit/ingredients/:id.
 //
 // In the order the page reads: names and where it is filed (category, the
-// ingredient it is a variety of, rating, labels, aliases); the prose -
+// ingredient it is a variety of, rating, labels, aliases, 自製版 - the dish
+// that makes it at home, picked from the dish library); the prose -
 // what it is, picking one, where to get it, keeping it; storage rows (state,
 // method, a min-max range in days, notes); heating rows (method, °C with the
 // °F beside it, duration, preheat, flip, notes); links; the 待補 flag; the
 // gallery. Every list is the shared RowEditor; every closed list comes from
 // the backend (useFixedVocabularies), not a copy.
 //
-// Saving goes to the ingredient's page.
+// Saving goes to the ingredient's page. A name a category already has is
+// refused with a `category_clash` preview, and the save waits behind
+// CategoryClashDialog: approving resends it with `convert_category`,
+// cancelling leaves the form unsaved as it was.
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
@@ -18,6 +22,7 @@ import ChipPicker from '../../components/forms/ChipPicker'
 import DeleteDialog from '../../components/forms/DeleteDialog'
 import FormActions from '../../components/forms/FormActions'
 import GalleryPicker from '../../components/forms/GalleryPicker'
+import CategoryClashDialog from '../../components/modals/CategoryClashDialog'
 import RowEditor from '../../components/forms/RowEditor'
 import Typeahead, { Picked } from '../../components/forms/Typeahead'
 import { Field, Input, Section, Select, TextArea } from '../../components/ui/primitives'
@@ -32,10 +37,12 @@ import { reconcileMinDays } from './storageDuration'
 
 // An ingredient save moves more than the ingredient's own reads: category and
 // label counts, cooking-method usage (heating rows), the recipes whose lines
-// name it, the image library's usage counts, and 常用食材 (a renamed
-// ingredient is a renamed chip).
+// name it, the image library's usage counts, 常用食材 (a renamed
+// ingredient is a renamed chip), and the dishes (a dish's 市售版 lists the
+// ingredients naming it as their 自製版).
 const INVALIDATE = [
   endpoints.ingredients.list(),
+  endpoints.dishes.list(),
   endpoints.commonIngredients.list(),
   endpoints.categories.tree(),
   endpoints.labels.list(),
@@ -50,6 +57,7 @@ const EMPTY = {
   name_alt: '',
   category_id: '',
   parent: null,
+  homemade: null,
   rating: '',
   label_ids: [],
   aliases: '',
@@ -101,6 +109,9 @@ function fromIngredient(row) {
     name_alt: row.name_alt ?? '',
     category_id: row.category ? String(row.category.id) : '',
     parent: row.parent ? { id: row.parent.id, label: row.parent.display_name } : null,
+    homemade: row.homemade_dish
+      ? { id: row.homemade_dish.id, label: row.homemade_dish.display_name }
+      : null,
     rating: row.rating ?? '',
     label_ids: (row.labels ?? []).map((label) => label.id),
     aliases: (row.aliases ?? []).join('、'),
@@ -132,8 +143,12 @@ export default function IngredientForm() {
   const [loaded, setLoaded] = useState(null)
   const [error, setError] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  // The `category_clash` preview of a refused save, while its dialog is open.
+  const [clash, setClash] = useState(null)
   // Typed into the parent box and not picked: refused on save, never dropped.
   const [parentTyped, setParentTyped] = useState('')
+  // The same for the homemade-version box.
+  const [homemadeTyped, setHomemadeTyped] = useState('')
   // The category select is required and the storage and heating rows' selects
   // are drawn from these lists: Save waits for them.
   const vocabulariesReady = Boolean(categories.data && fixed.data && methods.data)
@@ -161,6 +176,7 @@ export default function IngredientForm() {
       name_alt: blankToNull(form.name_alt),
       category_id: Number(categoryValue),
       parent_id: form.parent?.id ?? null,
+      homemade_dish_id: form.homemade?.id ?? null,
       rating: form.rating || null,
       label_ids: form.label_ids,
       aliases: splitAliases(form.aliases),
@@ -200,17 +216,36 @@ export default function IngredientForm() {
       )
       return
     }
-    try {
-      const saved = await save({
-        id,
-        body: payload(),
-        gallery: form.gallery,
-        galleryDirty: galleryChanged(galleryFromImages(loaded?.images), form.gallery),
-      })
-      navigate(`/ingredients/${saved.id}`)
-    } catch (caught) {
-      setError(caught)
+    if (!form.homemade && homemadeTyped.trim()) {
+      setError(
+        new Error(`「自製版」打了「${homemadeTyped.trim()}」，但還沒從清單選：選一道料理，或把文字清掉。`),
+      )
+      return
     }
+    try {
+      await persist()
+    } catch (caught) {
+      if (caught.status === 409 && caught.body?.category_clash) {
+        setClash(caught.body.category_clash)
+      } else {
+        setError(caught)
+      }
+    }
+  }
+
+  // The save, optionally converting the clashing category with it. The
+  // dialog catches what this throws: a fresh preview, or a refusal.
+  async function persist(conversion = null) {
+    const body = payload()
+    if (conversion) body.convert_category = conversion
+    const saved = await save({
+      id,
+      body,
+      gallery: form.gallery,
+      galleryDirty: galleryChanged(galleryFromImages(loaded?.images), form.gallery),
+    })
+    setClash(null)
+    navigate(`/ingredients/${saved.id}`)
   }
 
   const options = (list) =>
@@ -278,6 +313,27 @@ export default function IngredientForm() {
                     exclude={{ ingredient: id ? [Number(id)] : [] }}
                     onSelect={(option) => setField('parent', { id: option.id, label: option.label })}
                     onQueryChange={setParentTyped}
+                  />
+                )}
+              </div>
+              <div className="space-y-1 sm:col-span-3">
+                <span className="text-sm font-medium text-text-muted">自製版</span>
+                {form.homemade ? (
+                  <Picked
+                    label={form.homemade.label}
+                    onClear={() => {
+                      setField('homemade', null)
+                      setHomemadeTyped('')
+                    }}
+                    clearLabel="移除"
+                  />
+                ) : (
+                  <Typeahead
+                    sources={['dish']}
+                    label="自製版"
+                    placeholder="自己做的話是哪道料理或醬料，沒有就留空"
+                    onSelect={(option) => setField('homemade', { id: option.id, label: option.label })}
+                    onQueryChange={setHomemadeTyped}
                   />
                 )}
               </div>
@@ -514,6 +570,16 @@ export default function IngredientForm() {
             onDelete={isNew ? null : () => setDeleting(true)}
           />
         </>
+      ) : null}
+
+      {clash ? (
+        <CategoryClashDialog
+          preview={clash}
+          ingredientName={form.name_cn.trim() || form.name_en.trim() || clash.category.display_name}
+          categories={categories.data}
+          onConfirm={persist}
+          onClose={() => setClash(null)}
+        />
       ) : null}
 
       {deleting ? (

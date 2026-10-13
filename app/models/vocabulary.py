@@ -12,10 +12,23 @@ the ones it only displays and filters by.
 copied columns: `cls.name_cn` inside it is the subclass's column, not the
 mixin's, which is what lets one definition produce nine correctly-bound
 expression indexes.
+
+An author alone carries more than the shared shape - a remark and a child
+table of links (`author_link`) - declared on its own class below.
 """
 
-from sqlalchemy import CheckConstraint, Column, Index, Integer, String, func, text
-from sqlalchemy.orm import declared_attr
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+    text,
+)
+from sqlalchemy.orm import declared_attr, relationship
 
 from app.database import Base
 from app.models.base import NameFallbackMixin
@@ -88,9 +101,47 @@ class Author(Base, VocabularyMixin):
     sort_order 0, so the factory's (sort_order, name) order is name order.
     Grows from the recipe form as much as from 設定 - a name typed into a
     source that no author answers to is created by the save.
+
+    The one vocabulary with more than names: a remark (`notes`) and links -
+    a channel, a blog - shown above the recipe library when it is filtered
+    to this author.
     """
 
     __tablename__ = "author"
+
+    # Line breaks kept; blank is stored as NULL by the schema layer.
+    notes = Column(Text, nullable=True)
+
+    links = relationship(
+        "AuthorLink",
+        back_populates="author",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="AuthorLink.position",
+    )
+
+
+class AuthorLink(Base):
+    """tbd_link's shape and rules, on an author. CASCADE: an author deleted
+    takes its links. Replaced wholesale on a save, so `position` is the order
+    sent and carries no unique constraint - one would collide with the rows
+    being replaced inside the same flush."""
+
+    __tablename__ = "author_link"
+
+    id = Column(Integer, primary_key=True)
+    author_id = Column(
+        Integer, ForeignKey("author.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    position = Column(Integer, nullable=False)
+    # http or https only, normalised in the schema layer: a bare host is
+    # stored with https:// in front of it.
+    url = Column(String, nullable=False)
+    label = Column(String, nullable=True)
+
+    author = relationship("Author", back_populates="links")
+
+    __table_args__ = (CheckConstraint("btrim(url) <> ''", name="ck_author_link_has_a_url"),)
 
 
 class LineGroup(Base, VocabularyMixin):

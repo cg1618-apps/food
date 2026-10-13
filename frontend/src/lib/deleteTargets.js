@@ -6,8 +6,9 @@ import { endpoints } from '../api/endpoints'
 
 // Per kind: where its counts and its delete are, which counts the delete
 // echoes (the router's query parameters, read from app/routers/*.py) and how
-// each is worded, which cascade keys BLOCK rather than cascade, and which
-// reads the delete makes stale.
+// each is worded, which cascade keys BLOCK rather than cascade, which only
+// NOTE what loses a link to the row and stays (`notices`, never echoed), and
+// which reads the delete makes stale.
 export const DELETE_TARGETS = {
   dish: {
     noun: '料理',
@@ -19,8 +20,12 @@ export const DELETE_TARGETS = {
       ['used_in', (n) => `有 ${n} 份食譜把它當材料用，要先從那些食譜拿掉才能刪除。`],
       ['meals', (n) => `排程裡排了它 ${n} 次，要先從排程拿掉才能刪除。`],
     ],
+    // ingredient.homemade_dish_id is SET NULL: those ingredients stay.
+    notices: [['bought_as', (n) => `有 ${n} 種食材把它當自製版；刪除後食材留著，只是不再連到這道。`]],
     invalidate: [
       endpoints.dishes.list(),
+      // Their 自製版 goes.
+      endpoints.ingredients.list(),
       endpoints.recipes.list(),
       endpoints.labels.list(),
       endpoints.courses.list(),
@@ -41,6 +46,7 @@ export const DELETE_TARGETS = {
     // recipe of it, and the dish stays. A meal item on the schedule naming it
     // keeps its dish and loses only the recipe.
     blockers: [],
+    notices: [],
     invalidate: [
       endpoints.schedule.list(),
       // The dish's recipe count and cover move.
@@ -67,8 +73,11 @@ export const DELETE_TARGETS = {
       ['children', (n) => `底下還有 ${n} 個品種，要先移走或刪除它們。`],
       ['recipes', (n) => `有 ${n} 道食譜直接用到它，要先在那些食譜換掉，或把它合併到別的食材。`],
     ],
+    notices: [],
     invalidate: [
       endpoints.ingredients.list(),
+      // A dish's 市售版 lists the ingredients naming it.
+      endpoints.dishes.list(),
       // A deleted ingredient leaves 常用食材 (ON DELETE CASCADE).
       endpoints.commonIngredients.list(),
       endpoints.categories.tree(),
@@ -84,6 +93,7 @@ export const DELETE_TARGETS = {
     library: '/notes',
     counts: [],
     blockers: [],
+    notices: [],
     invalidate: [endpoints.notes.list(), endpoints.labels.list(), endpoints.images.list()],
   },
 }

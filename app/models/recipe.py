@@ -8,7 +8,8 @@ shape with each other more than with their owners.
 
 Two directions of deletion meet here and they differ on purpose (the table is
 in `docs/data-model.md`): what a recipe OWNS cascades with it; what it NAMES -
-its dish, an ingredient, a sub-dish, a status, a source platform, an author, a
+its dish, an ingredient, a sub-dish (on a line or on a line's
+alternative), a status, a source platform, an author, a
 method, a piece of equipment, a 材料分組 or 步驟分組 value - is RESTRICT, so
 nothing in use disappears from under a recipe.
 
@@ -71,6 +72,8 @@ class Recipe(Base):
     time = Column(String, nullable=True)
 
     storage_notes = Column(Text, nullable=True)
+    # 加熱: how to reheat what this recipe makes. Free text, as storage_notes.
+    reheating_notes = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=get_taipei_now)
@@ -331,11 +334,72 @@ class RecipeLine(Base):
     # to refuse and an ingredient in use disappears from under its recipes.
     ingredient = relationship("Ingredient", passive_deletes="all")
     sub_dish = relationship("Dish", passive_deletes="all")
+    # 或: what may stand in for the target. Owned by the line - CASCADE in the
+    # database, delete-orphan here - so a line replaced takes its own with it.
+    alternatives = relationship(
+        "RecipeLineAlternative",
+        back_populates="line",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="RecipeLineAlternative.position",
+    )
 
     __table_args__ = (
         UniqueConstraint("recipe_id", "position", name="uq_recipe_line_position"),
         CheckConstraint(
             "num_nonnulls(ingredient_id, sub_dish_id) = 1", name="ck_recipe_line_one_target"
+        ),
+    )
+
+
+class RecipeLineAlternative(Base):
+    """Something that may stand in for a line's target - 雞腿 或 雞胸肉, 米酒 或
+    清酒, a homemade sauce or a bought one. Varieties already cover the close
+    substitutes (a line naming 醬油 accepts its varieties); this is for the
+    rest.
+
+    A child of the line rather than a line of its own: an alternative is not a
+    separate requirement, so it has no group, no 可省略 and no place in the
+    recipe's positions, and "what does this recipe need" never has to filter
+    it out (docs/notes/decisions.md).
+
+    Its target follows a line's rules exactly: an ingredient or a dish, never
+    both, RESTRICT on each, and the write path's own-dish rule and cycle
+    guard. `amount` blank means "the same as the line".
+
+    `position` is the order among the line's alternatives, unique per line as
+    a line's is per recipe. A save never replaces alternatives in place - it
+    replaces the lines, and the alternatives go with them - so the unique
+    never meets the rows being replaced inside one flush, the case that made
+    `tbd_link.position` do without one.
+    """
+
+    __tablename__ = "recipe_line_alternative"
+
+    id = Column(Integer, primary_key=True)
+    line_id = Column(
+        Integer, ForeignKey("recipe_line.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    position = Column(Integer, nullable=False)
+    ingredient_id = Column(
+        Integer, ForeignKey("ingredient.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    sub_dish_id = Column(
+        Integer, ForeignKey("dish.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    amount = Column(String, nullable=True)
+    note = Column(String, nullable=True)
+
+    line = relationship("RecipeLine", back_populates="alternatives")
+    # passive_deletes="all", as on the line's own targets.
+    ingredient = relationship("Ingredient", passive_deletes="all")
+    sub_dish = relationship("Dish", passive_deletes="all")
+
+    __table_args__ = (
+        UniqueConstraint("line_id", "position", name="uq_recipe_line_alternative_position"),
+        CheckConstraint(
+            "num_nonnulls(ingredient_id, sub_dish_id) = 1",
+            name="ck_recipe_line_alternative_one_target",
         ),
     )
 

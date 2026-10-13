@@ -24,10 +24,10 @@ from app.schemas.image import AttachedImage, CoverRef
 from app.schemas.vocabulary import VocabRef
 
 if TYPE_CHECKING:
-    # recipe.py imports this module, so RecipeRef cannot be imported here at
-    # runtime; `app/schemas/__init__.py` resolves the forward reference once
-    # both modules exist.
-    from app.schemas.recipe import RecipeRef
+    # recipe.py imports this module, so UsedInRef and DishRef cannot be
+    # imported here at runtime; `app/schemas/__init__.py` resolves the forward
+    # references once both modules exist.
+    from app.schemas.recipe import DishRef, UsedInRef
 
 
 def _clean_aliases(values: list[str]) -> list[str]:
@@ -240,6 +240,23 @@ class RelatedIngredient(IngredientSummary):
     sourcing_notes: str | None = None
 
 
+class CategoryConversionIn(BaseModel):
+    """Turn the category the ingredient's name clashes with into this
+    ingredient, in the same transaction as the save.
+
+    Sent only after the save was refused with a `category_clash` preview:
+    `category_id` and `fingerprint` are that preview's, and
+    `target_category_id` is the owner's choice when the category is
+    top-level (it has no parent to hand its members to).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    category_id: int
+    target_category_id: int | None = None
+    fingerprint: str
+
+
 class IngredientBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -248,6 +265,7 @@ class IngredientBase(BaseModel):
     name_alt: str | None = None
     category_id: int
     parent_id: int | None = None
+    homemade_dish_id: int | None = None
     description: str | None = None
     selection_notes: str | None = None
     sourcing_notes: str | None = None
@@ -259,6 +277,9 @@ class IngredientBase(BaseModel):
     heating: list[HeatingIn] = []
     links: list[LinkIn] = []
     label_ids: list[int] = []
+    # Not a column: the answer to a `category_clash` refusal. See
+    # `app/services/category_clash.py`.
+    convert_category: CategoryConversionIn | None = None
 
     @field_validator("name_cn", "name_en", "name_alt", mode="before")
     @classmethod
@@ -314,6 +335,7 @@ class IngredientUpdate(BaseModel):
     name_alt: str | None = None
     category_id: int | None = None
     parent_id: int | None = None
+    homemade_dish_id: int | None = None
     description: str | None = None
     selection_notes: str | None = None
     sourcing_notes: str | None = None
@@ -325,6 +347,7 @@ class IngredientUpdate(BaseModel):
     heating: list[HeatingIn] | None = None
     links: list[LinkIn] | None = None
     label_ids: list[int] | None = None
+    convert_category: CategoryConversionIn | None = None
 
     @field_validator("name_cn", "name_en", "name_alt", mode="before")
     @classmethod
@@ -359,6 +382,8 @@ class IngredientResponse(BaseModel):
     category: CategoryRef | None = None
     parent: RelatedIngredient | None = None
     children: list[RelatedIngredient] = []
+    # The dish that makes this at home (自製版), or null.
+    homemade_dish: "DishRef | None" = None
 
     description: str | None = None
     selection_notes: str | None = None
@@ -373,7 +398,7 @@ class IngredientResponse(BaseModel):
     links: list[LinkResponse] = []
     labels: list[LabelRef] = []
     images: list[AttachedImage] = []
-    used_in: list["RecipeRef"] = []
+    used_in: list["UsedInRef"] = []
 
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -393,9 +418,12 @@ class MergeIn(BaseModel):
 
 
 class MergeMoves(BaseModel):
-    """How many rows of each kind move to the target."""
+    """How many rows of each kind move to the target. `alternatives` counts
+    only the ones that move; those the merge makes redundant are
+    `MergePreview.dropped_alternatives`."""
 
     lines: int
+    alternatives: int
     children: int
     links: int
     labels: int
@@ -417,8 +445,66 @@ class MergePreview(BaseModel):
     moves: MergeMoves
     new_aliases: list[str]
     dropped_preservation: list[PreservationKey]
+    # Alternatives the merge deletes: once the source is the target, they
+    # name what their own line names, or what another alternative of the
+    # line already names.
+    dropped_alternatives: int
     # Only the prose fields the source has: "moved" when the target's is
     # empty, "dropped" when the target already has its own.
     prose: dict[str, Literal["moved", "dropped"]]
+    # The source's homemade version, when it has one: "moved" when the
+    # target has none, "dropped" when the target keeps its own. Null when
+    # the source has none.
+    homemade_dish: Literal["moved", "dropped"] | None = None
     # Echoed back on the merge; a different plan by then is a 409.
+    fingerprint: str
+
+
+class NameRef(BaseModel):
+    id: int
+    display_name: str = ""
+
+
+class SiblingClash(BaseModel):
+    """A child category that cannot move up: `sibling` already sits there
+    under the same Chinese name."""
+
+    category: CategoryRef
+    sibling: CategoryRef
+
+
+class CategoryClashPreview(BaseModel):
+    """What turning `category` into the ingredient being saved would do.
+
+    Rides on the 409 that refuses the save, as `category_clash`; computed by
+    the same function the conversion runs.
+    """
+
+    category: CategoryRef
+    # Where the category's ingredients are re-filed: its parent. Null when it
+    # is top-level, and then `choose_target` is true and the request names one.
+    target: CategoryRef | None = None
+    choose_target: bool
+    # The ingredient's own category is the one about to go, so it is filed in
+    # the target too.
+    takes_target: bool
+    # Filed directly in the category, top-level: they become varieties of the
+    # ingredient being saved.
+    adopted: list[NameRef]
+    # Filed directly in the category and already varieties of something:
+    # they keep their parent and are only re-filed.
+    varieties: list[NameRef]
+    # Top-level, but above the ingredient being saved in its own parent
+    # chain: making them its varieties would be a cycle, so they stay
+    # top-level and are only re-filed.
+    kept_top_level: list[NameRef]
+    # The category's child categories, which move up to `child_parent` (null
+    # = top level) with their own ingredients and children.
+    child_categories: list[CategoryRef]
+    child_parent: CategoryRef | None = None
+    # Non-empty means the conversion cannot run: rename one of each pair first.
+    blocked_by: list[SiblingClash]
+    # The category's own notes: "moved" into the ingredient's empty
+    # description, "dropped" when it has its own; null when there are none.
+    description: Literal["moved", "dropped"] | None = None
     fingerprint: str

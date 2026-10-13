@@ -36,6 +36,16 @@ def _walk_to_root(db: Session, model, start_id: int | None):
         current = db.query(model.parent_id).filter(model.id == current).scalar()
 
 
+def ancestor_ids(db: Session, model, start_id: int | None) -> set[int]:
+    """`start_id` and every row above it; empty for None.
+
+    The ancestors a row WOULD have under the parent `start_id`, which is the
+    question when the row has no id yet - a new ingredient converting a
+    category asks it before it is inserted.
+    """
+    return set(_walk_to_root(db, model, start_id))
+
+
 def is_descendant(db: Session, model, row_id: int, ancestor_id: int) -> bool:
     """True when `row_id` sits somewhere below `ancestor_id` (not itself)."""
     row = db.query(model.parent_id).filter(model.id == row_id).scalar()
@@ -91,6 +101,7 @@ def build_tree(rows, counts: dict[int, int], node_schema):
             display_name=row.display_name,
             name_cn=row.name_cn,
             name_en=row.name_en,
+            description=row.description,
             parent_id=row.parent_id,
             sort_order=row.sort_order,
             is_fallback=row.is_fallback,

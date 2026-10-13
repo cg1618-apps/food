@@ -28,6 +28,9 @@
 //   arrange(items) - optional: cuts the list into titled sections (see
 //                   CoverGrid); without it the list is drawn flat
 //   itemTo(item)  - the item's detail path
+//   intro         - optional: drawn above the list, under the search - the
+//                   chosen ingredient category's own notes, or the one
+//                   chosen author's links and 備註 on the recipe library
 //   searchPlaceholder, emptyText, noMatchText
 import { useState } from 'react'
 
@@ -63,6 +66,7 @@ export default function LibraryLayout({
   columns,
   itemTo,
   arrange,
+  intro,
   searchPlaceholder = '搜尋…',
   emptyText = '這裡還沒有東西。',
   noMatchText = '沒有符合條件的項目。',
@@ -127,6 +131,8 @@ export default function LibraryLayout({
             </Button>
             <Toggle label="顯示方式" options={VIEW_OPTIONS} value={view} onChange={setView} />
           </div>
+
+          {intro}
 
           {query.data ? (
             <p className="text-xs text-text-faint" aria-live="polite">

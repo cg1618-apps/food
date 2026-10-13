@@ -81,6 +81,7 @@ def test_a_dish_round_trips_through_create_read_update_delete(client, vocab):
         "recipes": 0,
         "used_in": 0,
         "meals": 0,
+        "bought_as": 0,
     }
     deleted = client.delete(f"/api/edit/dishes/{created['id']}", params={"aliases": 0})
     assert deleted.status_code == 204
@@ -142,6 +143,7 @@ def test_a_dish_lists_its_recipes_and_the_recipes_that_use_it(client, source_pla
             "id": a["id"],
             "display_name": "A 版",
             "dish": {"id": chicken["id"], "display_name": "照燒雞腿排", "kind": "dish"},
+            "alternative_only": False,
         }
     ]
 

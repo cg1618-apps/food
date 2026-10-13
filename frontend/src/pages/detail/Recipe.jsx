@@ -8,8 +8,12 @@
 // recipes; the ingredients and the steps, each in its groups
 // (lib/recipeGroups.js) - the ungrouped rows first, then a block per group
 // under its name, ordinary steps numbered through every group, an optional
-// step marked 可省略 and a 備註 drawn as a callout; storage and notes. A line
-// naming a dish links to the dish. Every section with nothing in it is left
+// step marked 可省略 and a 備註 drawn as a callout; 保存, 加熱 and 筆記. A line
+// naming a dish links to the dish. A line's alternatives follow it on its
+// row - 雞腿 300g 或 雞胸肉 250g - each linked as a line's target is, with
+// its own amount and note when it has them; such a line's amount moves next
+// to its name, so each amount reads beside what it measures, where a line
+// without alternatives keeps its amount at the row's end. Every section with nothing in it is left
 // out, so a recipe saved as a bookmark is a short page rather than a page of
 // empties.
 //
@@ -148,8 +152,19 @@ function Lines({ blocks }) {
               <LineTarget line={line} />
               {line.is_optional ? <span className="text-xs">（可省略）</span> : null}
               {line.note ? <span className="text-xs text-text-muted">{line.note}</span> : null}
+              {line.amount && line.alternatives?.length ? <span className="tabular-nums">{line.amount}</span> : null}
+              {(line.alternatives ?? []).map((alternative) => (
+                <span key={alternative.id} className="inline-flex flex-wrap items-baseline gap-x-2">
+                  <span className="text-text-muted">或</span>
+                  <LineTarget line={alternative} />
+                  {alternative.amount ? <span className="tabular-nums">{alternative.amount}</span> : null}
+                  {alternative.note ? <span className="text-xs text-text-muted">{alternative.note}</span> : null}
+                </span>
+              ))}
             </span>
-            {line.amount ? <span className="shrink-0 tabular-nums">{line.amount}</span> : null}
+            {line.amount && !line.alternatives?.length ? (
+              <span className="shrink-0 tabular-nums">{line.amount}</span>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -373,6 +388,12 @@ export default function Recipe() {
       {recipe.storage_notes ? (
         <Section title="保存">
           <Prose>{recipe.storage_notes}</Prose>
+        </Section>
+      ) : null}
+
+      {recipe.reheating_notes ? (
+        <Section title="加熱">
+          <Prose>{recipe.reheating_notes}</Prose>
         </Section>
       ) : null}
 

@@ -9,6 +9,7 @@
 //            parent for a variety, names, rating, how many recipes use it and
 //            how many varieties it has, labels
 //   說明 · 挑選 · 品種 (children with rating and where bought) · 哪裡買 ·
+//   自製版 (the dish that makes it at home, a link) ·
 //   保存 (a state x method grid, lib/storageGrid.js, then the general notes) ·
 //   加熱 (°C with the °F beside it) · 參考連結 · 用在
 //
@@ -218,6 +219,14 @@ export default function Ingredient() {
       {item.sourcing_notes ? (
         <Section title="哪裡買">
           <Prose>{item.sourcing_notes}</Prose>
+        </Section>
+      ) : null}
+
+      {item.homemade_dish ? (
+        <Section title="自製版">
+          <Link to={`/dishes/${item.homemade_dish.id}`} className="text-brand hover:underline">
+            {item.homemade_dish.display_name}
+          </Link>
         </Section>
       ) : null}
 

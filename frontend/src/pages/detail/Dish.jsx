@@ -6,8 +6,10 @@
 // then 食譜 - the dish's recipes as covers (the recipe library's cards), with
 // 「＋ 新增食譜」 opening the new-recipe chooser with this dish kept for
 // whichever start is chosen (`?dish=<id>`); and 用在 - the recipes whose lines use this dish, which is
-// what a sauce's page is mostly for. Every section with nothing in it is left
-// out, except 食譜, whose add button is the way to give a new dish a recipe.
+// what a sauce's page is mostly for; and 市售版 - the ingredients naming this
+// dish as their homemade version, the bought things it stands in for. Every
+// section with nothing in it is left out, except 食譜, whose add button is
+// the way to give a new dish a recipe.
 import { Link, useParams } from 'react-router-dom'
 
 import { endpoints } from '../../api/endpoints'
@@ -94,6 +96,20 @@ export default function Dish() {
       {dish.used_in.length ? (
         <Section title="用在">
           <RecipeLinks recipes={dish.used_in} />
+        </Section>
+      ) : null}
+
+      {dish.bought_as?.length ? (
+        <Section title="市售版">
+          <ul className="flex flex-wrap gap-x-4 gap-y-1">
+            {dish.bought_as.map((ingredient) => (
+              <li key={ingredient.id}>
+                <Link to={`/ingredients/${ingredient.id}`} className="text-brand hover:underline">
+                  {ingredient.display_name}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </Section>
       ) : null}
 
