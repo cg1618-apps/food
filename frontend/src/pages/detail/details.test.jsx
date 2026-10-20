@@ -486,6 +486,19 @@ describe('the recipe page', () => {
     expect(within(group).getByRole('button', { name: '想試' }).getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('shows the difficulty first in the meta line, and nothing for it when there is none', async () => {
+    const rated = { ...RECIPE, difficulty: { id: 3, display_name: '困難' } }
+    handler = ({ url, method }) => (method === 'GET' && url === '/api/recipes/5' ? json(rated) : null)
+    renderAt('/recipes/5')
+    expect(await screen.findByText('難易度 困難 · 份量 2 人 · 時間 20 分鐘', { exact: false })).toBeTruthy()
+
+    cleanup()
+    handler = ({ url, method }) => (method === 'GET' && url === '/api/recipes/5' ? json(RECIPE) : null)
+    renderAt('/recipes/5')
+    await screen.findByRole('heading', { level: 1, name: '麻婆豆腐' })
+    expect(screen.queryByText(/難易度/)).toBeNull()
+  })
+
   it('says a missing recipe is missing', async () => {
     handler = () => json({ detail: 'Recipe not found' }, 404)
     renderAt('/recipes/99')

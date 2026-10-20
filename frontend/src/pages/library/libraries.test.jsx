@@ -420,6 +420,26 @@ describe('the recipe library', () => {
     await waitFor(() => expect(listRequests('/api/recipes')).toContain('/api/recipes?status_id=3'))
   })
 
+  it('filters by difficulty id, and shows the difficulty in the table', async () => {
+    responses['/api/recipe-difficulties'] = [
+      { id: 5, display_name: '簡單', sort_order: 10, usage_count: 1 },
+      { id: 6, display_name: '困難', sort_order: 20, usage_count: 0 },
+    ]
+    renderAt('/recipes')
+    const sidebar = screen.getByRole('complementary', { name: '篩選' })
+    fireEvent.click(await within(sidebar).findByRole('button', { name: /困難/ }))
+    expect(location()).toBe('/recipes?difficulty=6')
+    await waitFor(() => expect(listRequests('/api/recipes')).toContain('/api/recipes?difficulty_id=6'))
+
+    cleanup()
+    responses['/api/recipes'] = [{ ...RECIPE, difficulty: { id: 5, display_name: '簡單' } }]
+    localStorage.setItem('cg1618:food:recipes-view', 'list')
+    renderAt('/recipes')
+    const table = await screen.findByRole('table')
+    expect(within(table).getByRole('columnheader', { name: '難易度' })).toBeTruthy()
+    expect(within(table).getByText('簡單')).toBeTruthy()
+  })
+
   it('filters by author id, with the authors as the options', async () => {
     responses['/api/authors'] = [
       { id: 6, display_name: '阿基師', sort_order: 0, usage_count: 1 },

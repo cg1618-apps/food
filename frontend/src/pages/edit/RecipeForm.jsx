@@ -7,13 +7,13 @@
 //     (steps keeping their kinds), methods and equipment. A reference the
 //     template still holds to something since deleted is left out by the
 //     server, and the form says how many (「範本裡有 n 個項目已不存在，已略過」).
-//   - from another recipe: all of that, and its 保存, 加熱 and 筆記, with
-//     its dish chosen unless ?dish= names another. Not its name, sources,
+//   - from another recipe: all of that, and its 難易度, 保存, 加熱 and 筆記,
+//     with its dish chosen unless ?dish= names another. Not its name, sources,
 //     status or pictures - and the form says which recipe it was copied from.
 // Nothing is saved until 儲存, and what is saved is a new recipe.
 //
 // In the order the page reads: the dish this is a recipe of, and the
-// recipe's own optional name; status, servings, time; sources; ingredient
+// recipe's own optional name; status, difficulty, servings, time; sources; ingredient
 // lines; steps; methods, equipment; 保存, 加熱 and 筆記; the gallery. What is
 // true of the dish whoever cooks it - names, kind, course, region, labels,
 // serves-as, a description - is the dish's form's, not this one's.
@@ -74,6 +74,7 @@ const INVALIDATE = [
   endpoints.ingredients.list(),
   endpoints.categories.tree(),
   endpoints.statuses.list(),
+  endpoints.difficulties.list(),
   endpoints.platforms.list(),
   endpoints.methods.list(),
   endpoints.equipment.list(),
@@ -88,6 +89,8 @@ const empty = () => ({
   name: '',
   // '' until chosen: the first status is shown, and sent, in its place.
   status_id: '',
+  // '' is none: a difficulty is optional, and nothing stands in for it.
+  difficulty_id: '',
   // servings, time, lines, steps, method_ids, equipment_ids.
   ...emptyStructure(),
   sources: [],
@@ -111,6 +114,7 @@ function fromRecipe(row) {
     dish: row.dish ? dishPick(row.dish) : null,
     name: row.name ?? '',
     status_id: row.status ? String(row.status.id) : '',
+    difficulty_id: row.difficulty ? String(row.difficulty.id) : '',
     ...structureFromResponse(row),
     sources: (row.sources ?? []).map(sourceRow),
     storage_notes: row.storage_notes ?? '',
@@ -120,10 +124,12 @@ function fromRecipe(row) {
   }
 }
 
-// What a copy of another recipe carries: its structure and its notes.
-// Not its name, sources, status or pictures - those are what make it that
-// recipe rather than this one.
+// What a copy of another recipe carries: its structure, its difficulty and
+// its notes - the difficulty describes the way of making it, which is what is
+// copied. Not its name, sources, status or pictures - those are what make it
+// that recipe rather than this one.
 const copiedFrom = (row) => ({
+  difficulty_id: row.difficulty ? String(row.difficulty.id) : '',
   ...structureFromResponse(row),
   storage_notes: row.storage_notes ?? '',
   reheating_notes: row.reheating_notes ?? '',
@@ -152,6 +158,7 @@ function RecipeEditor({ id, start }) {
   const template = useApiQuery(endpoints.templates.detail(templateId), null, { enabled: templateId !== null })
   const source = useApiQuery(endpoints.recipes.detail(fromId), null, { enabled: fromId !== null })
   const statuses = useApiQuery(endpoints.statuses.list())
+  const difficulties = useApiQuery(endpoints.difficulties.list())
   const platforms = useApiQuery(endpoints.platforms.list())
   const authors = useApiQuery(endpoints.authors.list())
   const fixed = useFixedVocabularies()
@@ -224,6 +231,7 @@ function RecipeEditor({ id, start }) {
       // Left out when there is no status to choose: the server then gives
       // the first one, or says there is none.
       ...(statusId ? { status_id: Number(statusId) } : {}),
+      difficulty_id: form.difficulty_id ? Number(form.difficulty_id) : null,
       sources: sourcesPayload(form.sources, platformOf),
       ...structurePayload(form),
       storage_notes: blankToNull(form.storage_notes),
@@ -354,12 +362,20 @@ function RecipeEditor({ id, start }) {
                 <Input value={form.name} onChange={set('name')} />
               </Field>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="狀態">
                 <Select value={statusId} onChange={set('status_id')}>
                   {vocabularyOptions(statuses.data)}
                 </Select>
               </Field>
+              <Field label="難易度">
+                <Select value={form.difficulty_id} onChange={set('difficulty_id')}>
+                  <option value="">—</option>
+                  {vocabularyOptions(difficulties.data)}
+                </Select>
+              </Field>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="份量">
                 <Input value={form.servings} onChange={set('servings')} placeholder="例如 2 人份" />
               </Field>

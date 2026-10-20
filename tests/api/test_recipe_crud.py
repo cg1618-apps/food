@@ -16,6 +16,7 @@ from app.models import (
     Label,
     Recipe,
     RecipeCourse,
+    RecipeDifficulty,
     RecipeStatus,
 )
 
@@ -303,6 +304,54 @@ def test_the_fields_that_moved_to_the_dish_are_refused_on_a_recipe(client, field
 def test_a_known_status_is_accepted(client, recipe_statuses):
     regular = recipe_statuses["常煮"]
     assert create(client, status_id=regular.id)["status"]["id"] == regular.id
+
+
+@pytest.fixture
+def difficulties(db):
+    rows = {
+        name: RecipeDifficulty(name_cn=name, sort_order=i)
+        for i, name in enumerate(["簡單", "困難"])
+    }
+    db.add_all(rows.values())
+    db.flush()
+    return rows
+
+
+def test_a_recipe_saved_without_a_difficulty_has_none(client, difficulties):
+    """Values exist, so none is not for want of one: a difficulty is not
+    defaulted the way a status is."""
+    assert create(client)["difficulty"] is None
+
+
+def test_a_difficulty_is_set_changed_and_cleared(client, difficulties):
+    easy, hard = difficulties["簡單"], difficulties["困難"]
+    created = create(client, difficulty_id=easy.id, notes="keep")
+    assert created["difficulty"] == {"id": easy.id, "display_name": "簡單"}
+
+    url = f"/api/edit/recipes/{created['id']}"
+    changed = client.patch(url, json={"difficulty_id": hard.id}).json()
+    assert changed["difficulty"] == {"id": hard.id, "display_name": "困難"}
+    assert changed["notes"] == "keep"
+    assert changed["status"] == created["status"]
+
+    # A PATCH that does not send it leaves it alone; an explicit null clears it.
+    assert client.patch(url, json={"notes": "x"}).json()["difficulty"]["id"] == hard.id
+    assert client.patch(url, json={"difficulty_id": None}).json()["difficulty"] is None
+
+
+def test_an_unknown_difficulty_is_refused(client, difficulties):
+    """The fixture makes the table non-empty, so 999999 is refused for naming
+    nothing; the known one beside it is the mirror."""
+    response = client.post(
+        "/api/edit/recipes", json={"new_dish": {"name_cn": "x"}, "difficulty_id": 999999}
+    )
+    assert response.status_code == 422
+    assert "999999" in response.json()["detail"]
+    created = create(client, difficulty_id=difficulties["困難"].id)
+    url = f"/api/edit/recipes/{created['id']}"
+    assert client.patch(url, json={"difficulty_id": 999999}).status_code == 422
+    kept = client.get(f"/api/recipes/{created['id']}").json()["difficulty"]
+    assert kept["display_name"] == "困難"
 
 
 def test_a_recipe_saved_without_a_status_gets_the_first_in_sort_order(

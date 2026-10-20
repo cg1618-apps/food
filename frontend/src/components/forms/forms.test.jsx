@@ -546,6 +546,68 @@ describe('RecipeForm', () => {
     expect('status_id' in calls.find((c) => c.method === 'POST').body).toBe(false)
   })
 
+  it('offers 難易度 with — first, sending null for none and the id once chosen', async () => {
+    handler = ({ url, method }) => {
+      if (url === '/api/recipe-difficulties') {
+        return json([
+          { id: 5, display_name: '簡單', sort_order: 10, usage_count: 0 },
+          { id: 6, display_name: '困難', sort_order: 20, usage_count: 0 },
+        ])
+      }
+      if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
+      return json([])
+    }
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
+    await chooseNewDish('湯')
+    await screen.findByRole('option', { name: '困難' })
+    const select = screen.getByLabelText('難易度')
+    // Optional: nothing is chosen for it, unlike the status.
+    expect(select.value).toBe('')
+    expect(select.options[0].textContent).toBe('—')
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+    expect(calls.find((c) => c.method === 'POST').body.difficulty_id).toBeNull()
+  })
+
+  it('sends the difficulty chosen, and a copy of a recipe starts on its difficulty', async () => {
+    const SOURCE = {
+      id: 5,
+      display_name: '阿嬤版',
+      name: '阿嬤版',
+      dish: { id: 40, display_name: '照燒雞腿排', kind: 'dish', course: null, region: null, labels: [], serves_as: [] },
+      status: { id: 2, display_name: '常煮' },
+      difficulty: { id: 6, display_name: '困難' },
+      sources: [],
+      lines: [],
+      line_groups: [],
+      steps: [],
+      step_groups: [],
+      methods: [],
+      equipment: [],
+      images: [],
+      other_recipes: [],
+      written_up: false,
+    }
+    handler = ({ url, method }) => {
+      if (url === '/api/recipe-difficulties') {
+        return json([
+          { id: 5, display_name: '簡單', sort_order: 10, usage_count: 0 },
+          { id: 6, display_name: '困難', sort_order: 20, usage_count: 1 },
+        ])
+      }
+      if (url === '/api/recipes/5') return json(SOURCE)
+      if (url === '/api/edit/recipes' && method === 'POST') return json({ id: 42, images: [] }, 201)
+      return json([])
+    }
+    wrap(<AppRoutes />, '/edit/recipes/new?from=5')
+    await screen.findByRole('option', { name: '困難' })
+    expect(screen.getByLabelText('難易度').value).toBe('6')
+    fireEvent.change(screen.getByLabelText('難易度'), { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+    expect(calls.find((c) => c.method === 'POST').body.difficulty_id).toBe(5)
+  })
+
   it('adds alternatives under a line with ＋替代, each picked, measured and removable', async () => {
     handler = ({ url, method }) => {
       if (url.startsWith('/api/ingredients?')) return json([GINGER])

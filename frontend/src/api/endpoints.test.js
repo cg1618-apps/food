@@ -86,6 +86,8 @@ describe('paths the backend actually serves', () => {
     [endpoints.stepGroups.create(), '/api/edit/step-groups'],
     [endpoints.courses.list(), '/api/recipe-courses'],
     [endpoints.statuses.update(3), '/api/edit/recipe-statuses/3'],
+    [endpoints.difficulties.list(), '/api/recipe-difficulties'],
+    [endpoints.difficulties.remove(2), '/api/edit/recipe-difficulties/2'],
     [endpoints.platforms.list(), '/api/source-platforms'],
     [endpoints.methods.update(4), '/api/edit/cooking-methods/4'],
     [endpoints.equipment.remove(5), '/api/edit/equipment/5'],

@@ -3,7 +3,8 @@
 // One reading column, in the order a cook reads it: the pictures; the dish
 // it makes - a link, with the dish's kind, course, region, serves-as and
 // labels shown read-only, since they are the dish's and edited there; the
-// recipe's name and a meta line (servings, time, methods, equipment); the
+// recipe's name and a meta line (difficulty, servings, time, methods,
+// equipment); the
 // status, changeable here; where it came from; 其他版本, the dish's other
 // recipes; the ingredients and the steps, each in its groups
 // (lib/recipeGroups.js) - the ungrouped rows first, then a block per group
@@ -323,6 +324,7 @@ export default function Recipe() {
 
   const { dish } = recipe
   const meta = [
+    recipe.difficulty ? `難易度 ${recipe.difficulty.display_name}` : null,
     recipe.servings ? `份量 ${recipe.servings}` : null,
     recipe.time ? `時間 ${recipe.time}` : null,
     names(recipe.methods),

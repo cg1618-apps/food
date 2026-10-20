@@ -1,7 +1,8 @@
 // Frontend: the recipe library, /recipes. Every
 // recipe, of every dish.
 //
-// The sidebar: dish, kind, course, status, method, equipment, author, label,
+// The sidebar: dish, kind, course, status, difficulty, method, equipment,
+// author, label,
 // and written up / bookmark only. Kind, course and label are the dish's - the
 // API filters through it. Every filter but the last is "any of" (the API
 // takes the parameter repeated); written-up is one choice of two, since both
@@ -32,6 +33,7 @@ const SPEC = {
   dish: { type: 'multi', api: 'dish_id', id: true },
   course: { type: 'multi', api: 'course_id', id: true },
   status: { type: 'multi', api: 'status_id', id: true },
+  difficulty: { type: 'multi', api: 'difficulty_id', id: true },
   kind: { type: 'multi', api: 'kind' },
   method: { type: 'multi', api: 'method_id', id: true },
   equipment: { type: 'multi', api: 'equipment_id', id: true },
@@ -90,6 +92,7 @@ export default function RecipeLibrary() {
   const dishes = useApiQuery(endpoints.dishes.list())
   const courses = useApiQuery(endpoints.courses.list())
   const statuses = useApiQuery(endpoints.statuses.list())
+  const difficulties = useApiQuery(endpoints.difficulties.list())
   const methods = useApiQuery(endpoints.methods.list())
   const equipment = useApiQuery(endpoints.equipment.list())
   const authors = useApiQuery(endpoints.authors.list())
@@ -119,6 +122,12 @@ export default function RecipeLibrary() {
       header: '狀態',
       className: 'whitespace-nowrap',
       render: (row) => row.status?.display_name ?? null,
+    },
+    {
+      key: 'difficulty',
+      header: '難易度',
+      className: 'whitespace-nowrap',
+      render: (row) => row.difficulty?.display_name ?? null,
     },
   ]
 
@@ -157,6 +166,13 @@ export default function RecipeLibrary() {
           options={asOptions(statuses.data)}
           selected={values.status}
           onToggle={(value) => toggle('status', value)}
+        />
+      </FilterGroup>
+      <FilterGroup title="難易度">
+        <FilterOptions
+          options={asOptions(difficulties.data)}
+          selected={values.difficulty}
+          onToggle={(value) => toggle('difficulty', value)}
         />
       </FilterGroup>
       <FilterGroup title="做法">

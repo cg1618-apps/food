@@ -1,8 +1,8 @@
 # Data model
 
-What the database holds today: forty-six tables, at revision `r2eheat`.
+What the database holds today: forty-seven tables, at revision `d2ifficulty`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
-`ingredient_preservation`, `label`, `ingredient_label`), the nine managed
+`ingredient_preservation`, `label`, `ingredient_label`), the ten managed
 vocabularies and an author's links (`author_link`), `ingredient_heating`, `ingredient_link`, the image library and
 its four galleries (`image`, `ingredient_image`, `dish_image`, `recipe_image`,
 `kitchen_note_image`), the dish family's four (`dish`, `dish_alias`,
@@ -254,7 +254,8 @@ NULL `sort_order` - the owner's order on the page, as `tbd_entry`'s - and
 
 ## The managed vocabularies
 
-`recipe_course` (類別), `region` (地區), `recipe_status`, `source_platform`,
+`recipe_course` (類別), `region` (地區), `recipe_status`, `recipe_difficulty`
+(難易度), `source_platform`,
 `cooking_method`, `equipment`, `author`, `line_group` (材料分組) and
 `step_group` (步驟分組) share one shape, declared once
 in `VocabularyMixin` (`app/models/vocabulary.py`): `name_cn`, `name_en`,
@@ -296,6 +297,7 @@ them:**
 | `recipe_course` | 主食, 配菜, 湯, 小吃點心, 甜點, 飲料, 醬料 |
 | `region` | 台式, 中式, 日式, 韓式, 泰式, 西式 (`d1ishes`), hand-ordered |
 | `recipe_status` | 想試, 可煮, 常煮 (`v2ocabulary`) |
+| `recipe_difficulty` | nothing - `d2ifficulty` leaves the scale (簡單, 普通, 困難 …) to the owner, since a recipe need not have one |
 | `source_platform` | YouTube, Shorts, 網站, 書, 其他 (`v2ocabulary`) |
 | `line_group` | 主料, 配料, 調味料 (`g1roups`) |
 | `step_group` | 備料, 烹飪, 醬汁 (`g1roups`) |
@@ -338,6 +340,7 @@ things that would stop it being deleted:
 | `recipe_course` | dishes filed in it (`dish.course_id`); serves-as links `CASCADE` and do not count |
 | `region` | dishes from it (`dish.region_id`) |
 | `recipe_status` | recipes in it (`recipe.status_id`) |
+| `recipe_difficulty` | recipes rated with it (`recipe.difficulty_id`); a recipe with none counts for nothing |
 | `source_platform` | sources naming it (`recipe_source.platform_id`) — two sources from one book count twice |
 | `cooking_method` | `ingredient_heating` rows plus `recipe_method` links |
 | `equipment` | `recipe_equipment` links |
@@ -417,6 +420,7 @@ One specific way of making a dish - 照燒雞腿排 as one author makes it.
 | `dish_id` | **required**, → `dish`, `RESTRICT`, indexed |
 | `name` | optional - what tells this recipe from its dish's others |
 | `status_id` | **required**, → `recipe_status`, `RESTRICT`. No server default: a recipe created without one is given the first status in sort order by the write path |
+| `difficulty_id` | optional, → `recipe_difficulty` (難易度), `RESTRICT`, indexed. No default: a recipe saved without one has none |
 | `servings`, `time` | free text — `2-3 人`, `1hr` |
 | `storage_notes`, `reheating_notes`, `notes` | free text - 保存, 加熱 (how to reheat what the recipe makes, `r2eheat`) and 筆記 |
 | `created_at`, `updated_at` | |
@@ -700,7 +704,7 @@ shared.
 | TBD entry → its links | `CASCADE` |
 | author → its links | `CASCADE` |
 | course or region → the dishes filed in it | `RESTRICT` |
-| status → the recipes in it; source platform or author → the sources naming it | `RESTRICT` |
+| status or difficulty → the recipes in it; source platform or author → the sources naming it | `RESTRICT` |
 | course → its serves-as links; label → any link | `CASCADE` |
 | cooking method → the heating rows and recipe links that use it | `RESTRICT` |
 | equipment → the recipe links that use it | `RESTRICT` |

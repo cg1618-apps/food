@@ -40,7 +40,7 @@ reference work.
 ## Status
 
 **Modules 1 and 2 are built, with dishes, recipe templates, kitchen notes,
-the weekly schedule, 加熱 and TBD.** The schema is at revision `r2eheat`
+the weekly schedule, 加熱 and TBD.** The schema is at revision `d2ifficulty`
 (the head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
@@ -70,7 +70,7 @@ the weekly schedule, 加熱 and TBD.** The schema is at revision `r2eheat`
   their own amount and note, and steps (each a 步驟, 可省略
   or 備註), each in groups (a 設定 材料分組 / 步驟分組 value or a one-off name,
   rows dragged within and between them), sources with an author picked or
-  made by the save, a status, methods, equipment, 保存 / 加熱 / 筆記 notes,
+  made by the save, a status, an optional 難易度, methods, equipment, 保存 / 加熱 / 筆記 notes,
   galleries, "used in" for
   ingredients, and 常用 chips above the lines that add one in a tap. A new
   recipe starts blank, from a template, or as a copy of another recipe.
@@ -101,7 +101,8 @@ the weekly schedule, 加熱 and TBD.** The schema is at revision `r2eheat`
   (search and filters in the URL, a sidebar or a phone drawer, covers or a
   table), their detail pages, their add and edit forms with the gallery
   picker, one delete dialog, ingredient merge, 設定 for every vocabulary
-  (categories, labels, courses, regions, recipe statuses, source platforms, authors,
+  (categories, labels, courses, regions, recipe statuses, recipe difficulties
+  (難易度), source platforms, authors,
   材料分組, 步驟分組, cooking methods, equipment), for 常用食材 (the
   recipe form's chips, an ordered pick of ingredients) and for 範本 (the
   recipe templates), and 圖片, the image library.

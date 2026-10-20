@@ -1,7 +1,7 @@
 """Reading and writing recipes. The router does HTTP; this does the work.
 
 Every write validates everything it can BEFORE it changes anything: the dish,
-the status, every source's platform and author, every id in the vocabulary
+the status, the difficulty, every source's platform and author, every id in the vocabulary
 lists, every group's value or name, every line target, the own-dish rule and
 the cycle guard. Only then are new dishes, stubs and new authors created and
 the row touched.
@@ -41,6 +41,7 @@ from app.models import (
     IngredientCategory,
     LineGroup,
     Recipe,
+    RecipeDifficulty,
     RecipeEquipment,
     RecipeImage,
     RecipeLine,
@@ -78,6 +79,7 @@ def _loaded(query):
         dish.selectinload(Dish.serves_as),
         dish.selectinload(Dish.recipes),
         selectinload(Recipe.status),
+        selectinload(Recipe.difficulty),
         selectinload(Recipe.sources).selectinload(RecipeSource.platform),
         selectinload(Recipe.sources).selectinload(RecipeSource.author),
         selectinload(Recipe.lines).selectinload(RecipeLine.ingredient),
@@ -106,6 +108,7 @@ def _summary_loaded(query):
     return query.options(
         selectinload(Recipe.dish).selectinload(Dish.course),
         selectinload(Recipe.status),
+        selectinload(Recipe.difficulty),
         selectinload(Recipe.methods),
         selectinload(Recipe.sources).selectinload(RecipeSource.author),
         selectinload(Recipe.images).selectinload(RecipeImage.image),
@@ -281,6 +284,7 @@ def search(
     region_id: list[int] | None = None,
     label_id: list[int] | None = None,
     status_id: list[int] | None = None,
+    difficulty_id: list[int] | None = None,
     method_id: list[int] | None = None,
     equipment_id: list[int] | None = None,
     author_id: list[int] | None = None,
@@ -318,6 +322,8 @@ def search(
         )
     if status_id:
         query = query.filter(Recipe.status_id.in_(status_id))
+    if difficulty_id:
+        query = query.filter(Recipe.difficulty_id.in_(difficulty_id))
     if method_id:
         query = query.filter(_any_of(RecipeMethod, RecipeMethod.method_id, method_id))
     if equipment_id:
@@ -341,6 +347,12 @@ def search(
 
 def _check_status(db: Session, status_id: int) -> None:
     fetch_all(db, RecipeStatus, [status_id], "status")
+
+
+def _check_difficulty(db: Session, difficulty_id: int | None) -> None:
+    """None is no difficulty, which a recipe may have."""
+    if difficulty_id is not None:
+        fetch_all(db, RecipeDifficulty, [difficulty_id], "difficulty")
 
 
 def _first_status(db: Session) -> int:
@@ -884,6 +896,7 @@ def create(db: Session, payload) -> Recipe:
     else:
         status_id = payload.status_id
         _check_status(db, status_id)
+    _check_difficulty(db, payload.difficulty_id)
     fetched = _check_and_fetch(db, lists)
     _check_line_targets(db, None, dish_id, payload.new_dish, _targets(lists))
     groups = _check_groups(db, lists)
@@ -915,6 +928,8 @@ def update(db: Session, recipe_id: int, payload) -> Recipe:
     dish_id = _check_dish(db, payload.dish_id, new_dish) if moving else recipe.dish_id
     if "status_id" in scalars:
         _check_status(db, scalars["status_id"])
+    if "difficulty_id" in scalars:
+        _check_difficulty(db, scalars["difficulty_id"])
     fetched = _check_and_fetch(db, lists)
     # The lines are checked when they are sent - and when the dish moves, the
     # lines the recipe keeps, which may name the dish it is moving to.

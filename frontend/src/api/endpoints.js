@@ -14,7 +14,7 @@
 const API = '/api'
 const WRITE = '/api/edit'
 
-// The nine vocabularies the backend builds from one factory
+// The ten vocabularies the backend builds from one factory
 // (app/routers/vocabulary.py) share one URL shape.
 function vocabulary(resource) {
   return {
@@ -137,6 +137,8 @@ export const endpoints = {
   // 地區: where a dish comes from.
   regions: vocabulary('regions'),
   statuses: vocabulary('recipe-statuses'),
+  // 難易度: optional on a recipe.
+  difficulties: vocabulary('recipe-difficulties'),
   platforms: vocabulary('source-platforms'),
   methods: vocabulary('cooking-methods'),
   equipment: vocabulary('equipment'),

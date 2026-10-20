@@ -145,7 +145,7 @@ words and its filters:
 | Library | URL keys | Table columns | Badges |
 | --- | --- | --- | --- |
 | 料理 `/dishes` | `kind`, `course`, `region`, `label` (all "any of") | 種類, 類別, 地區, 食譜 (how many) | - |
-| 食譜 `/recipes` | `dish` (ids, sent as `dish_id`), `kind`, `course`, `status` (ids, sent as `status_id`), `method`, `equipment`, `author` (ids, sent as `author_id`), `label` (all "any of"); `written` = `true` / `false`. `kind`, `course` and `label` are the dish's | 類別, 做法, 時間, 作者, 狀態 | 書籤 when not written up |
+| 食譜 `/recipes` | `dish` (ids, sent as `dish_id`), `kind`, `course`, `status` (ids, sent as `status_id`), `difficulty` (ids, sent as `difficulty_id`), `method`, `equipment`, `author` (ids, sent as `author_id`), `label` (all "any of"); `written` = `true` / `false`. `kind`, `course` and `label` are the dish's | 類別, 做法, 時間, 作者, 狀態, 難易度 | 書籤 when not written up |
 | 食材 `/ingredients` | `category`, `group` (an ingredient id, sent as `group_id`), `label`, `rating` (one each); `variety` = `top` / `only` (sent as `has_parent` = `false` / `true`; the old `?variety=1` still means `only`); `stub` (switch) | 品種, 冷藏, 用於, 評等 | 待補, rating |
 | 筆記 `/notes` | `kind`, `label` (both "any of") | 種類, 連結 (host only) | - |
 
@@ -277,8 +277,8 @@ empties.
   region and 也可以當作 beside it and the dish's labels under the status -
   shown read-only, since they are the dish's and edited there; 書籤 when not
   written up; the recipe's display name, and 「<dish> 的一份食譜」 under it
-  when the recipe has its own name; a meta line of servings, time, methods
-  and equipment; the **status, changed in place**; 來源 (platform; author, a
+  when the recipe has its own name; a meta line of 難易度 (when it has one),
+  servings, time, methods and equipment; the **status, changed in place**; 來源 (platform; author, a
   link to the library filtered by them; title, linked out when there is a
   URL, the URL's host standing in for a missing title); **其他版本**, the
   dish's other recipes (`other_recipes`); 材料 and 步驟 in their groups
@@ -368,7 +368,7 @@ if the categories fail to load.
   a recipe save also marks the dish reads stale (its dish's recipe count,
   cover and 用在; a 新增 dish is a new row), the ingredient library and the
   category tree (a 新增 line files a stub in the fallback category, whose
-  count moves), the authors, status, source platform, method, equipment,
+  count moves), the authors, status, difficulty, source platform, method, equipment,
   材料分組 and 步驟分組 counts and the image library; a dish save, and a dish
   delete, mark the dish and recipe reads stale (every recipe of it shows its
   name) and the label, course, region and image counts; a recipe delete
@@ -493,7 +493,8 @@ it draws, so nothing typed is overwritten, and fills it in once:
 - **from a template**: 份量, 時間, 材料 and 步驟 in their groups (steps with
   their kinds), 做法 and 器材. The header says 「從範本「…」開始。」 and, when
   the server left references out, 「範本裡有 n 個項目已不存在，已略過。」.
-- **from another recipe**: all of that, and 保存, 加熱 and 筆記; its dish is chosen
+- **from another recipe**: all of that, and its 難易度 - it describes the way of
+  making it, which is what is copied - and 保存, 加熱 and 筆記; its dish is chosen
   unless `?dish=` names one. **Not its name, sources, status or pictures**:
   the header says 「複製自「…」」, linking to it, and that those were not
   copied. The new recipe starts on the first status, as any new recipe.
@@ -502,8 +503,8 @@ Nothing is written until 儲存, and what it writes is a new recipe. A template
 or recipe that cannot be read says so with 「重新選擇」 back to the chooser.
 
 **A recipe's 料理** is the form's first section, with the recipe's optional
-**名稱** beside it (blank shows the dish's name) and 狀態, 份量 and 時間 under
-them. The dish is picked with the typeahead over the dish library alone;
+**名稱** beside it (blank shows the dish's name), 狀態 and 難易度 under them,
+and 份量 and 時間 under those. The dish is picked with the typeahead over the dish library alone;
 「新增」 names a dish the save creates - **a 料理 unless 「新料理的種類」, the
 toggle shown under a new dish, says 醬料** - and a name the server already
 knows is reused instead (`new_dish`). Picked, it shows its kind, or 新料理 /
@@ -611,6 +612,10 @@ place, so a row added before the list has loaded still lands on the first.
 With no status at all the form leaves `status_id` out and the server's 422
 says why.
 
+**The recipe's 難易度** is a select over `GET /api/recipe-difficulties` with
+「—」 first: optional, unlike the status, so the form starts on — and sends
+`difficulty_id: null` for it, and nothing stands in for an empty choice.
+
 **Steps** take 「貼上多行」 too: a dialog whose text becomes one step per
 non-blank line with the leading numbering stripped (`lib/steps.js` -
 `1.`, `1)`, `1、`, `(1)`, `①`, `一、`, `第一步`, `Step 1:`, bullets), because the
@@ -639,11 +644,13 @@ cover and a thumbnail) and 移除.
 ## 設定 and 圖片
 
 `/edit/settings` is `pages/edit/Settings.jsx`: a tab each for 食材分類,
-常用食材, 範本, 標籤, 類別, 地區, 狀態, 來源, 作者, 材料分組, 步驟分組, 做法 and 器材, with 圖片庫 - the way
+常用食材, 範本, 標籤, 類別, 地區, 狀態, 難易度, 來源, 作者, 材料分組, 步驟分組, 做法 and 器材, with 圖片庫 - the way
 into `/edit/images` - beside the heading. 類別 and 地區 file a dish (地區 is
 台式, 中式, 日式 …, hand-ordered, the order the dish form and filters offer);
 renaming either marks the dish and recipe reads stale. 狀態 is the recipe statuses (想試,
-可煮, 常煮 …; the first is what a new recipe starts on), 來源 the source
+可煮, 常煮 …; the first is what a new recipe starts on), 難易度 the recipe
+difficulties (簡單, 普通, 困難 …, hand-ordered; a recipe may have none, and
+the tab starts empty - the scale is the owner's), 來源 the source
 platforms (YouTube, 網站, 書 …), 作者 the sources' authors, and 材料分組 /
 步驟分組 the groups a recipe's lines and steps are picked from (主料, 配料,
 調味料 / 備料, 烹飪, 醬汁 …), hand-ordered - the recipe form offers them in
@@ -664,7 +671,7 @@ the other vocabularies pass none and are unchanged.
 
 - **The tab is in the URL**, `?tab=` with `categories`, `common-ingredients`,
   `templates`, `labels`, `courses`, `regions`,
-  `statuses`, `platforms`, `authors`, `line-groups`, `step-groups`, `methods` or
+  `statuses`, `difficulties`, `platforms`, `authors`, `line-groups`, `step-groups`, `methods` or
   `equipment` (`hooks/useUrlTab.js`), so a tab can be linked to
   and survives a reload. A missing or unknown tab is the first, 食材分類, and
   the URL is left as it is. Choosing a tab **replaces** the history entry
@@ -706,7 +713,7 @@ Each value is a `components/settings/NameRow.jsx`:
   siblings, and carries its children with it; moving it under another parent
   is 改名's 上層.
 - **刪除** asks in `ConfirmModal`, saying the count it knows. A refusal is
-  explained **in the row**: for a course, region, status, source platform,
+  explained **in the row**: for a course, region, status, difficulty, source platform,
   method or piece of equipment with the 409's `usage_count` (the server's number, newer than the page's); for a
   category with what is under it - its ingredients and child categories, both
   `RESTRICT`. The button stays even when the page already knows the delete

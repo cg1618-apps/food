@@ -217,6 +217,7 @@ describe('設定', () => {
       '類別',
       '地區',
       '狀態',
+      '難易度',
       '來源',
       '作者',
       '材料分組',
@@ -694,6 +695,39 @@ describe('設定', () => {
       ]),
     )
     await waitFor(() => expect(client.getQueryState(['/api/recipes', null]).isInvalidated).toBe(true))
+  })
+
+  it('keeps 難易度 in hand order on a tab of its own, beside 狀態, with its usage', async () => {
+    handler = (call) =>
+      call.method === 'GET' && call.url === '/api/recipe-difficulties'
+        ? json([
+            { id: 2, display_name: '簡單', name_cn: '簡單', name_en: null, sort_order: 10, usage_count: 3 },
+            { id: 1, display_name: '困難', name_cn: '困難', name_en: null, sort_order: 20, usage_count: 0 },
+          ])
+        : call.method === 'POST'
+          ? json({}, 201)
+          : settingsData(call)
+    renderAt('/edit/settings?tab=difficulties')
+    const list = await screen.findByRole('list', { name: '難易度' })
+    const rows = within(list).getAllByRole('listitem')
+    expect(rows.map((row) => row.getAttribute('aria-label'))).toEqual(['簡單', '困難'])
+    expect(rows[0].textContent).toContain('用在 3 個地方')
+    expect(rows[1].textContent).toContain('沒有使用')
+
+    const add = screen.getByRole('form', { name: '新增難易度' })
+    fireEvent.change(within(add).getByRole('textbox', { name: '新增難易度：中文名' }), {
+      target: { value: '普通' },
+    })
+    fireEvent.click(within(add).getByRole('button', { name: '＋ 新增難易度' }))
+    await waitFor(() =>
+      expect(writes()).toEqual([
+        {
+          url: '/api/edit/recipe-difficulties',
+          method: 'POST',
+          body: { name_cn: '普通', name_en: null, sort_order: 21 },
+        },
+      ]),
+    )
   })
 
   it("explains a refused platform delete with the server's count", async () => {

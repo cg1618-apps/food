@@ -459,7 +459,7 @@ How other rows point at these on the wire:
 **`GET /api/recipes`** is the library: every recipe of every dish, a bare
 array of summaries sorted by display name. A summary is `id`, `display_name`,
 `name` (its own, or null), `dish` (a `DishRef`), `status`
-(`{id, display_name}`), `course` (the dish's, `{id, display_name}` or null),
+(`{id, display_name}`), `difficulty` (`{id, display_name}` or null), `course` (the dish's, `{id, display_name}` or null),
 `methods` (`{id, display_name}` list), `authors` (`{id, display_name}`, the
 distinct authors of its sources, in source order, skipping sources with
 none), `time`, `written_up` and `cover` (the recipe's own first gallery
@@ -472,7 +472,7 @@ Query parameters:
   literally. Each arm is a subquery, so a recipe matching twice comes back
   once;
 - `dish_id`, `kind`, `course_id`, `region_id`, `label_id`, `status_id`,
-  `method_id`, `equipment_id`, `author_id`, `ingredient_id` - each may repeat,
+  `difficulty_id`, `method_id`, `equipment_id`, `author_id`, `ingredient_id` - each may repeat,
   and a repeated parameter means **any of** its values
   (`?status_id=2&status_id=3`). Different parameters narrow each other.
   `kind`, `course_id`, `region_id` and `label_id` are the dish's and filter
@@ -486,7 +486,8 @@ Query parameters:
 **`PUT /api/edit/recipes/{id}/images`** replaces the recipe's own gallery
 exactly as an ingredient's does, and answers the full recipe.
 
-**The full recipe** is `id`, `display_name`, `name`, `status`, `servings`,
+**The full recipe** is `id`, `display_name`, `name`, `status`, `difficulty`
+(難易度, `{id, display_name}` or null), `servings`,
 `time`, `storage_notes`, `reheating_notes` (加熱, how to reheat what it
 makes), `notes`, `created_at`, `updated_at`, and:
 
@@ -525,7 +526,7 @@ only `step`-kind steps, through every group, so an optional step or a note
 takes a place in the order and no number.
 
 **`POST` takes the whole recipe; `PATCH` takes any subset.** The fields are
-`dish_id` or `new_dish`, `name`, `status_id`, `servings`, `time`,
+`dish_id` or `new_dish`, `name`, `status_id`, `difficulty_id`, `servings`, `time`,
 `storage_notes`, `reheating_notes`, `notes`, and the lists `sources`, `lines`, `line_groups`,
 `steps`, `step_groups`, `method_ids` and `equipment_ids`. The fields that live
 on the dish - name slots, `kind`, `course_id`, `serves_as_ids`, `label_ids`,
@@ -542,7 +543,9 @@ recipe to that dish and neither leaves it where it is; an explicit null
 
 When `status_id` is left out on create, the recipe gets the first status in
 sort order (the oldest among equals); with no status at all to give, the create
-is a 422 saying so. On `PATCH` each list sent replaces the stored list and each
+is a 422 saying so. `difficulty_id` is optional and has no default: left
+out or null on create the recipe has none, and on `PATCH` an explicit null
+clears it. On `PATCH` each list sent replaces the stored list and each
 one absent is left alone. Sources, lines, steps and groups take their order
 from the list - a request naming `sort_order` or `position` is a 422 - and
 re-sending the same lines, steps and groups succeeds.
@@ -608,7 +611,8 @@ author, not a stub an earlier line asked for:
 - a group naming both a value and a name, or neither; the same group twice in
   one recipe; on `PATCH`, one half of a lines or steps pair without the other;
 - creating a recipe without `status_id` when there is no status at all;
-- **an id inside the body that names nothing** - `dish_id`, `status_id`, a
+- **an id inside the body that names nothing** - `dish_id`, `status_id`,
+  `difficulty_id`, a
   source's `platform_id` or `author_id`, either id list, a group's
   `line_group_id` or `step_group_id`, `ingredient_id` or `sub_dish_id` in a
   line or an alternative. The detail names the id. The URL's own recipe missing is 404;
@@ -772,13 +776,14 @@ answers the full note.
 
 ## Vocabularies
 
-Nine managed vocabularies share one shape, so one description covers them:
+Ten managed vocabularies share one shape, so one description covers them:
 
 | Route | |
 | --- | --- |
 | `GET /api/recipe-courses` | 類別, filing a dish |
 | `GET /api/regions` | 地區, where a dish comes from |
 | `GET /api/recipe-statuses` | |
+| `GET /api/recipe-difficulties` | 難易度, optional on a recipe |
 | `GET /api/source-platforms` | |
 | `GET /api/cooking-methods` | |
 | `GET /api/equipment` | |
@@ -804,7 +809,7 @@ given `https://`, any scheme but `http` or `https` is a 422 (so
 `javascript:` never reaches a page), a blank url is a 422, a blank label is
 null, and a link has no other field. On a `PATCH`, `links` replaces every
 link in the order sent when it is sent and leaves them alone when it is
-not; `[]` clears them and an explicit null is a 422. The other eight
+not; `[]` clears them and an explicit null is a 422. The other nine
 vocabularies neither answer with these fields nor accept them - sending
 one is a 422. Deleting an author takes its links with it; the 409 above
 counts only sources.
@@ -813,7 +818,7 @@ counts only sources.
 before the database is asked; the `RESTRICT` foreign key is the backstop. The
 count is the number of `RESTRICT` references: for a course, the dishes filed
 in it (a dish that only serves as that course does not count, and its link
-goes with the course); for a region, the dishes from it; for a status, the recipes in it; for a source platform,
+goes with the course); for a region, the dishes from it; for a status, the recipes in it; for a difficulty, the recipes rated with it; for a source platform,
 the sources naming it, so one recipe with two sources from one book counts
 twice; for an author, likewise the sources naming them; for a cooking method,
 ingredient heating rows plus recipes using it; for equipment, recipes using
@@ -827,7 +832,7 @@ renders, as `{value, label}` pairs under `preservation_methods`,
 `step_kinds` (步驟, 可省略, 備註) and `meal_slots` (`breakfast` 早, `lunch`
 中, `afternoon` 下午, `dinner` 晚),
 so no component keeps its own copy. These lists are constants in the code and
-are not editable through the API; recipe statuses and source platforms are not
+are not editable through the API; recipe statuses, difficulties and source platforms are not
 among them — they are managed vocabularies, above.
 
 ## Images

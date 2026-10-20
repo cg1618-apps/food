@@ -15,7 +15,7 @@
 //
 // What a change here makes stale is named per vocabulary: a renamed course or
 // region is shown on every dish and on its recipes' pages, a renamed status,
-// source platform, author or 材料分組 / 步驟分組 on every recipe, a renamed
+// difficulty, source platform, author or 材料分組 / 步驟分組 on every recipe, a renamed
 // method on recipes and on ingredient heating rows, a renamed label on all
 // three kinds of owner - ingredients, dishes and notes - and on the recipes
 // that show their dish's. 標籤 is its own editor (LabelEditor): a section per
@@ -55,7 +55,7 @@ const AUTHOR_DETAILS = {
   body: authorBody,
 }
 
-// The nine factory vocabularies: one shape, one count (`usage_count`, the
+// The ten factory vocabularies: one shape, one count (`usage_count`, the
 // RESTRICT references that would stop a delete). Authors are listed by name
 // like labels, so they have no order to move by. `key` is the tab id and,
 // unless `vocabulary` says otherwise, the api/endpoints.js group.
@@ -80,6 +80,13 @@ const FACTORY = [
     hint: '食譜做到哪一步：想試、可煮、常煮…。新食譜預設排第一的那個。',
     addLabel: '新增狀態',
     invalidate: [endpoints.statuses.list(), RECIPES],
+  },
+  {
+    key: 'difficulties',
+    title: '難易度',
+    hint: '食譜做起來難不難：簡單、普通、困難…。食譜可以不選；表單和篩選依這裡的順序列出。',
+    addLabel: '新增難易度',
+    invalidate: [endpoints.difficulties.list(), RECIPES],
   },
   {
     key: 'platforms',
