@@ -1092,8 +1092,13 @@ is no second, exact parameter.
 
 **品種 became a three-way choice, not a second switch.** 只看主項 and 只看品種
 contradict each other; two switches would allow both on and list nothing.
-The URL word for the old switch (`?variety=1`) is kept as an alias of
-`only`, so a link written before the change still lands.
+The URL word for the old switch (`?variety=1`) was kept as an alias of
+`only`, so a link written before the change still landed.
+
+**只看品種 was then removed, leaving 全部 / 只看主項**, at the owner's request.
+`?variety=only` and the older `?variety=1` are no longer read, so such a link
+lands on 全部; the API's `has_parent=true` stays, since it costs nothing and
+the read API is public.
 
 ## A category's own notes
 

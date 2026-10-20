@@ -18,7 +18,7 @@
 //
 // `values` on a single key maps its URL words to the API's values, for a
 // choice whose words are not the API's: the ingredient library's 品種 is
-// `?variety=top` or `?variety=only`, sent as has_parent=false or true. Only a
+// `?variety=top`, sent as has_parent=false. Only a
 // listed word is read; `aliases` maps an old word to a current one, so a link
 // written before the key changed still lands.
 //

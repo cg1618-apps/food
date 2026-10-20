@@ -76,7 +76,7 @@ export function FilterOptions({ options, selected, onToggle, empty = '還沒有�
 }
 
 /**
- * A switch for a filter that is on or absent - 只看待補, 只看品種. `count` is
+ * A switch for a filter that is on or absent - 只看待補. `count` is
  * shown beside the label whatever the switch's state: the stub backlog's size
  * has to be visible before anyone turns the filter on, or stubs accumulate
  * unseen (docs/frontend.md).

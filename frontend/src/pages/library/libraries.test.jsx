@@ -276,7 +276,7 @@ describe('the ingredient library', () => {
     })
 
     // 只看主項 sends has_parent=false; a bool key could never send false.
-    it('sends 只看主項 and 只看品種 as has_parent', async () => {
+    it('sends 只看主項 as has_parent=false', async () => {
       renderAt('/ingredients')
       const sidebar = screen.getByRole('complementary', { name: '篩選' })
       fireEvent.click(within(sidebar).getByRole('button', { name: '只看主項' }))
@@ -286,13 +286,14 @@ describe('the ingredient library', () => {
       )
     })
 
-    it('still reads the old 只看品種 switch from a link', async () => {
-      renderAt('/ingredients?variety=1')
-      await waitFor(() =>
-        expect(listRequests('/api/ingredients')).toContain('/api/ingredients?has_parent=true'),
-      )
+    // 只看品種 was removed: neither its word nor the older switch's is read.
+    it('ignores a link to the removed 只看品種', async () => {
+      renderAt('/ingredients?variety=only')
       const sidebar = screen.getByRole('complementary', { name: '篩選' })
-      expect(within(sidebar).getByRole('button', { name: '只看品種', pressed: true })).toBeTruthy()
+      expect(await within(sidebar).findByRole('button', { name: '全部', pressed: true })).toBeTruthy()
+      expect(within(sidebar).queryByRole('button', { name: '只看品種' })).toBeNull()
+      await waitFor(() => expect(listRequests('/api/ingredients')).toContain('/api/ingredients'))
+      expect(listRequests('/api/ingredients')).not.toContain('/api/ingredients?has_parent=true')
     })
   })
 

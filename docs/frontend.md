@@ -146,7 +146,7 @@ words and its filters:
 | --- | --- | --- | --- |
 | 料理 `/dishes` | `kind`, `course`, `region`, `label` (all "any of") | 種類, 類別, 地區, 食譜 (how many) | - |
 | 食譜 `/recipes` | `dish` (ids, sent as `dish_id`), `kind`, `course`, `status` (ids, sent as `status_id`), `difficulty` (ids, sent as `difficulty_id`), `method`, `equipment`, `author` (ids, sent as `author_id`), `label` (all "any of"); `written` = `true` / `false`. `kind`, `course` and `label` are the dish's | 類別, 做法, 時間, 作者, 狀態, 難易度 | 書籤 when not written up |
-| 食材 `/ingredients` | `category`, `group` (an ingredient id, sent as `group_id`), `label`, `rating` (one each); `variety` = `top` / `only` (sent as `has_parent` = `false` / `true`; the old `?variety=1` still means `only`); `stub` (switch) | 品種, 冷藏, 用於, 評等 | 待補, rating |
+| 食材 `/ingredients` | `category`, `group` (an ingredient id, sent as `group_id`), `label`, `rating` (one each); `variety` = `top` (sent as `has_parent=false`); `stub` (switch) | 品種, 冷藏, 用於, 評等 | 待補, rating |
 | 筆記 `/notes` | `kind`, `label` (both "any of") | 種類, 連結 (host only) | - |
 
 **A dish card** (`pages/library/DishLibrary.jsx`) is the dish's cover - its
@@ -199,8 +199,7 @@ one - under 只看主項 the varieties are gone and 雞肉 is still a group.
   never both on. Branches start closed, except the path to the chosen node,
   which opens when the choice changes or when the groups arrive after the
   categories.
-- **品種** is 全部 / 只看主項 / 只看品種: no filter, top-level ingredients
-  only, varieties only.
+- **品種** is 全部 / 只看主項: no filter, or top-level ingredients only.
 - **The list is sectioned by category**, in the tree's order, a child category
   titled with its path (蔬菜 › 葉菜) and anything outside the tree last under
   其他. Choosing a parent category gives its own section first, then one per
