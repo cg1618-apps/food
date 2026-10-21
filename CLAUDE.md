@@ -39,9 +39,8 @@ reference work.
 
 ## Status
 
-**Modules 1 and 2 are built, with dishes, recipe templates, kitchen notes,
-the weekly schedule, 加熱 and TBD.** The schema is at revision `d2ifficulty`
-(the head).
+**Modules 1 and 2 are built, with dishes, kitchen notes, the weekly
+schedule, 加熱 and TBD.** The schema is at revision `t3emplates` (the head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
   parent, rating, labels, storage as a state x method grid with day ranges, a
@@ -73,16 +72,11 @@ the weekly schedule, 加熱 and TBD.** The schema is at revision `d2ifficulty`
   made by the save, a status, an optional 難易度, methods, equipment, 保存 / 加熱 / 筆記 notes,
   galleries, "used in" for
   ingredients, and 常用 chips above the lines that add one in a tap. A new
-  recipe starts blank, from a template, or as a copy of another recipe.
+  recipe starts blank or as a copy of another recipe.
 - **Authors** - a 設定 vocabulary that also carries links (a name and a
   url each, in the owner's order) and a 備註, edited on the author's row
   and shown above the recipe library when it is filtered to that author;
   a source's author on a recipe links to that filter.
-- **Recipe templates** - a named skeleton (servings, time, lines with their
-  alternatives and steps in their groups, methods, equipment) stored as one
-  JSONB body, made on its own
-  form or from a recipe (存成範本), ordered on 設定; a reference to something
-  since deleted is dropped when it is read, and counted.
 - **Kitchen notes** - bookmarks with a title, a kind, a link, a body, labels
   and a gallery.
 - **The weekly schedule (排程)** - per date, four meals (早, 中, 下午, 晚),
@@ -104,8 +98,8 @@ the weekly schedule, 加熱 and TBD.** The schema is at revision `d2ifficulty`
   (categories, labels, courses, regions, recipe statuses, recipe difficulties
   (難易度), source platforms, authors,
   材料分組, 步驟分組, cooking methods, equipment), for 常用食材 (the
-  recipe form's chips, an ordered pick of ingredients) and for 範本 (the
-  recipe templates), and 圖片, the image library.
+  recipe form's chips, an ordered pick of ingredients), and 圖片, the image
+  library.
 
 **The starting ingredient list is loaded by `i3import`**: 194 names from the
 recipe document's ingredient lists, approved by the owner, read from

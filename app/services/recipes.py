@@ -459,8 +459,8 @@ def distinct_alternatives(line_target: tuple, alternatives: list, target) -> lis
     earlier alternative names; the first of a repeat is kept.
 
     `target(alternative)` is its `(ingredient_id, sub_dish_id)`, and
-    `line_target` the line's. Applied on every save of a recipe or a
-    template, and by an ingredient merge: a line accepts its own target
+    `line_target` the line's. Applied on every save of a recipe, and by an
+    ingredient merge: a line accepts its own target
     already, and naming one thing twice says nothing more.
     """
     seen = {line_target}
@@ -482,9 +482,6 @@ def resolve_groups(db: Session, rows_field: str, entries) -> list[tuple[int | No
     becomes that value. After that a recipe may not hold one group twice -
     the same value, or the same one-off name in any case - which the uniques
     on the group tables would refuse anyway, but only as "something clashed".
-
-    Public because a recipe template's groups follow the same rules
-    (app/services/recipe_templates.py).
     """
     _, model, id_field, _, what = _PAIRS[rows_field]
     ids = [getattr(e, id_field) for e in entries if getattr(e, id_field) is not None]

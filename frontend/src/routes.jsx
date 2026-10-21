@@ -28,7 +28,6 @@ import RecipeForm from './pages/edit/RecipeForm'
 import ScheduleForm from './pages/edit/ScheduleForm'
 import Settings from './pages/edit/Settings'
 import TbdForm from './pages/edit/TbdForm'
-import TemplateForm from './pages/edit/TemplateForm'
 import DishLibrary from './pages/library/DishLibrary'
 import Heating from './pages/library/Heating'
 import IngredientLibrary from './pages/library/IngredientLibrary'
@@ -63,8 +62,6 @@ export default function AppRoutes() {
           <Route path="/edit/dishes/:id" element={<DishForm />} />
           <Route path="/edit/recipes/new" element={<RecipeForm />} />
           <Route path="/edit/recipes/:id" element={<RecipeForm />} />
-          <Route path="/edit/templates/new" element={<TemplateForm />} />
-          <Route path="/edit/templates/:id" element={<TemplateForm />} />
           <Route path="/edit/ingredients/new" element={<IngredientForm />} />
           <Route path="/edit/ingredients/:id" element={<IngredientForm />} />
           <Route path="/edit/notes/new" element={<NoteForm />} />

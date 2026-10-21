@@ -260,17 +260,6 @@ is load-bearing and says so. Some examples worth knowing about:
   carried by nothing (and the eight seeded ones), and separately one carried
   by two libraries. On an empty `label` table the backfill, the deletion and
   the refusal all pass by doing nothing.
-- `body_refs` (`tests/api/test_recipe_templates.py`) gives a template one of
-  everything its body can name - an ingredient, a dish, a 材料分組 value, a
-  method, a piece of equipment - so the stale-reference test has something to
-  drop, and that test reads the same template first and asserts `dropped`
-  is 0: a count that was always 4, or always 0, fails one of the two reads.
-  The merge test names a third ingredient beside the source, so a rewrite
-  that changed every line would fail; it was proved to fail with the rewrite
-  removed from `merge()`. The `new_ingredient` / `new_dish` refusal has its
-  mirror in a line naming an existing ingredient, and the unique-name
-  refusal in a template renamed to its own name in another case.
-
 - `chicken_tree` (`tests/api/test_category_clash.py`) gives the clashing
   category 雞肉 every kind of row a conversion touches - a top-level
   ingredient, one already a variety of an ingredient filed elsewhere, a child
@@ -312,7 +301,7 @@ the entire failure.
 | `tests/api/test_dish_library.py` | the dish list's summary, search and "any of" filters, and the recipe list's filters that read through the dish (dish, kind, course, region, label) and its search over the dish's names |
 | `tests/api/test_recipe_crud.py` | the recipe round trip, its dish (`dish_id`, `new_dish`, reuse by name, moving), 其他版本, `PATCH` list semantics, status, the default status and the 422 with none, a difficulty set, changed, cleared by null and left alone when not sent, none by default, an unknown one refused, the moved fields refused, sources and their platforms, `reheating_notes` (加熱) round-tripping and cleared as `storage_notes` is, delete leaving the dish, stale counts |
 | `tests/api/test_recipe_lines.py` | line targets (ingredient, dish, new ingredient, new dish), the claimed-type refusal, the own-dish rule and the cycle guard through dishes, stub and dish creation and reuse |
-| `tests/api/test_recipe_line_alternatives.py` | a line's alternatives: the round trip in order with amount and note, in a group, new names resolved with the lines' (one stub for a name typed on both), the unknown-id 422 writing nothing, exactly one target, redundant alternatives dropped, a re-save replacing them; the own-dish rule, the cycle guard and a dish move through an alternative; "used in" for an ingredient (a variety's included) and a dish with `alternative_only`, the recipe filter; both delete refusals with mirrors, the RESTRICT itself, the CASCADE with the recipe; the ingredient merge moving and dropping them with the preview's counts and the fingerprint; templates carrying them, dropping a deleted one, `from-recipe`, a body stored before them, and a merge rewriting them |
+| `tests/api/test_recipe_line_alternatives.py` | a line's alternatives: the round trip in order with amount and note, in a group, new names resolved with the lines' (one stub for a name typed on both), the unknown-id 422 writing nothing, exactly one target, redundant alternatives dropped, a re-save replacing them; the own-dish rule, the cycle guard and a dish move through an alternative; "used in" for an ingredient (a variety's included) and a dish with `alternative_only`, the recipe filter; both delete refusals with mirrors, the RESTRICT itself, the CASCADE with the recipe; the ingredient merge moving and dropping them with the preview's counts and the fingerprint |
 | `tests/test_line_alternatives_migration.py` | `a2lternatives` on a scratch database: the downgrade drops the table with an alternative in it and keeps the line, and the chain upgrades again |
 | `tests/api/test_recipe_step_kinds.py` | a step's kind: the `step` default, the round trip through create, read and `PATCH` in and out of groups, the 422 for an unknown or null kind, the `step_kinds` fixed list |
 | `tests/api/test_recipe_groups.py` | lines and steps in groups: order and positions, a name stored as its 設定 value, the empty group, duplicate and malformed groups, the `PATCH` pair rule, stubs, cycles and a dish's "used in" through grouped lines, the delete counts, the in-use 409, SET NULL from a group to its rows |
@@ -327,7 +316,6 @@ the entire failure.
 | `tests/api/test_tbd.py` | TBD: the blank-url CHECK and CASCADE to links, the round trip, the name-or-link 422 on create and on a `PATCH` that would leave neither (with the mirror that keeps a name), a new entry last, `https://` given to a link without a scheme and the 422 for a blank or non-web one, links replaced wholesale or left alone, the delete, the order `PUT` and each of its 422s against three real entries, the writes only under the gated prefix |
 | `tests/api/test_schedule.py` | the schedule: the Saturday a week starts on, the default range from a pinned today, every date answered stored or not, the `days` bounds, the day round trip with its meals, marks defaulting to false and refusing text, `PUT` replacing the whole day, blanks as null and empty meals and days not stored, unknown slots and fields, a meal of text only, of items only and of both, several items kept in order, a recipe implying its dish, a recipe of another dish, an item naming nothing and a duplicate item refused, unknown ids, a refused `PUT` changing nothing, a dish delete refused while meal items name it (with the dates) and its mirrors, a recipe delete leaving the item its dish, `meal_slots` in the fixed vocabularies |
 | `tests/test_schedule_migration.py` | `s4chedule` on a scratch database: marks turned into booleans from the stored text, each meal's dish and recipe moved into one item, and the downgrade writing ✓ and keeping the first item |
-| `tests/api/test_recipe_templates.py` | recipe templates: the round trip with every reference resolved, the empty template, a group name stored as its 設定 value, the list's order and counts, the `new_*` 422 that creates nothing (with its mirror), unknown ids, the case-insensitive unique name and blank name, fields a template does not carry, `PATCH` semantics and a refused `PATCH` changing nothing, delete, the order `PUT` and its 422s, stale references dropped and counted (a dropped group's lines kept as ungrouped), a template from a recipe's structure, and an ingredient merge rewriting template lines |
 | `tests/test_seed_migration.py` | the seeds, the storage migration's copy and lossy downgrade, `v2ocabulary`'s string-to-row mapping, `a1uthors`'s creator-to-author mapping, `g1roups`' sections-to-groups move, `s1tepkinds`' default for existing steps and `d1ishes`' grouping of recipes into dishes, each with its downgrade, on a scratch database |
 | `tests/test_ingredient_import.py` | `i3import`: the committed CSV passes validation, each validation refusal with a good mirror, and the load on a scratch database — stubs, aliases, parents, categories, the skip rule, the cycle guard, a second run, the no-op downgrade |
 | `tests/unit/test_prod_compose.py` | the production compose file, including the image bind mount |
@@ -397,21 +385,15 @@ payload; and the unpicked refusal sending nothing),
 `pages/detail/details.test.jsx` (a line's alternatives after it with their
 links, amounts and notes, a line without them unchanged; 替代 in an
 ingredient's and a sauce's 用在), `lib/mergePreview.test.js` (the moved and
-dropped counts) and the payload expectations of every recipe and template
-form test, which now carry `alternatives: []`.
+dropped counts) and the payload expectations of every recipe form test,
+which now carry `alternatives: []`.
 
-Recipe templates are covered in: `pages/edit/templates.test.jsx` (the
-new-recipe chooser's three ways in and the URL each writes, `?dish=` kept
-through them; the form prefilled from a template - the dropped notice, and
-nothing written before 儲存 - and from another recipe - its dish unless
-`?dish=` names one, and not its name, sources, status or pictures; a
-template that cannot be read; the template form's payload, its refusal of
-新增 and of a missing name, and a saved template sent back whole),
-`pages/edit/settings.test.jsx` (the 範本 tab: order, counts and links, the
-keyboard reorder frozen until the `PUT` lands and put back on a refusal,
-rename with a refused name explained in the row, delete after asking),
-`pages/detail/details.test.jsx` (存成範本: the name asked for, a refused
-name, the link to the new template), `lib/newRecipe.test.js`,
+How a new recipe starts is covered in: `components/forms/forms.test.jsx`
+(the new-recipe chooser's two ways in - 空白 and 複製另一份食譜 - and the URL
+each writes, `?dish=` kept through them, and no 從範本; the form prefilled
+from another recipe - its dish unless `?dish=` names one, not its name,
+sources, status or pictures, and nothing written before 儲存; a recipe to
+copy that cannot be read), `lib/newRecipe.test.js`,
 `lib/recipeStructure.test.js` and `lib/typeahead.test.js` (recipes as
 options).
 

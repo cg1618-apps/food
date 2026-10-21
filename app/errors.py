@@ -109,12 +109,10 @@ CONSTRAINT_MESSAGES = {
     "uq_recipe_step_position": "Two steps cannot share one position.",
     "uq_recipe_image_position": "Two images cannot share one position.",
     "uq_recipe_image_once": "That image is already in this gallery.",
-    "uq_recipe_template_name": "Another template already has that name.",
     "uq_schedule_meal_slot": "A day has one meal per slot.",
     "uq_schedule_meal_item_position": "Two items of a meal cannot share one position.",
     "ck_tbd_link_has_a_url": "A link needs a URL.",
     "ck_heating_note_has_a_name": "A note needs a name.",
-    "ck_recipe_template_has_a_name": "A template needs a name.",
 }
 
 GENERIC_MESSAGES = {

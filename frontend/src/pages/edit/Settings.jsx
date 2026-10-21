@@ -20,9 +20,7 @@
 // three kinds of owner - ingredients, dishes and notes - and on the recipes
 // that show their dish's. 標籤 is its own editor (LabelEditor): a section per
 // library a label can belong to, and a label moved between them while unused. 常用食材 is not a vocabulary but an ordered pick of ingredients -
-// the recipe form's chips - and makes only its own list stale. 範本 is not a
-// vocabulary either: the recipe templates a new recipe can start from,
-// ordered, renamed and deleted here and edited on their own form.
+// the recipe form's chips - and makes only its own list stale.
 //
 // 作者 is a factory vocabulary with more than names: its row's 編輯 opens
 // the names, the author's links and 備註 together
@@ -33,7 +31,6 @@ import CategoryEditor from '../../components/settings/CategoryEditor'
 import AuthorDetails from '../../components/settings/AuthorDetails'
 import CommonIngredientsEditor from '../../components/settings/CommonIngredientsEditor'
 import LabelEditor from '../../components/settings/LabelEditor'
-import TemplatesEditor from '../../components/settings/TemplatesEditor'
 import VocabularyEditor from '../../components/settings/VocabularyEditor'
 import { LinkButton, Tabs } from '../../components/ui/primitives'
 import { useUrlTab } from '../../hooks/useUrlTab'
@@ -159,7 +156,6 @@ function FactoryEditor({ vocabulary, ...section }) {
 const TABS = [
   { id: 'categories', label: '食材分類', render: () => <CategoryEditor /> },
   { id: 'common-ingredients', label: '常用食材', render: () => <CommonIngredientsEditor /> },
-  { id: 'templates', label: '範本', render: () => <TemplatesEditor /> },
   { id: 'labels', label: '標籤', render: () => <LabelEditor /> },
   ...FACTORY.map(({ key, vocabulary = key, ...section }) => ({
     id: key,

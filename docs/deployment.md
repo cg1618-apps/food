@@ -129,9 +129,7 @@ author's links and remark with them. The authors themselves, and the
 sources naming them, are untouched.
 
 `a2lternatives`'s downgrade drops `recipe_line_alternative`, and every
-recipe line's alternatives with it. The lines themselves, and the `alternatives`
-lists inside recipe templates' JSONB bodies, are untouched; the older code
-ignores the latter.
+recipe line's alternatives with it. The lines themselves are untouched.
 
 `r2eheat`'s downgrade drops `recipe.reheating_notes`, and every recipe's
 加熱 text with it. Nothing else is touched.
@@ -139,6 +137,10 @@ ignores the latter.
 `d2ifficulty`'s downgrade drops `recipe.difficulty_id` and then
 `recipe_difficulty`: every recipe's 難易度 and every value 設定 held for it.
 Nothing else is touched.
+
+`t3emplates`'s upgrade drops `recipe_template`, and every recipe template in
+it - the feature was removed, and there were none. Its downgrade recreates
+the table empty, exactly as `t2emplates` made it; no template comes back.
 
 **`d1ishes` restructures every recipe**, so its two directions are worth
 reading before either runs.
@@ -238,7 +240,8 @@ they ever do not, believe the box.
 | An author's links and remark | `a2uthor` — forty-five tables |
 | Recipe line alternatives | `a2lternatives` — forty-six tables |
 | A recipe's 加熱 notes | `r2eheat` — no new table |
-| 難易度, a recipe's difficulty | `d2ifficulty` — forty-seven tables, the current head |
+| 難易度, a recipe's difficulty | `d2ifficulty` — forty-seven tables |
+| Recipe templates removed | `t3emplates` — forty-six tables, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

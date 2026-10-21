@@ -2,7 +2,8 @@
 // its 「新增」, the delete dialog correcting itself on a 409 and listing what
 // blocks a refusal, the recipe form's save - its dish, picked or new or
 // preset from ?dish=, one target per line, and a new recipe's gallery PUT only
-// after the POST has answered with an id - the dish form's save, and the
+// after the POST has answered with an id - the new-recipe chooser and a
+// recipe copied from another (?from=), the dish form's save, and the
 // ingredient form's 「轉成食材」 dialog when its name is a category's.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -48,8 +49,13 @@ afterEach(() => {
 })
 
 function LocationProbe() {
-  const { pathname } = useLocation()
-  return <output data-testid="location">{pathname}</output>
+  const { pathname, search } = useLocation()
+  return (
+    <>
+      <output data-testid="location">{pathname}</output>
+      <output data-testid="url">{`${pathname}${search}`}</output>
+    </>
+  )
 }
 
 function wrap(ui, path = '/', client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
@@ -1446,5 +1452,148 @@ describe('IngredientForm', () => {
     expect(save.disabled).toBe(true)
     await act(async () => release())
     await waitFor(() => expect(screen.getByRole('button', { name: '儲存' }).disabled).toBe(false))
+  })
+})
+
+// /edit/recipes/new through the real routes: the chooser and its two ways in
+// (空白, 複製另一份食譜), each kept in the URL with the preset dish, and the
+// form prefilled from another recipe - that recipe's dish, but not its name,
+// sources, status or pictures.
+describe('a new recipe: the chooser, and a copy of another recipe', () => {
+  const FIXED = {
+    dish_kinds: [
+      { value: 'dish', label: '料理' },
+      { value: 'sauce', label: '醬料' },
+    ],
+    step_kinds: [
+      { value: 'step', label: '步驟' },
+      { value: 'optional', label: '可省略' },
+      { value: 'note', label: '備註' },
+    ],
+  }
+  const STATUSES = [
+    { id: 1, display_name: '想試', name_cn: '想試', sort_order: 10, usage_count: 0 },
+    { id: 2, display_name: '常煮', name_cn: '常煮', sort_order: 20, usage_count: 0 },
+  ]
+  const DISHES = {
+    40: { id: 40, display_name: '照燒雞腿排', name_cn: '照燒雞腿排', kind: 'dish', recipes: [] },
+    41: { id: 41, display_name: '照燒豆腐', name_cn: '照燒豆腐', kind: 'dish', recipes: [] },
+  }
+  const SOURCE = {
+    id: 5,
+    display_name: '阿嬤版',
+    name: '阿嬤版',
+    dish: { id: 40, display_name: '照燒雞腿排', kind: 'dish', course: null, region: null, labels: [], serves_as: [] },
+    status: { id: 2, display_name: '常煮' },
+    servings: '4 人份',
+    time: null,
+    storage_notes: '冷藏三天',
+    reheating_notes: '電鍋蒸 10 分鐘',
+    notes: '醬汁先調',
+    sources: [{ id: 1, platform: { id: 1, display_name: 'YouTube' }, author: null, url: 'https://example.com', title: '影片', sort_order: 0 }],
+    lines: [{ id: 1, position: 0, ingredient: { id: 1, display_name: '薑', needs_detail: false }, sub_dish: null, amount: '2 片', note: null, is_optional: true }],
+    line_groups: [],
+    steps: [{ id: 1, position: 0, kind: 'optional', body: '先醃' }],
+    step_groups: [],
+    methods: [],
+    equipment: [{ id: 4, display_name: '平底鍋' }],
+    images: [{ image_id: 9, url: '/images/9.jpg', thumb_url: '/images/t9.jpg', focus: null }],
+    other_recipes: [],
+    written_up: true,
+  }
+
+  function data({ url, method }) {
+    if (method === 'POST' && url === '/api/edit/recipes') return json({ id: 42, images: [] }, 201)
+    if (method !== 'GET') return null
+    if (url === '/api/vocabularies/fixed') return json(FIXED)
+    if (url === '/api/recipe-statuses') return json(STATUSES)
+    const dish = url.match(/^\/api\/dishes\/(\d+)$/)
+    if (dish) return json(DISHES[dish[1]])
+    if (url === '/api/recipes/5') return json(SOURCE)
+    if (url.startsWith('/api/recipes?q=')) return json([{ id: 5, display_name: '阿嬤版', name: '阿嬤版', dish: SOURCE.dish }])
+    return null
+  }
+
+  const url = () => screen.getByTestId('url').textContent
+
+  async function save() {
+    fireEvent.click(await screen.findByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(url()).toBe('/recipes/42'))
+    return calls.find((call) => call.method === 'POST' && call.url === '/api/edit/recipes').body
+  }
+
+  beforeEach(() => {
+    handler = (call) => data(call) ?? json([])
+  })
+
+  it('asks how to start before any form, naming the dish it came from', async () => {
+    wrap(<AppRoutes />, '/edit/recipes/new?dish=40')
+    expect(screen.getByRole('heading', { level: 1, name: '新增食譜' })).toBeTruthy()
+    for (const name of ['空白', '複製另一份食譜']) {
+      expect(screen.getByRole('heading', { name })).toBeTruthy()
+    }
+    // Recipe templates are gone: there is no third way in.
+    expect(screen.queryByRole('heading', { name: '從範本' })).toBeNull()
+    expect(await screen.findByText(/這份食譜會放在「照燒雞腿排」底下/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '儲存' })).toBeNull()
+  })
+
+  it('opens the empty form on 空白, keeping the dish in the URL and on the form', async () => {
+    wrap(<AppRoutes />, '/edit/recipes/new?dish=40')
+    fireEvent.click(screen.getByRole('button', { name: '空白食譜' }))
+    expect(url()).toBe('/edit/recipes/new?dish=40&blank=1')
+    expect(await screen.findByText('照燒雞腿排')).toBeTruthy()
+    const body = await save()
+    expect(body.dish_id).toBe(40)
+    expect(body.lines).toEqual([])
+  })
+
+  it('finds a recipe to copy by searching the recipe library', async () => {
+    wrap(<AppRoutes />, '/edit/recipes/new')
+    fireEvent.change(screen.getByRole('combobox', { name: '要複製的食譜' }), { target: { value: '阿嬤' } })
+    const option = await screen.findByRole('option', { name: /阿嬤版/ })
+    expect(option.textContent).toContain('照燒雞腿排')
+    fireEvent.click(option)
+    expect(url()).toBe('/edit/recipes/new?from=5')
+    expect(await screen.findByRole('link', { name: '阿嬤版' })).toBeTruthy()
+  })
+
+  it("copies the structure and notes under the source's dish, not its name, sources, status or pictures", async () => {
+    wrap(<AppRoutes />, '/edit/recipes/new?from=5')
+    expect(await screen.findByText(/名稱、來源、狀態和圖片沒有複製/)).toBeTruthy()
+    expect(screen.getByRole('link', { name: '阿嬤版' }).getAttribute('href')).toBe('/recipes/5')
+    expect(screen.getByLabelText(/^名稱/).value).toBe('')
+
+    const body = await save()
+    expect(body.dish_id).toBe(40)
+    expect(body.name).toBeNull()
+    expect(body.sources).toEqual([])
+    // The first status, as any new recipe - not the source's 常煮.
+    expect(body.status_id).toBe(1)
+    expect(body.servings).toBe('4 人份')
+    expect(body.storage_notes).toBe('冷藏三天')
+    expect(body.reheating_notes).toBe('電鍋蒸 10 分鐘')
+    expect(body.notes).toBe('醬汁先調')
+    expect(body.lines).toEqual([{ ingredient_id: 1, amount: '2 片', note: null, is_optional: true, alternatives: [] }])
+    expect(body.steps).toEqual([{ body: '先醃', kind: 'optional' }])
+    expect(body.equipment_ids).toEqual([4])
+    // No gallery PUT: the pictures stayed with the source.
+    expect(calls.filter((c) => c.method === 'PUT')).toEqual([])
+  })
+
+  it('keeps the dish ?dish= names over the source recipe’s', async () => {
+    wrap(<AppRoutes />, '/edit/recipes/new?dish=41&from=5')
+    expect(await screen.findByText(/名稱、來源、狀態和圖片沒有複製/)).toBeTruthy()
+    const body = await save()
+    expect(body.dish_id).toBe(41)
+  })
+
+  it('offers to choose again when the recipe to copy cannot be read', async () => {
+    handler = (call) =>
+      call.url === '/api/recipes/5' ? json({ detail: 'No such recipe.' }, 404) : (data(call) ?? json([]))
+    wrap(<AppRoutes />, '/edit/recipes/new?dish=40&from=5')
+    expect((await screen.findByRole('alert')).textContent).toMatch(/讀不到要複製的食譜/)
+    expect(screen.getByRole('link', { name: '重新選擇' }).getAttribute('href')).toBe('/edit/recipes/new?dish=40')
+    expect(screen.queryByRole('button', { name: '儲存' })).toBeNull()
   })
 })

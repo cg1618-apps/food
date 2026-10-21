@@ -77,7 +77,7 @@ function Harness({ initial = '', rows }) {
         onChange={(event) => setValue(event.target.value)}
         style={{ boxSizing: 'border-box', borderStyle: 'solid', borderWidth: `${BORDER}px` }}
       />
-      <button type="button" onClick={() => setValue('a\nb\nc\nd\ne\nf')}>套用範本</button>
+      <button type="button" onClick={() => setValue('a\nb\nc\nd\ne\nf')}>帶入</button>
       <button type="button" onClick={() => setValue('')}>清除</button>
     </>
   )
@@ -108,9 +108,9 @@ describe('TextArea', () => {
     expect(box().style.height).toBe(fit(2))
   })
 
-  it('re-fits when the value changes from outside, as a template or a reset does', () => {
+  it('re-fits when the value changes from outside, as a prefill or a reset does', () => {
     render(<Harness rows={2} />)
-    fireEvent.click(screen.getByText('套用範本'))
+    fireEvent.click(screen.getByText('帶入'))
     expect(box().style.height).toBe(fit(6))
     fireEvent.click(screen.getByText('清除'))
     expect(box().style.height).toBe(fit(2))

@@ -35,7 +35,7 @@ export function fitHeight(el) {
 }
 
 // Returns the ref to put on the <textarea>. `value` is what the box holds, so
-// the height follows typing, a value set from outside (a template applied, a
+// the height follows typing, a value set from outside (a copy prefilled, a
 // form reset) and the first render alike.
 export function useAutoGrow(value) {
   const ref = useRef(null)

@@ -1,6 +1,6 @@
 # Data model
 
-What the database holds today: forty-seven tables, at revision `d2ifficulty`.
+What the database holds today: forty-six tables, at revision `t3emplates`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the ten managed
 vocabularies and an author's links (`author_link`), `ingredient_heating`, `ingredient_link`, the image library and
@@ -8,7 +8,7 @@ its four galleries (`image`, `ingredient_image`, `dish_image`, `recipe_image`,
 `kitchen_note_image`), the dish family's four (`dish`, `dish_alias`,
 `dish_serves_as`, `dish_label`), the recipe family's nine (`recipe`,
 `recipe_method`, `recipe_equipment`, `recipe_source`, `recipe_line_group`,
-`recipe_line`, `recipe_line_alternative`, `recipe_step_group`, `recipe_step`), `recipe_template`, kitchen notes' two (`kitchen_note`, `kitchen_note_label`),
+`recipe_line`, `recipe_line_alternative`, `recipe_step_group`, `recipe_step`), kitchen notes' two (`kitchen_note`, `kitchen_note_label`),
 `common_ingredient`, the 常用食材 list, TBD's two (`tbd_entry`,
 `tbd_link`), 加熱's `heating_note`, and the schedule's three (`schedule_day`, `schedule_meal`,
 `schedule_meal_item`).
@@ -536,7 +536,7 @@ reason.
 
 **No alternative names its line's own target, and no two of one line name the
 same thing.** Nothing in the schema says so; the write path drops such an
-alternative on every save of a recipe or a template, and an ingredient merge
+alternative on every save of a recipe, and an ingredient merge
 drops the ones it would create.
 
 ## `recipe_step`
@@ -552,43 +552,6 @@ against `STEP_KINDS` in `app/constants.py` rather than by a Postgres enum:
 or `note` (備註, a note among the steps). Only a `step` is numbered, so a
 step's number is not its position plus one; it is counted by whoever draws
 the steps and never stored (`s1tepkinds`).
-
-## `recipe_template`
-
-A named skeleton a new recipe starts from: a NOT NULL `name`, refused when
-blank (`ck_recipe_template_has_a_name`) and unique whatever its case
-(`uq_recipe_template_name`, on `lower(name)`); a NOT NULL `sort_order`, the
-owner's order on 設定 and in the new-recipe chooser - a new template is given
-the end, and a reorder renumbers every template 0, 1, 2 …, ties falling back
-to the name; a NOT NULL JSONB `body`; and `created_at` / `updated_at`.
-
-`body` is one document in the recipe payload's own shapes, always stored in
-this canonical form:
-
-```json
-{"servings": null, "time": null,
- "lines": [{"ingredient_id": 1, "sub_dish_id": null, "amount": null, "note": null, "is_optional": false,
-            "alternatives": [{"ingredient_id": 2, "sub_dish_id": null, "amount": null, "note": null}]}],
- "line_groups": [{"line_group_id": 5, "name": null, "lines": []}],
- "steps": [{"body": "…", "kind": "step"}],
- "step_groups": [{"step_group_id": null, "name": "收尾", "steps": []}],
- "method_ids": [], "equipment_ids": []}
-```
-
-A line and an alternative each name exactly one of an ingredient and a dish,
-and a group exactly one of a 設定 value and a one-off name, as a recipe's do;
-a template never names an ingredient or a dish that does not exist yet. A body
-stored before alternatives existed has no `alternatives` key on its lines and
-reads as having none.
-
-**Nothing in the body is a foreign key**, and nothing references the table.
-An ingredient, a dish, a method, a piece of equipment or a group value a body
-names can be deleted without a refusal; the API leaves the missing reference
-out when it reads the template, and counts it - a line whose target is gone
-takes its alternatives with it. An ingredient merge rewrites the merged
-ingredient's id to the target's in every body, lines and alternatives alike,
-dropping an alternative that then repeats its line or a sibling. Why JSONB rather than
-tables mirroring the recipe's is in `notes/decisions.md`.
 
 ## `schedule_day`, `schedule_meal` and `schedule_meal_item`
 
@@ -698,7 +661,6 @@ shared.
 | schedule meal → its items | `CASCADE` |
 | dish → the meal items on the schedule that name it | `RESTRICT` |
 | recipe → the meal items on the schedule that name it | `SET NULL` — the item keeps its dish |
-| recipe template → what its body names | none — not a foreign key; a missing reference is left out when the template is read |
 | line or step group → the lines or steps in it | `SET NULL` — they become ungrouped |
 | kitchen note → its label links and gallery rows | `CASCADE` |
 | TBD entry → its links | `CASCADE` |

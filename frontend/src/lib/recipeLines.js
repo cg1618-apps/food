@@ -67,8 +67,8 @@ function alternativeFromResponse(alternative) {
   })
 }
 
-/** A line as GET /api/recipes/{id} or a template's body returns it -> a form
- * row, its alternatives included. */
+/** A line as GET /api/recipes/{id} returns it -> a form row, its
+ * alternatives included. */
 export function lineFromResponse(line) {
   return keyed({
     target: targetFromResponse(line),

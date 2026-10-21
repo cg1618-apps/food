@@ -665,7 +665,7 @@ What the branch after module 1 chose, and what it turned down.
   own target, or one an earlier alternative of the line already names, says
   nothing more, and a new name may only turn out to be one of those after it
   is resolved - by which point the save has started writing, and a refusal
-  then would leave rows behind. So every save (recipe and template) and an
+  then would leave rows behind. So every recipe save and an
   ingredient merge apply one rule, `recipes.distinct_alternatives`: the first
   of a repeat is kept. A merge reports what it drops (`dropped_alternatives`)
   and fingerprints it, as it does every row it touches.
@@ -864,58 +864,30 @@ What the branch after module 1 chose, and what it turned down.
   link written to the design still lands, and the house convention is the
   one a reader can guess.
 
-## Recipe templates
+## How a new recipe starts
 
-- **What the owner asked for.** "We should be able to create template for
-  recipe", and "when we add a new recipe, we could choose from blank,
-  template, or another recipe." A template is for recipes only - it belongs
-  to no dish, and starting from one picks no dish.
-- **The body is one JSONB column, not tables mirroring the recipe's.** A
-  template is a snapshot that is only ever read whole into a form and written
-  whole from one: nothing filters, joins, counts or constrains by what is
-  inside it. Mirroring `recipe_line`, `recipe_step`, both group tables and two
-  link tables would be six tables and a second copy of the recipe write path
-  for no query that needs them. This does not reopen the "no list in a
-  column" rule (`ingredient_alias` and the media regret it records): that
-  rule is about data something searches or joins on, and a template body is
-  neither. If a template ever needs to be searched by ingredient, it becomes
-  tables then.
-- **The body is the recipe payload's own shapes**, validated by the recipe's
-  own input models (`LineIn`, `LineGroupIn`, `StepIn`, `StepGroupIn`) and the
-  recipe's group rules (`recipes.resolve_groups`), and read back in the recipe
-  response's shapes. One vocabulary on the wire, so the form reads a template
-  with the code that reads a recipe (`lib/recipeStructure.js`).
-- **A template never creates rows.** `new_ingredient` and `new_dish` are a
-  422 saying to pick an existing one: a template is applied to a form and
-  nothing is saved until the recipe is, so a stub made by saving a template
-  would be a row nobody asked for yet. The template form's line typeahead
-  offers no 「新增」 for the same reason.
-- **No foreign keys into the JSON; stale references are dropped on read and
-  counted.** Refusing to delete an ingredient because a template names it
-  would make a starting point block real data. The read leaves out a line
-  whose ingredient or dish is gone, a method or a piece of equipment that is
-  gone, and a group whose value is gone - its rows join the ungrouped ones, as
-  removing a group in the form does - and answers `dropped` so the form can
-  say so. The stored body is not rewritten on a read; a GET that writes would
-  be a surprise, and the next save writes what the form holds anyway.
-- **An ingredient merge rewrites template bodies.** A merge is the fix for a
-  duplicate, so the duplicate's id must not turn into a dropped line in every
-  template - lines and alternatives alike, dropping an alternative that then
-  repeats its line or a sibling. It is not in the merge preview or its fingerprint, as the
-  常用食材 move is not: a template is a starting point, not content the merge
-  moves. A dish has no merge, so nothing rewrites dish ids.
+- **A new recipe starts blank or as a copy of another recipe.** Recipe
+  templates (範本) - named skeletons a new recipe could start from, with
+  their own table, routes, 設定 tab and 存成範本 on a recipe's page - were
+  removed at the owner's request. No template had been saved, so nothing was
+  lost; `t3emplates` drops the table, and its downgrade recreates it empty.
+- **The chooser stays, with two choices.** 空白 and 複製另一份食譜 are still
+  two different starts, and the copy needs a search for the recipe to copy,
+  so the question is still worth asking before the form; a dish page's
+  「＋ 新增食譜」 lands on it as before.
 - **Copying another recipe copies its structure and its notes, not what makes
   it that recipe.** Name, sources, status and pictures stay with the source;
   the copy starts on the first status like any new recipe. Its dish comes
   along - a copy is most often another way of making the same dish - unless
   `?dish=` (a dish page's 「＋ 新增食譜」) names one.
-- **The choice is in the URL** (`?blank=1`, `?template=`, `?from=`), so the
-  form opened on it survives a reload and Back returns to the question. The
-  chooser shows whenever none is given, including from a dish page, whose
-  `?dish=` rides along.
-- **The 材料, 步驟 and 做法、器材 sections were extracted rather than
-  duplicated**, so the template form and the recipe form cannot drift apart;
-  the recipe form's behaviour and its tests are unchanged by the move.
+- **The choice is in the URL** (`?blank=1`, `?from=`), so the form opened on
+  it survives a reload and Back returns to the question. The chooser shows
+  whenever neither is given, including from a dish page, whose `?dish=` rides
+  along.
+- **The 材料, 步驟 and 做法、器材 sections are components of their own**
+  (`components/forms/RecipeLinesSection.jsx` and its two siblings), which
+  keeps the recipe form readable; `lib/recipeStructure.js` reads a recipe
+  response into them, for an edit and for a copy alike.
 
 ## Kitchen notes
 
