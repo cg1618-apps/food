@@ -10,7 +10,7 @@ Alembic's autogenerate reads `Base.metadata`, which is populated by the same
 imports; a model missing from this file is a table missing from the diff.
 """
 
-from app.models.common_ingredient import CommonIngredient
+from app.models.common_ingredient import CommonIngredient, CommonIngredientGroup
 from app.models.dish import Dish, DishAlias, DishLabel, DishServesAs
 from app.models.heating import HeatingNote
 from app.models.image import DishImage, Image, IngredientImage, KitchenNoteImage, RecipeImage
@@ -55,6 +55,7 @@ __all__ = [
     "Author",
     "AuthorLink",
     "CommonIngredient",
+    "CommonIngredientGroup",
     "CookingMethod",
     "Dish",
     "DishAlias",

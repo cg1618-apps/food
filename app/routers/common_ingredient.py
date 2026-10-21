@@ -1,7 +1,8 @@
-"""常用食材: the list the recipe form's chips are drawn from.
+"""常用食材: the chips the recipe form offers, ungrouped and in groups.
 
-One read and one write. The write replaces the whole list, so adding, removing
-and reordering are each one call carrying the list as it should now be.
+One read and one write. The write replaces the whole structure, so adding,
+removing and reordering a chip, and adding, renaming, reordering and deleting
+a group, are each one call carrying the structure as it should now be.
 """
 
 from fastapi import Depends
@@ -9,7 +10,6 @@ from sqlalchemy.orm import Session
 
 from app import schemas
 from app.database import get_db
-from app.models import CommonIngredient
 from app.routing import read_router, write_router
 from app.services import common_ingredients
 
@@ -17,30 +17,41 @@ router = read_router("common-ingredients", "Common ingredients")
 edit = write_router("common-ingredients", "Common ingredients")
 
 
-def _response(row: CommonIngredient) -> schemas.CommonIngredientResponse:
-    ingredient = row.ingredient
-    return schemas.CommonIngredientResponse(
-        ingredient=schemas.IngredientRef(
-            id=ingredient.id,
-            display_name=ingredient.display_name,
-            needs_detail=ingredient.needs_detail,
-        ),
-        sort_order=row.sort_order,
+def _chips(rows) -> list[schemas.IngredientRef]:
+    return [
+        schemas.IngredientRef(
+            id=row.ingredient.id,
+            display_name=row.ingredient.display_name,
+            needs_detail=row.ingredient.needs_detail,
+        )
+        for row in rows
+    ]
+
+
+def _response(structure) -> schemas.CommonIngredientsResponse:
+    ungrouped, groups = structure
+    return schemas.CommonIngredientsResponse(
+        ungrouped=_chips(ungrouped),
+        groups=[
+            schemas.CommonIngredientGroupResponse(id=group.id, name=group.name, ingredients=_chips(rows))
+            for group, rows in groups
+        ],
     )
 
 
-@router.get("", response_model=list[schemas.CommonIngredientResponse])
+@router.get("", response_model=schemas.CommonIngredientsResponse)
 def list_common_ingredients(db: Session = Depends(get_db)):
-    return [_response(row) for row in common_ingredients.listed(db)]
+    return _response(common_ingredients.listed(db))
 
 
-@edit.put("", response_model=list[schemas.CommonIngredientResponse])
+@edit.put("", response_model=schemas.CommonIngredientsResponse)
 def replace_common_ingredients(
     payload: schemas.CommonIngredientsIn, db: Session = Depends(get_db)
 ):
-    """Replace the list with `ingredient_ids`, in that order; answers the list.
+    """Replace the structure with the one sent, in that order; answers it.
 
-    An id naming no ingredient, or one named twice, is a 422 and changes
-    nothing.
+    An ingredient named twice anywhere, an id naming no ingredient or no
+    group, a group sent twice, and a blank or repeated group name are each a
+    422 and change nothing.
     """
-    return [_response(row) for row in common_ingredients.replace(db, payload.ingredient_ids)]
+    return _response(common_ingredients.replace(db, payload))

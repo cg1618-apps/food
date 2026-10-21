@@ -311,7 +311,8 @@ the entire failure.
 | `tests/api/test_homemade_version.py` | an ingredient's 自製版: the round trip and `PATCH` set / change / clear, any dish kind, one dish named by several ingredients as the dish's `bought_as`, the 422 for an id naming no dish (writing nothing), SET NULL through the API and in raw SQL, the cascade's `bought_as`, and the merge keeping the target's or taking the source's, with its preview word and fingerprint |
 | `tests/api/test_category_clash.py` | a name is a category or an ingredient, never both: the 409 and its `category_clash` preview (English name and case included; aliases and `name_alt` not), the conversion's every outcome, the ingredient keeping its own category and description, the ancestor kept top-level, conversion on update and no check on an update leaving the names, a top-level category's target and its 422s, a parent's other target refused, the sibling-name block (422, nothing changed), a child sharing the category's name moving up, the stale fingerprint (409, nothing changed), the fallback's 422, two clashing categories' 409, a category created or renamed under an ingredient's name refused (409) and a drag not, the recipe stub's 422 |
 | `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, ordering after the target's rows, the fingerprint and its 409, refusals |
-| `tests/api/test_common_ingredients.py` | 常用食材: the whole-list `PUT` and its order, the unknown-id and duplicate 422s that change nothing, the write only under the gated prefix, CASCADE on an ingredient's delete, and a merge moving or dropping the source's entry |
+| `tests/api/test_common_ingredients.py` | 常用食材: the whole-structure `PUT` and its order - 未分組, the groups, each group's chips, an empty group; a rename keeping the id, two groups swapping names in one `PUT`, a group not sent deleted with its chips where the body puts them, SET NULL when a group goes underneath its chips; each 422 changing nothing against a stored structure - an ingredient in two groups and in a group and 未分組 (each with the mirror that succeeds), an unknown ingredient or group id, a group id twice, a blank name, a duplicate name in any case (with its mirror), extra fields, the old flat body; the write only under the gated prefix, CASCADE on an ingredient's delete, and a merge moving the source's entry with its group and place or dropping it |
+| `tests/test_common_ingredient_groups_migration.py` | `c3ommon` on a scratch database: the upgrade leaving every chip ungrouped in its order, and the downgrade flattening two groups and 未分組 into one list numbered 0 … n - 未分組 first, groups in their order rather than their ids' - with every chip kept, and the chain upgrading again |
 | `tests/api/test_heating.py` | 加熱: the blank-name CHECK, the round trip with line breaks kept, a blank body stored as null, the no-name 422 on create and the blank-name `PATCH` 422 with the mirror that renames, a `PATCH` applying only what it sends, a new note last, the delete, the order `PUT` and each of its 422s against three real notes, the writes only under the gated prefix |
 | `tests/api/test_tbd.py` | TBD: the blank-url CHECK and CASCADE to links, the round trip, the name-or-link 422 on create and on a `PATCH` that would leave neither (with the mirror that keeps a name), a new entry last, `https://` given to a link without a scheme and the 422 for a blank or non-web one, links replaced wholesale or left alone, the delete, the order `PUT` and each of its 422s against three real entries, the writes only under the gated prefix |
 | `tests/api/test_schedule.py` | the schedule: the Saturday a week starts on, the default range from a pinned today, every date answered stored or not, the `days` bounds, the day round trip with its meals, marks defaulting to false and refusing text, `PUT` replacing the whole day, blanks as null and empty meals and days not stored, unknown slots and fields, a meal of text only, of items only and of both, several items kept in order, a recipe implying its dish, a recipe of another dish, an item naming nothing and a duplicate item refused, unknown ids, a refused `PUT` changing nothing, a dish delete refused while meal items name it (with the dates) and its mirrors, a recipe delete leaving the item its dish, `meal_slots` in the fixed vocabularies |
@@ -415,6 +416,21 @@ sent, and the server's refusal shown on the card with the typing kept),
 payload),
 `pages/detail/details.test.jsx` (a dish delete refused with `meals`, each
 date linked to its week), `lib/nav.test.js` and `routes.test.jsx`.
+
+常用食材 is covered in: `pages/edit/settings.test.jsx` (the flat list with
+no 未分組 heading, its order and badge; the keyboard reorder sending the whole
+structure and frozen until it lands; ✕; a pick going to the end of 未分組 and
+never offering one listed in a group; 「＋ 新增分組」 sent without an id and
+refusing a taken name; the groups under 未分組; a rename on leaving the box
+keeping the id, a blank one going back unsent; groups reordered by their
+handle; a chip moved Down into the next group and Up out of a group to the
+end of the one above, each with its exact body; 刪除分組 asked first,
+cancelled sending nothing, confirmed moving its chips to the end of 未分組;
+a refused change putting the stored structure back with the sentence; the
+empty state) and `components/forms/forms.test.jsx` (the recipe form's chips:
+one unheaded row with no groups, 未分組 then each group under its heading
+with an empty group not drawn, one group alone under its own heading, and a
+grouped chip adding an ungrouped line).
 
 Authors' links and 備註 are covered in: `pages/edit/settings.test.jsx`
 (the row's 編輯 opening the stored links and 備註, a link added and the

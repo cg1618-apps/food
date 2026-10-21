@@ -1034,10 +1034,14 @@ describe('RecipeForm groups', () => {
 })
 
 describe('RecipeForm 常用食材', () => {
-  const COMMON = [
-    { ingredient: { id: 1, display_name: '蒜', needs_detail: false }, sort_order: 0 },
-    { ingredient: { id: 2, display_name: '薑', needs_detail: true }, sort_order: 1 },
-  ]
+  const COMMON = {
+    ungrouped: [
+      { id: 1, display_name: '蒜', needs_detail: false },
+      { id: 2, display_name: '薑', needs_detail: true },
+    ],
+    groups: [],
+  }
+  const EMPTY = { ungrouped: [], groups: [] }
   const LINE_GROUPS = [
     { id: 11, display_name: '主料', name_cn: '主料', name_en: null, sort_order: 10, usage_count: 0 },
   ]
@@ -1062,8 +1066,9 @@ describe('RecipeForm 常用食材', () => {
     fireEvent.click(within(lines).getByRole('button', { name: '＋ 加分組' }))
     fireEvent.click(await within(lines).findByRole('button', { name: '＋ 主料' }))
 
-    // In list order.
+    // In list order, as one unheaded row: there are no groups.
     const offered = await within(chips()).findAllByRole('button')
+    expect(within(chips()).queryAllByRole('group')).toEqual([])
     expect(offered.map((chip) => chip.getAttribute('aria-label'))).toEqual(['加一行「蒜」', '加一行「薑」'])
 
     fireEvent.click(within(chips()).getByRole('button', { name: '加一行「蒜」' }))
@@ -1141,8 +1146,48 @@ describe('RecipeForm 常用食材', () => {
     expect(within(chips()).getByRole('button', { name: '加一行「蒜」' })).toBeTruthy()
   })
 
+  it('shows the chips under their groups, 未分組 first, an empty group not at all', async () => {
+    handler = commonData({
+      ungrouped: [{ id: 1, display_name: '蒜', needs_detail: false }],
+      groups: [
+        { id: 21, name: '肉', ingredients: [{ id: 4, display_name: '雞腿', needs_detail: false }] },
+        { id: 23, name: '空的', ingredients: [] },
+        { id: 22, name: '調味料', ingredients: [{ id: 2, display_name: '薑', needs_detail: true }] },
+      ],
+    })
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
+    await chooseNewDish('炒雞腿')
+    const sections = await within(chips()).findAllByRole('group')
+    expect(sections.map((section) => section.getAttribute('aria-label'))).toEqual(['未分組', '肉', '調味料'])
+    expect(within(sections[1]).getAllByRole('button').map((chip) => chip.getAttribute('aria-label'))).toEqual([
+      '加一行「雞腿」',
+    ])
+    expect(within(sections[0]).getByText('未分組')).toBeTruthy()
+
+    // A chip in a group adds an ungrouped line, as any chip does.
+    fireEvent.click(within(sections[1]).getByRole('button', { name: '加一行「雞腿」' }))
+    expect(within(screen.getByRole('group', { name: '材料 1' })).getByText('雞腿')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
+    const body = calls.find((c) => c.method === 'POST' && c.url === '/api/edit/recipes').body
+    expect(body.lines).toEqual([
+      { amount: null, note: null, is_optional: false, ingredient_id: 4, alternatives: [] },
+    ])
+    expect(body.line_groups).toEqual([])
+  })
+
+  it('draws chips that are all in one group under that group heading', async () => {
+    handler = commonData({
+      ungrouped: [],
+      groups: [{ id: 21, name: '肉', ingredients: [{ id: 4, display_name: '雞腿', needs_detail: false }] }],
+    })
+    wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
+    const sections = await within(await screen.findByRole('group', { name: '常用食材' })).findAllByRole('group')
+    expect(sections.map((section) => section.getAttribute('aria-label'))).toEqual(['肉'])
+  })
+
   it('shows no chip row at all while the list is empty', async () => {
-    handler = commonData([])
+    handler = commonData(EMPTY)
     wrap(<AppRoutes />, '/edit/recipes/new?blank=1')
     await screen.findByRole('combobox', { name: '料理' })
     await waitFor(() => expect(calls.some((c) => c.url === '/api/common-ingredients')).toBe(true))

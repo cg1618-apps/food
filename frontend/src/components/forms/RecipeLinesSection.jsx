@@ -2,9 +2,10 @@
 // form edits them.
 //
 // Above the lines sit the 常用 chips, one per 設定's 常用食材, in its order
-// (CommonIngredientChips). A tap appends a line naming that ingredient to the
-// ungrouped lines and puts the cursor in its 份量, so the amount is typed
-// next; a chip whose ingredient is already on a line is marked used and still
+// and under its groups' headings (CommonIngredientChips). A tap appends a
+// line naming that ingredient to the ungrouped lines - a 常用食材 group is
+// no 材料分組 - and puts the cursor in its 份量, so the amount is typed next;
+// a chip whose ingredient is already on a line is marked used and still
 // adds. No chips, no row.
 //
 // The lines sit in groups (GroupedRowEditor): the ungrouped ones first, then
@@ -116,7 +117,7 @@ export default function RecipeLinesSection({ value, setValue, excludeDishes = []
   return (
     <Section title="材料">
       <CommonIngredientChips
-        ingredients={(common.data ?? []).map((row) => row.ingredient)}
+        common={common.data}
         usedIds={usedIngredients}
         onAdd={addCommonLine}
       />

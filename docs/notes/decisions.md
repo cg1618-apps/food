@@ -787,6 +787,34 @@ What the branch after module 1 chose, and what it turned down.
   surviving row and keeps its place; when the target is already listed the
   source's chip is simply dropped. The move is outside the merge plan and its
   fingerprint: it moves no content the preview would need to warn about.
+- **Groups of its own, not 設定's 材料分組.** The owner chose this. A
+  材料分組 (主料, 醬汁) says where a line sits in one recipe; a 常用食材 group
+  (肉, 調味料) only arranges shortcuts so a long row of chips can be scanned.
+  Reusing 材料分組 would tie the two lists together - renaming 醬汁 would
+  rename a chip heading, and a chip group would have to exist in every
+  recipe's group picker - for a likeness that is only in the word. So
+  `common_ingredient_group` is a table of its own, and a tapped chip still
+  adds an ungrouped line whatever group it sits in.
+- **未分組 is no group at all, not a group called 未分組.** A chip with a null
+  `group_id` is ungrouped, and 未分組 is always first. Every chip that existed
+  before `c3ommon` is ungrouped, so nothing changes until a group is made,
+  and the screens show no heading until then.
+- **SET NULL from a group to its chips.** Deleting a group must never delete
+  a chip: the chip is an ingredient the owner picked, and the group only a
+  heading. RESTRICT would make a group with chips undeletable for no gain.
+  The `PUT` writes each chip's group and place explicitly, so 設定's delete
+  puts a deleted group's chips at the end of 未分組 itself; SET NULL is the
+  schema saying the same thing for any other path, where the chips keep
+  their old positions among 未分組's.
+- **Still one whole-structure `PUT`.** Groups are ids the server keeps (sent
+  back to rename), but the structure is still replaced in one call: a drag
+  between groups changes two lists at once, and two calls could half-apply.
+  A rename passes through a placeholder name first, because the unique
+  index on `lower(name)` is checked row by row and two groups swapping names
+  would otherwise collide with themselves. A duplicate ingredient is refused
+  across the whole structure, as the list's duplicate always was.
+- **Deleting a group asks first**, as every delete on 設定 does, though
+  nothing is lost - the question says how many chips move to 未分組.
 - **A tapped chip adds to the ungrouped lines and focuses the amount.** The
   chip cannot know which group the owner means, and the ungrouped area is the
   one place every recipe has; the line drags into a group afterwards like any

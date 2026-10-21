@@ -113,6 +113,8 @@ CONSTRAINT_MESSAGES = {
     "uq_schedule_meal_item_position": "Two items of a meal cannot share one position.",
     "ck_tbd_link_has_a_url": "A link needs a URL.",
     "ck_heating_note_has_a_name": "A note needs a name.",
+    "ck_common_ingredient_group_has_a_name": "A group needs a name.",
+    "uq_common_ingredient_group_name": "Another group already has that name.",
 }
 
 GENERIC_MESSAGES = {

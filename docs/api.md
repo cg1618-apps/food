@@ -261,8 +261,8 @@ The target wins every collision:
   the source has none, and the link is in the fingerprint;
 - names, category, parent, rating and `needs_detail` are the target's and are
   not touched;
-- the source's 常用食材 entry moves to the target in the same place, unless
-  the target is listed already, when it is dropped. It is not in the preview
+- the source's 常用食材 entry moves to the target in the same group and
+  the same place, unless the target is listed already, when it is dropped. It is not in the preview
   or the fingerprint: it moves no content.
 
 Refused with 422: into itself, into one of its own descendants, and an `into`
@@ -810,27 +810,47 @@ exist is a 404, not the application shell: the bundle's catch-all refuses
 
 | Route | |
 | --- | --- |
-| `GET /api/common-ingredients` | the list, in order |
-| `PUT /api/edit/common-ingredients` | replaces the whole list |
+| `GET /api/common-ingredients` | the structure, in order |
+| `PUT /api/edit/common-ingredients` | replaces the whole structure |
 
-The list is the ingredients the recipe form offers as chips:
+The structure is the ingredients the recipe form offers as chips: 未分組
+(the ungrouped chips) first, then the owner's named groups, each in order:
 
 ```json
-[{"ingredient": {"id": 3, "display_name": "蒜", "needs_detail": false}, "sort_order": 0},
- {"ingredient": {"id": 8, "display_name": "薑", "needs_detail": true}, "sort_order": 1}]
+{"ungrouped": [{"id": 3, "display_name": "蒜", "needs_detail": false}],
+ "groups": [{"id": 5, "name": "調味料",
+             "ingredients": [{"id": 8, "display_name": "薑", "needs_detail": true}]}]}
 ```
 
-`ingredient` is the shape a recipe line embeds (`IngredientRef`).
+Each chip is the shape a recipe line embeds (`IngredientRef`). A group may
+be empty. Nothing listed is `{"ungrouped": [], "groups": []}`.
 
-**The `PUT` body is `{"ingredient_ids": [3, 8]}`** and the list becomes
-exactly that, numbered 0, 1, 2 … in the order sent; `[]` empties it. Adding,
-removing and reordering are each this one call. The answer is the list, as
-the `GET` gives it. An id that names no ingredient is 422 naming the id, the
-same id twice is 422, and an unknown field in the body is 422; each changes
-nothing.
+**The `PUT` body is the same structure with ids in place of chips**:
+
+```json
+{"ungrouped": [3],
+ "groups": [{"id": 5, "name": "辛香料", "ingredient_ids": [8]},
+            {"name": "肉", "ingredient_ids": []}]}
+```
+
+and the structure becomes exactly that: 未分組's chips, each group's chips and
+the groups themselves numbered 0, 1, 2 … in the order sent. A group sent
+with an `id` is that group, renamed and moved; one without is created; a
+stored group not sent is deleted, and its chips are wherever the body puts
+them (設定 sends them at the end of 未分組). Adding, removing and moving a
+chip, and adding, renaming, reordering and deleting a group, are each this
+one call. A name is stored trimmed. The answer is the structure, as the
+`GET` gives it.
+
+Refused with 422, each changing nothing: an ingredient named twice anywhere
+(in two groups, or in a group and 未分組), an id naming no ingredient or no
+group (the message names the id), one group id sent twice, a blank group
+name, two groups whose names differ only in case or surrounding spaces, and
+an unknown field anywhere in the body - the old flat `{"ingredient_ids"}`
+body among them.
 
 Deleting an ingredient takes it off the list (`CASCADE`); merging one moves
-its entry to the target (see Ingredients).
+its entry to the target, group and place with it (see Ingredients).
 
 ## Schedule
 

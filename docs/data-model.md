@@ -1,6 +1,6 @@
 # Data model
 
-What the database holds today: forty-six tables, at revision `t3emplates`.
+What the database holds today: forty-seven tables, at revision `c3ommon`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the ten managed
 vocabularies and an author's links (`author_link`), `ingredient_heating`, `ingredient_link`, the image library and
@@ -9,7 +9,8 @@ its four galleries (`image`, `ingredient_image`, `dish_image`, `recipe_image`,
 `dish_serves_as`, `dish_label`), the recipe family's nine (`recipe`,
 `recipe_method`, `recipe_equipment`, `recipe_source`, `recipe_line_group`,
 `recipe_line`, `recipe_line_alternative`, `recipe_step_group`, `recipe_step`), kitchen notes' two (`kitchen_note`, `kitchen_note_label`),
-`common_ingredient`, the 常用食材 list, TBD's two (`tbd_entry`,
+`common_ingredient` and `common_ingredient_group`, 常用食材 and its
+groups, TBD's two (`tbd_entry`,
 `tbd_link`), 加熱's `heating_note`, and the schedule's three (`schedule_day`, `schedule_meal`,
 `schedule_meal_item`).
 
@@ -208,16 +209,26 @@ A reference link — where the advice came from. `url` is required and the API
 accepts `http` and `https` only, because a `javascript:` URL rendered as a link
 is script execution. `title` is optional; rows are ordered by `sort_order`.
 
-## `common_ingredient`
+## `common_ingredient` and `common_ingredient_group`
 
 常用食材: the ingredients the recipe form offers as one-tap chips above its
-材料, in the owner's order. `ingredient_id` is the primary key - an
-ingredient is listed once or not at all - and a foreign key to `ingredient`
-with `ON DELETE CASCADE`, so a deleted ingredient leaves the list.
-`sort_order` (NOT NULL) is the chip's place; the API writes the whole list at
-once and numbers it 0, 1, 2 … in the order sent. A merge moves the source's
-row to the target in the same place, unless the target is listed already,
-when the source's row goes with the source.
+材料, ungrouped (未分組) or in the owner's named groups, in the owner's order.
+
+`common_ingredient_group` is one group: a required `name` (CHECK
+`btrim(name) <> ''`, and unique in any case through the expression index
+`uq_common_ingredient_group_name` on `lower(name)`) and a NOT NULL
+`sort_order`, its place among the groups.
+
+`common_ingredient` is one chip. `ingredient_id` is the primary key - an
+ingredient is listed once or not at all, in one group or across them - and a
+foreign key to `ingredient` with `ON DELETE CASCADE`, so a deleted
+ingredient leaves the list. `group_id` is nullable and indexed, a foreign key
+to `common_ingredient_group` with `ON DELETE SET NULL`: null is 未分組, and a
+deleted group leaves its chips, ungrouped. `sort_order` (NOT NULL) is the
+chip's place within its group, or within 未分組. The API writes the whole
+structure at once and numbers each list 0, 1, 2 … in the order sent. A merge
+moves the source's row to the target, group and place with it, unless the
+target is listed already, when the source's row goes with the source.
 
 ## `tbd_entry` and `tbd_link`
 
@@ -647,6 +658,7 @@ shared.
 | --- | --- |
 | ingredient → its aliases, preservation rows, heating rows, links, label links, gallery rows | `CASCADE` |
 | ingredient → its 常用食材 row | `CASCADE` |
+| 常用食材 group → its chips | `SET NULL` |
 | ingredient → its children | `RESTRICT` |
 | ingredient → the recipe lines and line alternatives that name it | `RESTRICT` |
 | category → its ingredients and child categories | `RESTRICT` |

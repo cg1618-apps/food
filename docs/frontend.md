@@ -546,8 +546,12 @@ running index RowEditor gives every row, so each stays unique whatever its
 kind. The save sends each step as `{body, kind}`.
 
 **常用 chips** sit above 材料 (`components/forms/CommonIngredientChips.jsx`),
-one per 設定 常用食材, in that list's order. A tap appends a line naming that
-ingredient to the **ungrouped** lines - whatever groups the recipe has - and
+one per 設定 常用食材, in its order: 未分組 first, then each group on a row
+of its own headed by its name. While every chip is in 未分組 - which is how it
+reads with no group at all - they are the single row headed 常用, with no
+未分組 heading; a group with no chips is not drawn. A 常用食材 group is not a
+材料分組: a tap appends a line naming that ingredient to the **ungrouped**
+lines - whatever groups the recipe or the chip has - and
 moves the focus to that line's 份量, so the amount is typed next. A chip
 whose ingredient is already on a line anywhere in the recipe, grouped or not,
 is drawn as used (✓, muted, `data-used`, and named 「加一行「蒜」（已在材料中）」
@@ -705,14 +709,31 @@ Each value is a `components/settings/NameRow.jsx`:
 
 **常用食材** (`components/settings/CommonIngredientsEditor.jsx`) is not a
 vocabulary but an ordered pick of ingredients: the chips the recipe form
-offers above its 材料. Each row is the ingredient's name (with 待補 for a
-stub), a drag handle and ✕; under the list, an ingredient typeahead adds one
-at the end - existing ingredients only, no 「新增」, and one already listed is
-never offered. Every change - a drag (or Up / Down on the handle), a ✕, a
-pick - `PUT`s the whole list (`{ingredient_ids}`) at once, by the rule a
-vocabulary's move follows: the new list shows immediately, the handles and
-✕ are off until the `PUT` has landed and the list has been read again, and a
-failure puts the stored list back with the server's sentence above it. A
+offers above its 材料, ungrouped or in named groups. Each row is the
+ingredient's name (with 待補 for a stub), a drag handle and ✕. With no group
+the rows are one list, as they always were; once there is a group, the
+ungrouped rows sit under a 未分組 heading first, and each group follows as a
+box - its own drag handle, its name in an input, 刪除分組, and its rows (an
+empty one says 把食材拖到這裡 and takes a drop). It is the recipe form's
+grouped pattern (one `SortableBoard`, `lib/groupedRows.js`'s reducer): rows
+drag within a group and between groups, groups drag by their header, and Up
+/ Down on a row's handle crosses a group's edge (Up on a group's first row
+puts it at the end of the one above).
+
+Under it, an ingredient typeahead adds one at the end of 未分組 - existing
+ingredients only, no 「新增」, and one already listed in any group is never
+offered - and 「＋ 新增分組」 opens a name box and 加入, adding an empty group
+last. A group's name is renamed in place and saved when the box is left or on
+Enter; Escape, a blank name or one another group has (any case, said under
+the box) puts the stored name back, and the add box refuses a taken name the
+same way. 刪除分組 asks in a ConfirmModal, as every 設定 delete does, saying
+how many chips move; confirmed, its chips go to the end of 未分組.
+
+Every change `PUT`s the whole structure (`{ungrouped, groups}`, a group
+carrying its `id` unless it is new) at once, by the rule a vocabulary's move
+follows: the new structure shows immediately, every handle, ✕ and box is off
+until the `PUT` has landed and the structure has been read again, and a
+failure puts the stored one back with the server's sentence above it. A
 change makes only `GET /api/common-ingredients` stale - which is what the
 recipe form's chips read.
 

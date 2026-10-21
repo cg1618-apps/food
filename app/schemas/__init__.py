@@ -8,8 +8,10 @@ from app.schemas.author import (
     AuthorUpdate,
 )
 from app.schemas.common_ingredient import (
-    CommonIngredientResponse,
+    CommonIngredientGroupIn,
+    CommonIngredientGroupResponse,
     CommonIngredientsIn,
+    CommonIngredientsResponse,
 )
 from app.schemas.dish import DishCreate, DishResponse, DishSummary, DishUpdate
 from app.schemas.heating import (
@@ -119,8 +121,10 @@ __all__ = [
     "AuthorLinkResponse",
     "AuthorResponse",
     "AuthorUpdate",
-    "CommonIngredientResponse",
+    "CommonIngredientGroupIn",
+    "CommonIngredientGroupResponse",
     "CommonIngredientsIn",
+    "CommonIngredientsResponse",
     "CoverRef",
     "DishBrief",
     "DishCreate",
