@@ -86,6 +86,8 @@ describe('paths the backend actually serves', () => {
     [endpoints.stepGroups.create(), '/api/edit/step-groups'],
     [endpoints.courses.list(), '/api/recipe-courses'],
     [endpoints.statuses.update(3), '/api/edit/recipe-statuses/3'],
+    [endpoints.difficulties.list(), '/api/recipe-difficulties'],
+    [endpoints.difficulties.remove(2), '/api/edit/recipe-difficulties/2'],
     [endpoints.platforms.list(), '/api/source-platforms'],
     [endpoints.methods.update(4), '/api/edit/cooking-methods/4'],
     [endpoints.equipment.remove(5), '/api/edit/equipment/5'],
@@ -106,10 +108,6 @@ describe('paths the backend actually serves', () => {
     [endpoints.tbd.order(), '/api/edit/tbd/order'],
     [endpoints.schedule.list(), '/api/schedule'],
     [endpoints.schedule.update('2026-10-03'), '/api/edit/schedule/2026-10-03'],
-    [endpoints.templates.list(), '/api/recipe-templates'],
-    [endpoints.templates.detail(3), '/api/recipe-templates/3'],
-    [endpoints.templates.order(), '/api/edit/recipe-templates/order'],
-    [endpoints.templates.fromRecipe(9), '/api/edit/recipe-templates/from-recipe/9'],
   ])('%s', (actual, expected) => {
     expect(actual).toBe(expected)
   })

@@ -1,4 +1,4 @@
-"""What an author has that the other eight vocabularies do not: a remark and
+"""What an author has that the other nine vocabularies do not: a remark and
 links. The vocabulary factory (app/routers/vocabulary.py) calls `apply` to
 write a create or an update and `load` to read the links with the list.
 """

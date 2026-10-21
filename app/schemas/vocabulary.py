@@ -1,4 +1,5 @@
-"""Shapes shared by the eight managed vocabularies."""
+"""Shapes shared by the nine plain managed vocabularies (an author adds to
+them, `app/schemas/author.py`)."""
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 

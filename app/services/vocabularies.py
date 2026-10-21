@@ -22,6 +22,7 @@ from app.models import (
     LineGroup,
     Recipe,
     RecipeCourse,
+    RecipeDifficulty,
     RecipeEquipment,
     RecipeLineGroup,
     RecipeMethod,
@@ -50,6 +51,11 @@ def _region_usage(db: Session) -> dict[int, int]:
 
 def _status_usage(db: Session) -> dict[int, int]:
     return dict(_count(db, Recipe.status_id))
+
+
+def _difficulty_usage(db: Session) -> dict[int, int]:
+    """Recipes rated with the value; a recipe with none counts for nothing."""
+    return _nonnull(db, Recipe.difficulty_id)
 
 
 def _platform_usage(db: Session) -> dict[int, int]:
@@ -94,6 +100,7 @@ USAGE: dict[type, Callable[[Session], dict[int, int]]] = {
     RecipeCourse: _course_usage,
     Region: _region_usage,
     RecipeStatus: _status_usage,
+    RecipeDifficulty: _difficulty_usage,
     SourcePlatform: _platform_usage,
     CookingMethod: _cooking_method_usage,
     Equipment: _equipment_usage,

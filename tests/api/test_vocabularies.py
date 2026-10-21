@@ -1,5 +1,5 @@
-"""The nine managed vocabularies share one router factory, so one parametrised
-suite covers all nine. The fixtures that make refusals bite are the in-use
+"""The ten managed vocabularies share one router factory, so one parametrised
+suite covers all ten. The fixtures that make refusals bite are the in-use
 rows: a vocabulary value nothing uses deletes freely, and that is the mirror."""
 
 import pytest
@@ -8,6 +8,7 @@ RESOURCES = [
     "recipe-courses",
     "regions",
     "recipe-statuses",
+    "recipe-difficulties",
     "source-platforms",
     "cooking-methods",
     "equipment",
@@ -211,6 +212,28 @@ def test_a_status_a_recipe_is_in_cannot_be_deleted(client, db, recipe_statuses):
     assert response.json()["usage_count"] == 1
     unused = client.delete(f"/api/edit/recipe-statuses/{recipe_statuses['常煮'].id}")
     assert unused.status_code == 204
+
+
+def test_a_difficulty_a_recipe_is_rated_cannot_be_deleted(client, db, recipe_statuses):
+    """The recipe rated 困難 is the fixture that makes the 409 bite; 簡單,
+    which nothing uses, is the mirror and deletes - and a recipe with no
+    difficulty counts for neither."""
+    from app.models import RecipeDifficulty
+
+    easy, hard = RecipeDifficulty(name_cn="簡單"), RecipeDifficulty(name_cn="困難")
+    db.add_all([easy, hard])
+    db.flush()
+    _recipe(db, recipe_statuses["想試"], difficulty_id=hard.id)
+    _recipe(db, recipe_statuses["想試"])
+
+    listed = {row["name_cn"]: row for row in client.get("/api/recipe-difficulties").json()}
+    assert listed["困難"]["usage_count"] == 1
+    assert listed["簡單"]["usage_count"] == 0
+
+    response = client.delete(f"/api/edit/recipe-difficulties/{hard.id}")
+    assert response.status_code == 409
+    assert response.json()["usage_count"] == 1
+    assert client.delete(f"/api/edit/recipe-difficulties/{easy.id}").status_code == 204
 
 
 def test_a_platform_a_source_names_cannot_be_deleted(

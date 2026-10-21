@@ -35,7 +35,7 @@ from app.models import (
     RecipeLine,
     RecipeLineAlternative,
 )
-from app.services import category_clash, recipe_templates
+from app.services import category_clash
 from app.services.hierarchy import check_parent, is_descendant
 from app.services.lookup import fetch_all, fetch_labels
 from app.services.recipes import distinct_alternatives
@@ -632,12 +632,6 @@ def merge(db: Session, plan: MergePlan) -> Ingredient:
     A line's alternatives follow as the plan says: the redundant ones are
     deleted, the rest naming the source name the target.
 
-    Recipe templates follow too: every template line and alternative naming
-    the source names the target, with the same alternatives dropped
-    (`recipe_templates.rewrite_ingredient`). Like a 常用食材 entry,
-    that is not in the plan - a template is a starting point, not content the
-    merge moves.
-
     A 常用食材 entry follows the source to the target, keeping its place in
     the list, unless the target is listed already - then the source's entry
     is left to go with the source (CASCADE). It is not in the plan: it moves
@@ -681,8 +675,6 @@ def merge(db: Session, plan: MergePlan) -> Ingredient:
     _move_after(db, IngredientHeating, plan.heating, target_id, "sort_order", heating)
     _move_after(db, IngredientImage, plan.images, target_id, "position", positions)
     _move_after(db, IngredientPreservation, plan.preservation, target_id, "sort_order", kept)
-
-    recipe_templates.rewrite_ingredient(db, source_id, target_id)
 
     target.labels.extend(plan.labels)
     target.aliases.extend(IngredientAlias(value=v) for v in plan.new_aliases)

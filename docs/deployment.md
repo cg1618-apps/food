@@ -103,6 +103,11 @@ optional step or a note comes back as an ordinary step.
 `c1ommon`'s downgrade drops `common_ingredient`, and the 常用食材 list with
 it. No ingredient is touched.
 
+`c3ommon`'s downgrade drops `common_ingredient_group` and
+`common_ingredient.group_id`, and every 常用食材 group's name with them. No
+chip is lost: they are first renumbered into one list - 未分組 first, then
+each group's chips in group order, each in its own order.
+
 `t1bd`'s downgrade drops `tbd_link` and `tbd_entry`, and every entry on the
 TBD page with them. Nothing else is touched.
 
@@ -129,12 +134,18 @@ author's links and remark with them. The authors themselves, and the
 sources naming them, are untouched.
 
 `a2lternatives`'s downgrade drops `recipe_line_alternative`, and every
-recipe line's alternatives with it. The lines themselves, and the `alternatives`
-lists inside recipe templates' JSONB bodies, are untouched; the older code
-ignores the latter.
+recipe line's alternatives with it. The lines themselves are untouched.
 
 `r2eheat`'s downgrade drops `recipe.reheating_notes`, and every recipe's
 加熱 text with it. Nothing else is touched.
+
+`d2ifficulty`'s downgrade drops `recipe.difficulty_id` and then
+`recipe_difficulty`: every recipe's 難易度 and every value 設定 held for it.
+Nothing else is touched.
+
+`t3emplates`'s upgrade drops `recipe_template`, and every recipe template in
+it - the feature was removed, and there were none. Its downgrade recreates
+the table empty, exactly as `t2emplates` made it; no template comes back.
 
 **`d1ishes` restructures every recipe**, so its two directions are worth
 reading before either runs.
@@ -233,7 +244,10 @@ they ever do not, believe the box.
 | An ingredient's homemade version | `h2omemade` — no new table |
 | An author's links and remark | `a2uthor` — forty-five tables |
 | Recipe line alternatives | `a2lternatives` — forty-six tables |
-| A recipe's 加熱 notes | `r2eheat` — no new table, the current head |
+| A recipe's 加熱 notes | `r2eheat` — no new table |
+| 難易度, a recipe's difficulty | `d2ifficulty` — forty-seven tables |
+| Recipe templates removed | `t3emplates` — forty-six tables |
+| 常用食材 groups | `c3ommon` — forty-seven tables, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

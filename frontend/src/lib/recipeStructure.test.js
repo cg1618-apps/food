@@ -1,5 +1,5 @@
-// A recipe's structure through the form and back: what a template body or a
-// recipe response holds comes out as the payload that would save it again.
+// A recipe's structure through the form and back: what a recipe response
+// holds comes out as the payload that would save it again.
 import { describe, expect, it } from 'vitest'
 
 import { emptyStructure, structureFromResponse, structurePayload } from './recipeStructure'

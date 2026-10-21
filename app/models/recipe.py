@@ -9,7 +9,7 @@ shape with each other more than with their owners.
 Two directions of deletion meet here and they differ on purpose (the table is
 in `docs/data-model.md`): what a recipe OWNS cascades with it; what it NAMES -
 its dish, an ingredient, a sub-dish (on a line or on a line's
-alternative), a status, a source platform, an author, a
+alternative), a status, a difficulty, a source platform, an author, a
 method, a piece of equipment, a 材料分組 or 步驟分組 value - is RESTRICT, so
 nothing in use disappears from under a recipe.
 
@@ -66,6 +66,13 @@ class Recipe(Base):
     status_id = Column(
         Integer, ForeignKey("recipe_status.id", ondelete="RESTRICT"), nullable=False, index=True
     )
+    # 難易度: optional, as a dish's course is - a recipe need not be rated.
+    difficulty_id = Column(
+        Integer,
+        ForeignKey("recipe_difficulty.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
 
     # Free text: "2-3 人", "1hr", "30m". Nothing computes with either.
     servings = Column(String, nullable=True)
@@ -81,6 +88,7 @@ class Recipe(Base):
 
     dish = relationship("Dish", back_populates="recipes")
     status = relationship("RecipeStatus")
+    difficulty = relationship("RecipeDifficulty")
 
     sources = relationship(
         "RecipeSource",

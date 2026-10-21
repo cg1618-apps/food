@@ -1,14 +1,14 @@
-"""One factory, nine vocabularies. Reads are public; writes sit behind Access.
+"""One factory, ten vocabularies. Reads are public; writes sit behind Access.
 
 A delete of a value still in use is refused here with a 409 that carries the
 count, before the database is asked. The RESTRICT foreign keys are the
 backstop, and through the IntegrityError handler they would only be able to
 say "something still refers to this".
 
-Eight vocabularies are names and nothing else. An author also has a remark
+Nine vocabularies are names and nothing else. An author also has a remark
 and links, so `build` takes a `Shape`: the schemas a vocabulary is read and
 written with, how a write is applied, and what its list loads alongside. The
-default is the plain one, and only authors pass another - so the other eight
+default is the plain one, and only authors pass another - so the other nine
 still refuse `notes` and `links` as extra fields.
 """
 
@@ -28,6 +28,7 @@ from app.models import (
     Equipment,
     LineGroup,
     RecipeCourse,
+    RecipeDifficulty,
     RecipeStatus,
     Region,
     SourcePlatform,
@@ -140,6 +141,10 @@ course_router, course_edit = build(RecipeCourse, "recipe-courses", "Recipe cours
 # filters offer them in.
 region_router, region_edit = build(Region, "regions", "Regions", "region")
 status_router, status_edit = build(RecipeStatus, "recipe-statuses", "Recipe statuses", "status")
+# Hand-ordered like statuses; optional on a recipe.
+difficulty_router, difficulty_edit = build(
+    RecipeDifficulty, "recipe-difficulties", "Recipe difficulties", "difficulty"
+)
 platform_router, platform_edit = build(
     SourcePlatform, "source-platforms", "Source platforms", "source platform"
 )
@@ -172,6 +177,8 @@ ROUTERS = [
     region_edit,
     status_router,
     status_edit,
+    difficulty_router,
+    difficulty_edit,
     platform_router,
     platform_edit,
     method_router,

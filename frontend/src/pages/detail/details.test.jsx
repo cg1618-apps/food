@@ -411,34 +411,11 @@ describe('the recipe page', () => {
     expect(within(sources).getByText('家常菜')).toBeTruthy()
   })
 
-  it('saves itself as a template under the name asked for, then links to it', async () => {
-    handler = ({ url, method, body }) => {
-      if (method === 'GET' && url === '/api/recipes/5') return json(RECIPE)
-      if (method === 'POST' && body.name === '麻婆豆腐') {
-        return json({ detail: 'Another template already has that name.' }, 422)
-      }
-      if (method === 'POST') return json({ id: 21, name: body.name, sort_order: 0, body: {}, dropped: 0 }, 201)
-      return null
-    }
+  it('offers 編輯 and 刪除, and no 存成範本 - recipe templates are gone', async () => {
     renderAt('/recipes/5')
-    fireEvent.click(await screen.findByRole('button', { name: '存成範本' }))
-    const dialog = screen.getByRole('dialog', { name: '存成範本' })
-    // The recipe's name to start with; a name another template has is
-    // refused, said, and the dialog stays.
-    const box = within(dialog).getByRole('textbox', { name: '範本名稱' })
-    expect(box.value).toBe('麻婆豆腐')
-    fireEvent.click(within(dialog).getByRole('button', { name: '存成範本' }))
-    expect((await within(dialog).findByRole('alert')).textContent).toBe('Another template already has that name.')
-
-    fireEvent.change(box, { target: { value: '麻婆系' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: '存成範本' }))
-    const link = await within(dialog).findByRole('link', { name: '麻婆系' })
-    expect(link.getAttribute('href')).toBe('/edit/templates/21')
-    expect(within(dialog).getByRole('link', { name: '開啟範本' }).getAttribute('href')).toBe('/edit/templates/21')
-    expect(calls.filter((c) => c.method === 'POST')).toEqual([
-      { url: '/api/edit/recipe-templates/from-recipe/5', method: 'POST', body: { name: '麻婆豆腐' } },
-      { url: '/api/edit/recipe-templates/from-recipe/5', method: 'POST', body: { name: '麻婆系' } },
-    ])
+    expect((await screen.findByRole('link', { name: '編輯' })).getAttribute('href')).toBe('/edit/recipes/5')
+    expect(screen.getByRole('button', { name: '刪除' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '存成範本' })).toBeNull()
   })
 
   it('changes the status in place with a PATCH of status alone', async () => {
@@ -484,6 +461,19 @@ describe('the recipe page', () => {
     fireEvent.click(await within(group).findByRole('button', { name: '常煮' }))
     expect((await screen.findByRole('alert')).textContent).toContain('狀態沒有改成')
     expect(within(group).getByRole('button', { name: '想試' }).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('shows the difficulty first in the meta line, and nothing for it when there is none', async () => {
+    const rated = { ...RECIPE, difficulty: { id: 3, display_name: '困難' } }
+    handler = ({ url, method }) => (method === 'GET' && url === '/api/recipes/5' ? json(rated) : null)
+    renderAt('/recipes/5')
+    expect(await screen.findByText('難易度 困難 · 份量 2 人 · 時間 20 分鐘', { exact: false })).toBeTruthy()
+
+    cleanup()
+    handler = ({ url, method }) => (method === 'GET' && url === '/api/recipes/5' ? json(RECIPE) : null)
+    renderAt('/recipes/5')
+    await screen.findByRole('heading', { level: 1, name: '麻婆豆腐' })
+    expect(screen.queryByText(/難易度/)).toBeNull()
   })
 
   it('says a missing recipe is missing', async () => {
