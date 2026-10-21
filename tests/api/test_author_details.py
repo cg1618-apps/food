@@ -1,7 +1,7 @@
 """An author's links and remark (備註).
 
-An author is one of the nine factory vocabularies, and the parametrised suite
-in test_vocabularies.py covers what it shares with the other eight. What only
+An author is one of the ten factory vocabularies, and the parametrised suite
+in test_vocabularies.py covers what it shares with the other nine. What only
 an author has is here: `notes`, and `links` in `author_link`, whose rules are
 `tbd_link`'s.
 
@@ -198,7 +198,7 @@ def test_deleting_an_unused_author_takes_its_links(client, db):
 
 @pytest.mark.parametrize("field, value", [("notes", "x"), ("links", [])])
 def test_the_other_vocabularies_do_not_take_notes_or_links(client, field, value):
-    """The other eight keep their own shape. The author is the mirror: the
+    """The other nine keep their own shape. The author is the mirror: the
     same field on the same factory's route is accepted there."""
     assert client.post("/api/edit/equipment", json={"name_cn": "鍋", field: value}).status_code == 422
     assert client.post(EDIT_URL, json={"name_cn": "鍋", field: value}).status_code == 201

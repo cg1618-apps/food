@@ -1,20 +1,19 @@
 // Frontend: 材料 - a recipe's ingredient lines in their groups, as the recipe
-// form and the template form both edit them.
+// form edits them.
 //
 // Above the lines sit the 常用 chips, one per 設定's 常用食材, in its order
-// (CommonIngredientChips). A tap appends a line naming that ingredient to the
-// ungrouped lines and puts the cursor in its 份量, so the amount is typed
-// next; a chip whose ingredient is already on a line is marked used and still
+// and under its groups' headings (CommonIngredientChips). A tap appends a
+// line naming that ingredient to the ungrouped lines - a 常用食材 group is
+// no 材料分組 - and puts the cursor in its 份量, so the amount is typed next;
+// a chip whose ingredient is already on a line is marked used and still
 // adds. No chips, no row.
 //
 // The lines sit in groups (GroupedRowEditor): the ungrouped ones first, then
 // a box per group, picked from 設定's 材料分組 or named here only. A line's
 // ingredient or dish is picked with the Typeahead, searching both libraries.
-// With `allowNew` - the recipe form - 「新增」 makes the line name an
-// ingredient that does not exist yet, shown with 待補 until the save creates
-// it as a stub, and 「新增料理」 a dish, a 醬料, made by the save the same way.
-// Without it - the template form, which never creates rows - only what is
-// already in the libraries is offered.
+// 「新增」 makes the line name an ingredient that does not exist yet, shown
+// with 待補 until the save creates it as a stub, and 「新增料理」 a dish, a
+// 醬料, made by the save the same way.
 //
 // Under each line, 「＋替代」 adds an alternative (或): something that may
 // stand in for the line's target, picked with the same Typeahead and the same
@@ -26,7 +25,6 @@
 //   setValue       next value, or (previous) => next: the typed-but-unpicked
 //                  text of a line is set from the latest state, because a
 //                  pick calls onSelect and then reports '' in the same tick
-//   allowNew       offer 新增 / 新增料理 (default true)
 //   excludeDishes  dish ids never offered - a recipe's own dish
 import { useEffect, useRef, useState } from 'react'
 
@@ -40,7 +38,7 @@ import GroupedRowEditor from './GroupedRowEditor'
 import Typeahead, { Picked } from './Typeahead'
 
 /** A line's or an alternative's target: the pick, or the search for one. */
-function TargetPicker({ row, label, allowNew, excludeDishes, kindWord, onPick, onClear, onQueryChange }) {
+function TargetPicker({ row, label, excludeDishes, kindWord, onPick, onClear, onQueryChange }) {
   if (row.target) {
     return (
       <Picked
@@ -59,8 +57,8 @@ function TargetPicker({ row, label, allowNew, excludeDishes, kindWord, onPick, o
   }
   return (
     <Typeahead
-      allowNew={allowNew}
-      allowNewDish={allowNew}
+      allowNew
+      allowNewDish
       label={label}
       placeholder="食材或料理（醬料）…"
       exclude={{ dish: excludeDishes }}
@@ -70,7 +68,7 @@ function TargetPicker({ row, label, allowNew, excludeDishes, kindWord, onPick, o
   )
 }
 
-export default function RecipeLinesSection({ value, setValue, allowNew = true, excludeDishes = [] }) {
+export default function RecipeLinesSection({ value, setValue, excludeDishes = [] }) {
   const lineGroups = useApiQuery(endpoints.lineGroups.list())
   const common = useApiQuery(endpoints.commonIngredients.list())
   const fixed = useFixedVocabularies()
@@ -119,7 +117,7 @@ export default function RecipeLinesSection({ value, setValue, allowNew = true, e
   return (
     <Section title="材料">
       <CommonIngredientChips
-        ingredients={(common.data ?? []).map((row) => row.ingredient)}
+        common={common.data}
         usedIds={usedIngredients}
         onAdd={addCommonLine}
       />
@@ -139,7 +137,6 @@ export default function RecipeLinesSection({ value, setValue, allowNew = true, e
                 <TargetPicker
                   row={line}
                   label={`材料 ${number}`}
-                  allowNew={allowNew}
                   excludeDishes={excludeDishes}
                   kindWord={kindWord}
                   onPick={(target) => update({ target })}
@@ -189,7 +186,6 @@ export default function RecipeLinesSection({ value, setValue, allowNew = true, e
                       <TargetPicker
                         row={alternative}
                         label={name}
-                        allowNew={allowNew}
                         excludeDishes={excludeDishes}
                         kindWord={kindWord}
                         onPick={(target) => updateAlternative(line._key, alternative._key, { target })}

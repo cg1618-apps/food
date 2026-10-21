@@ -261,13 +261,9 @@ The target wins every collision:
   the source has none, and the link is in the fingerprint;
 - names, category, parent, rating and `needs_detail` are the target's and are
   not touched;
-- the source's 常用食材 entry moves to the target in the same place, unless
-  the target is listed already, when it is dropped. It is not in the preview
-  or the fingerprint: it moves no content;
-- every recipe template line and alternative naming the source names the
-  target, a redundant alternative dropped as above. Not in the preview or the
-  fingerprint either: a template is a starting point, not
-  content the merge moves.
+- the source's 常用食材 entry moves to the target in the same group and
+  the same place, unless the target is listed already, when it is dropped. It is not in the preview
+  or the fingerprint: it moves no content.
 
 Refused with 422: into itself, into one of its own descendants, and an `into`
 that names nothing. A missing source — the id in the URL — is 404. The body
@@ -459,7 +455,7 @@ How other rows point at these on the wire:
 **`GET /api/recipes`** is the library: every recipe of every dish, a bare
 array of summaries sorted by display name. A summary is `id`, `display_name`,
 `name` (its own, or null), `dish` (a `DishRef`), `status`
-(`{id, display_name}`), `course` (the dish's, `{id, display_name}` or null),
+(`{id, display_name}`), `difficulty` (`{id, display_name}` or null), `course` (the dish's, `{id, display_name}` or null),
 `methods` (`{id, display_name}` list), `authors` (`{id, display_name}`, the
 distinct authors of its sources, in source order, skipping sources with
 none), `time`, `written_up` and `cover` (the recipe's own first gallery
@@ -472,7 +468,7 @@ Query parameters:
   literally. Each arm is a subquery, so a recipe matching twice comes back
   once;
 - `dish_id`, `kind`, `course_id`, `region_id`, `label_id`, `status_id`,
-  `method_id`, `equipment_id`, `author_id`, `ingredient_id` - each may repeat,
+  `difficulty_id`, `method_id`, `equipment_id`, `author_id`, `ingredient_id` - each may repeat,
   and a repeated parameter means **any of** its values
   (`?status_id=2&status_id=3`). Different parameters narrow each other.
   `kind`, `course_id`, `region_id` and `label_id` are the dish's and filter
@@ -486,7 +482,8 @@ Query parameters:
 **`PUT /api/edit/recipes/{id}/images`** replaces the recipe's own gallery
 exactly as an ingredient's does, and answers the full recipe.
 
-**The full recipe** is `id`, `display_name`, `name`, `status`, `servings`,
+**The full recipe** is `id`, `display_name`, `name`, `status`, `difficulty`
+(難易度, `{id, display_name}` or null), `servings`,
 `time`, `storage_notes`, `reheating_notes` (加熱, how to reheat what it
 makes), `notes`, `created_at`, `updated_at`, and:
 
@@ -525,7 +522,7 @@ only `step`-kind steps, through every group, so an optional step or a note
 takes a place in the order and no number.
 
 **`POST` takes the whole recipe; `PATCH` takes any subset.** The fields are
-`dish_id` or `new_dish`, `name`, `status_id`, `servings`, `time`,
+`dish_id` or `new_dish`, `name`, `status_id`, `difficulty_id`, `servings`, `time`,
 `storage_notes`, `reheating_notes`, `notes`, and the lists `sources`, `lines`, `line_groups`,
 `steps`, `step_groups`, `method_ids` and `equipment_ids`. The fields that live
 on the dish - name slots, `kind`, `course_id`, `serves_as_ids`, `label_ids`,
@@ -542,7 +539,9 @@ recipe to that dish and neither leaves it where it is; an explicit null
 
 When `status_id` is left out on create, the recipe gets the first status in
 sort order (the oldest among equals); with no status at all to give, the create
-is a 422 saying so. On `PATCH` each list sent replaces the stored list and each
+is a 422 saying so. `difficulty_id` is optional and has no default: left
+out or null on create the recipe has none, and on `PATCH` an explicit null
+clears it. On `PATCH` each list sent replaces the stored list and each
 one absent is left alone. Sources, lines, steps and groups take their order
 from the list - a request naming `sort_order` or `position` is a 422 - and
 re-sending the same lines, steps and groups succeeds.
@@ -608,7 +607,8 @@ author, not a stub an earlier line asked for:
 - a group naming both a value and a name, or neither; the same group twice in
   one recipe; on `PATCH`, one half of a lines or steps pair without the other;
 - creating a recipe without `status_id` when there is no status at all;
-- **an id inside the body that names nothing** - `dish_id`, `status_id`, a
+- **an id inside the body that names nothing** - `dish_id`, `status_id`,
+  `difficulty_id`, a
   source's `platform_id` or `author_id`, either id list, a group's
   `line_group_id` or `step_group_id`, `ingredient_id` or `sub_dish_id` in a
   line or an alternative. The detail names the id. The URL's own recipe missing is 404;
@@ -642,86 +642,6 @@ line names a dish, never a recipe, so no line depends on it. **The dish
 stays**, even when this was its last recipe - deleting a dish is its own
 decision. Method and equipment links and gallery rows go with the recipe
 uncounted; the images themselves stay.
-
-## Recipe templates
-
-| Route | |
-| --- | --- |
-| `GET /api/recipe-templates` | every template, in order, with counts |
-| `GET /api/recipe-templates/{id}` | the body, resolved, and `dropped` |
-| `POST /api/edit/recipe-templates` | creates one, at the end; 201 |
-| `POST /api/edit/recipe-templates/from-recipe/{recipe_id}` | creates one from that recipe; 201 |
-| `PATCH /api/edit/recipe-templates/{id}` | |
-| `DELETE /api/edit/recipe-templates/{id}` | 204; nothing refers to a template |
-| `PUT /api/edit/recipe-templates/order` | saves the order of every template |
-
-A template is a named skeleton a new recipe starts from: servings, time, the
-lines and steps in their groups (steps with their kinds), methods and
-equipment. No dish, name, status, sources, notes or pictures.
-
-**The list** is light - `{id, name, sort_order, line_count, step_count}` - in
-`sort_order`, ties by name. The counts are of the body as stored, grouped rows
-included.
-
-**`GET /api/recipe-templates/{id}`** answers the body in a recipe response's
-shapes, so a form reads a template with the code that reads a recipe:
-
-```json
-{"id": 11, "name": "基本照燒", "sort_order": 0, "dropped": 1,
- "body": {"servings": "2 人份", "time": null,
-          "lines": [{"ingredient": {"id": 1, "display_name": "薑", "needs_detail": false},
-                     "sub_dish": null, "amount": "1 片", "note": null, "is_optional": false,
-                     "alternatives": [{"ingredient": {"id": 4, "display_name": "薑粉", "needs_detail": false},
-                                       "sub_dish": null, "amount": null, "note": null}]}],
-          "line_groups": [{"group": {"id": 5, "display_name": "主料"}, "name": null,
-                           "display_name": "主料", "lines": []}],
-          "steps": [{"kind": "step", "body": "煎皮"}],
-          "step_groups": [{"group": null, "name": "收尾", "display_name": "收尾",
-                           "steps": [{"kind": "note", "body": "別燒焦"}]}],
-          "methods": [{"id": 3, "display_name": "煎"}], "equipment": []},
- "created_at": "…", "updated_at": "…"}
-```
-
-Lines and steps carry no `id` or `position`: they are not rows. `POST` and
-`PATCH` answer this same shape.
-
-**What the body names can be deleted from under it** - nothing in the
-database ties a template to an ingredient, a dish, a method, a piece of
-equipment or a group value. Reading a template leaves out each reference that
-no longer exists and counts it in `dropped`: a line whose ingredient or dish
-is gone (its alternatives go with it, uncounted), an alternative whose
-ingredient or dish is gone, a method or a piece of equipment that is gone, and a group whose
-材料分組 / 步驟分組 value is gone - whose rows then join the end of the
-ungrouped ones, as removing a group in the form does. The stored body is left
-alone; the next save writes what the form then holds.
-
-**The `POST` body is `{"name": …, "body": {…}}`**, and `PATCH` sends either
-or both. `body` takes the recipe payload's structural fields -
-`servings`, `time`, `lines` with `line_groups`, `steps` with `step_groups`,
-`method_ids`, `equipment_ids` - each optional, validated by the recipe's own
-input models, and replaces the whole body when sent. Refused with 422, each
-changing nothing:
-
-- a blank name, or a name another template has, whatever its case;
-- a line or an alternative naming `new_ingredient` or `new_dish` - **a
-  template never creates rows**; pick an existing ingredient or dish;
-- an id naming nothing - an ingredient, a dish, a method, a piece of
-  equipment, a group value;
-- a line naming none or several targets, a group naming both or neither of a
-  value and a name, or the same group twice;
-- a field a template does not carry (`dish_id`, `sources`, `notes` …), and
-  `null` for `name` or `body` on a `PATCH`.
-
-A one-off group name that is a 設定 value's name is stored as that value, as
-on a recipe.
-
-**`POST /api/edit/recipe-templates/from-recipe/{recipe_id}`** takes `{"name":
-…}` and makes a template of that recipe's structure - its lines with their
-alternatives and its steps in their groups, the steps' kinds, its methods, equipment, servings and time.
-A missing recipe is 404; a taken name is 422.
-
-**The order `PUT` body is `{"ids": [11, 12, …]}`** and must hold exactly the
-current templates, each once, as TBD's does; the answer is the list.
 
 ## Kitchen notes
 
@@ -772,13 +692,14 @@ answers the full note.
 
 ## Vocabularies
 
-Nine managed vocabularies share one shape, so one description covers them:
+Ten managed vocabularies share one shape, so one description covers them:
 
 | Route | |
 | --- | --- |
 | `GET /api/recipe-courses` | 類別, filing a dish |
 | `GET /api/regions` | 地區, where a dish comes from |
 | `GET /api/recipe-statuses` | |
+| `GET /api/recipe-difficulties` | 難易度, optional on a recipe |
 | `GET /api/source-platforms` | |
 | `GET /api/cooking-methods` | |
 | `GET /api/equipment` | |
@@ -804,7 +725,7 @@ given `https://`, any scheme but `http` or `https` is a 422 (so
 `javascript:` never reaches a page), a blank url is a 422, a blank label is
 null, and a link has no other field. On a `PATCH`, `links` replaces every
 link in the order sent when it is sent and leaves them alone when it is
-not; `[]` clears them and an explicit null is a 422. The other eight
+not; `[]` clears them and an explicit null is a 422. The other nine
 vocabularies neither answer with these fields nor accept them - sending
 one is a 422. Deleting an author takes its links with it; the 409 above
 counts only sources.
@@ -813,7 +734,7 @@ counts only sources.
 before the database is asked; the `RESTRICT` foreign key is the backstop. The
 count is the number of `RESTRICT` references: for a course, the dishes filed
 in it (a dish that only serves as that course does not count, and its link
-goes with the course); for a region, the dishes from it; for a status, the recipes in it; for a source platform,
+goes with the course); for a region, the dishes from it; for a status, the recipes in it; for a difficulty, the recipes rated with it; for a source platform,
 the sources naming it, so one recipe with two sources from one book counts
 twice; for an author, likewise the sources naming them; for a cooking method,
 ingredient heating rows plus recipes using it; for equipment, recipes using
@@ -827,7 +748,7 @@ renders, as `{value, label}` pairs under `preservation_methods`,
 `step_kinds` (步驟, 可省略, 備註) and `meal_slots` (`breakfast` 早, `lunch`
 中, `afternoon` 下午, `dinner` 晚),
 so no component keeps its own copy. These lists are constants in the code and
-are not editable through the API; recipe statuses and source platforms are not
+are not editable through the API; recipe statuses, difficulties and source platforms are not
 among them — they are managed vocabularies, above.
 
 ## Images
@@ -889,27 +810,47 @@ exist is a 404, not the application shell: the bundle's catch-all refuses
 
 | Route | |
 | --- | --- |
-| `GET /api/common-ingredients` | the list, in order |
-| `PUT /api/edit/common-ingredients` | replaces the whole list |
+| `GET /api/common-ingredients` | the structure, in order |
+| `PUT /api/edit/common-ingredients` | replaces the whole structure |
 
-The list is the ingredients the recipe form offers as chips:
+The structure is the ingredients the recipe form offers as chips: 未分組
+(the ungrouped chips) first, then the owner's named groups, each in order:
 
 ```json
-[{"ingredient": {"id": 3, "display_name": "蒜", "needs_detail": false}, "sort_order": 0},
- {"ingredient": {"id": 8, "display_name": "薑", "needs_detail": true}, "sort_order": 1}]
+{"ungrouped": [{"id": 3, "display_name": "蒜", "needs_detail": false}],
+ "groups": [{"id": 5, "name": "調味料",
+             "ingredients": [{"id": 8, "display_name": "薑", "needs_detail": true}]}]}
 ```
 
-`ingredient` is the shape a recipe line embeds (`IngredientRef`).
+Each chip is the shape a recipe line embeds (`IngredientRef`). A group may
+be empty. Nothing listed is `{"ungrouped": [], "groups": []}`.
 
-**The `PUT` body is `{"ingredient_ids": [3, 8]}`** and the list becomes
-exactly that, numbered 0, 1, 2 … in the order sent; `[]` empties it. Adding,
-removing and reordering are each this one call. The answer is the list, as
-the `GET` gives it. An id that names no ingredient is 422 naming the id, the
-same id twice is 422, and an unknown field in the body is 422; each changes
-nothing.
+**The `PUT` body is the same structure with ids in place of chips**:
+
+```json
+{"ungrouped": [3],
+ "groups": [{"id": 5, "name": "辛香料", "ingredient_ids": [8]},
+            {"name": "肉", "ingredient_ids": []}]}
+```
+
+and the structure becomes exactly that: 未分組's chips, each group's chips and
+the groups themselves numbered 0, 1, 2 … in the order sent. A group sent
+with an `id` is that group, renamed and moved; one without is created; a
+stored group not sent is deleted, and its chips are wherever the body puts
+them (設定 sends them at the end of 未分組). Adding, removing and moving a
+chip, and adding, renaming, reordering and deleting a group, are each this
+one call. A name is stored trimmed. The answer is the structure, as the
+`GET` gives it.
+
+Refused with 422, each changing nothing: an ingredient named twice anywhere
+(in two groups, or in a group and 未分組), an id naming no ingredient or no
+group (the message names the id), one group id sent twice, a blank group
+name, two groups whose names differ only in case or surrounding spaces, and
+an unknown field anywhere in the body - the old flat `{"ingredient_ids"}`
+body among them.
 
 Deleting an ingredient takes it off the list (`CASCADE`); merging one moves
-its entry to the target (see Ingredients).
+its entry to the target, group and place with it (see Ingredients).
 
 ## Schedule
 

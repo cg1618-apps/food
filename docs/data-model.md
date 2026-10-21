@@ -1,15 +1,16 @@
 # Data model
 
-What the database holds today: forty-six tables, at revision `r2eheat`.
+What the database holds today: forty-seven tables, at revision `c3ommon`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
-`ingredient_preservation`, `label`, `ingredient_label`), the nine managed
+`ingredient_preservation`, `label`, `ingredient_label`), the ten managed
 vocabularies and an author's links (`author_link`), `ingredient_heating`, `ingredient_link`, the image library and
 its four galleries (`image`, `ingredient_image`, `dish_image`, `recipe_image`,
 `kitchen_note_image`), the dish family's four (`dish`, `dish_alias`,
 `dish_serves_as`, `dish_label`), the recipe family's nine (`recipe`,
 `recipe_method`, `recipe_equipment`, `recipe_source`, `recipe_line_group`,
-`recipe_line`, `recipe_line_alternative`, `recipe_step_group`, `recipe_step`), `recipe_template`, kitchen notes' two (`kitchen_note`, `kitchen_note_label`),
-`common_ingredient`, the 常用食材 list, TBD's two (`tbd_entry`,
+`recipe_line`, `recipe_line_alternative`, `recipe_step_group`, `recipe_step`), kitchen notes' two (`kitchen_note`, `kitchen_note_label`),
+`common_ingredient` and `common_ingredient_group`, 常用食材 and its
+groups, TBD's two (`tbd_entry`,
 `tbd_link`), 加熱's `heating_note`, and the schedule's three (`schedule_day`, `schedule_meal`,
 `schedule_meal_item`).
 
@@ -208,16 +209,26 @@ A reference link — where the advice came from. `url` is required and the API
 accepts `http` and `https` only, because a `javascript:` URL rendered as a link
 is script execution. `title` is optional; rows are ordered by `sort_order`.
 
-## `common_ingredient`
+## `common_ingredient` and `common_ingredient_group`
 
 常用食材: the ingredients the recipe form offers as one-tap chips above its
-材料, in the owner's order. `ingredient_id` is the primary key - an
-ingredient is listed once or not at all - and a foreign key to `ingredient`
-with `ON DELETE CASCADE`, so a deleted ingredient leaves the list.
-`sort_order` (NOT NULL) is the chip's place; the API writes the whole list at
-once and numbers it 0, 1, 2 … in the order sent. A merge moves the source's
-row to the target in the same place, unless the target is listed already,
-when the source's row goes with the source.
+材料, ungrouped (未分組) or in the owner's named groups, in the owner's order.
+
+`common_ingredient_group` is one group: a required `name` (CHECK
+`btrim(name) <> ''`, and unique in any case through the expression index
+`uq_common_ingredient_group_name` on `lower(name)`) and a NOT NULL
+`sort_order`, its place among the groups.
+
+`common_ingredient` is one chip. `ingredient_id` is the primary key - an
+ingredient is listed once or not at all, in one group or across them - and a
+foreign key to `ingredient` with `ON DELETE CASCADE`, so a deleted
+ingredient leaves the list. `group_id` is nullable and indexed, a foreign key
+to `common_ingredient_group` with `ON DELETE SET NULL`: null is 未分組, and a
+deleted group leaves its chips, ungrouped. `sort_order` (NOT NULL) is the
+chip's place within its group, or within 未分組. The API writes the whole
+structure at once and numbers each list 0, 1, 2 … in the order sent. A merge
+moves the source's row to the target, group and place with it, unless the
+target is listed already, when the source's row goes with the source.
 
 ## `tbd_entry` and `tbd_link`
 
@@ -254,7 +265,8 @@ NULL `sort_order` - the owner's order on the page, as `tbd_entry`'s - and
 
 ## The managed vocabularies
 
-`recipe_course` (類別), `region` (地區), `recipe_status`, `source_platform`,
+`recipe_course` (類別), `region` (地區), `recipe_status`, `recipe_difficulty`
+(難易度), `source_platform`,
 `cooking_method`, `equipment`, `author`, `line_group` (材料分組) and
 `step_group` (步驟分組) share one shape, declared once
 in `VocabularyMixin` (`app/models/vocabulary.py`): `name_cn`, `name_en`,
@@ -296,6 +308,7 @@ them:**
 | `recipe_course` | 主食, 配菜, 湯, 小吃點心, 甜點, 飲料, 醬料 |
 | `region` | 台式, 中式, 日式, 韓式, 泰式, 西式 (`d1ishes`), hand-ordered |
 | `recipe_status` | 想試, 可煮, 常煮 (`v2ocabulary`) |
+| `recipe_difficulty` | nothing - `d2ifficulty` leaves the scale (簡單, 普通, 困難 …) to the owner, since a recipe need not have one |
 | `source_platform` | YouTube, Shorts, 網站, 書, 其他 (`v2ocabulary`) |
 | `line_group` | 主料, 配料, 調味料 (`g1roups`) |
 | `step_group` | 備料, 烹飪, 醬汁 (`g1roups`) |
@@ -338,6 +351,7 @@ things that would stop it being deleted:
 | `recipe_course` | dishes filed in it (`dish.course_id`); serves-as links `CASCADE` and do not count |
 | `region` | dishes from it (`dish.region_id`) |
 | `recipe_status` | recipes in it (`recipe.status_id`) |
+| `recipe_difficulty` | recipes rated with it (`recipe.difficulty_id`); a recipe with none counts for nothing |
 | `source_platform` | sources naming it (`recipe_source.platform_id`) — two sources from one book count twice |
 | `cooking_method` | `ingredient_heating` rows plus `recipe_method` links |
 | `equipment` | `recipe_equipment` links |
@@ -417,6 +431,7 @@ One specific way of making a dish - 照燒雞腿排 as one author makes it.
 | `dish_id` | **required**, → `dish`, `RESTRICT`, indexed |
 | `name` | optional - what tells this recipe from its dish's others |
 | `status_id` | **required**, → `recipe_status`, `RESTRICT`. No server default: a recipe created without one is given the first status in sort order by the write path |
+| `difficulty_id` | optional, → `recipe_difficulty` (難易度), `RESTRICT`, indexed. No default: a recipe saved without one has none |
 | `servings`, `time` | free text — `2-3 人`, `1hr` |
 | `storage_notes`, `reheating_notes`, `notes` | free text - 保存, 加熱 (how to reheat what the recipe makes, `r2eheat`) and 筆記 |
 | `created_at`, `updated_at` | |
@@ -532,7 +547,7 @@ reason.
 
 **No alternative names its line's own target, and no two of one line name the
 same thing.** Nothing in the schema says so; the write path drops such an
-alternative on every save of a recipe or a template, and an ingredient merge
+alternative on every save of a recipe, and an ingredient merge
 drops the ones it would create.
 
 ## `recipe_step`
@@ -548,43 +563,6 @@ against `STEP_KINDS` in `app/constants.py` rather than by a Postgres enum:
 or `note` (備註, a note among the steps). Only a `step` is numbered, so a
 step's number is not its position plus one; it is counted by whoever draws
 the steps and never stored (`s1tepkinds`).
-
-## `recipe_template`
-
-A named skeleton a new recipe starts from: a NOT NULL `name`, refused when
-blank (`ck_recipe_template_has_a_name`) and unique whatever its case
-(`uq_recipe_template_name`, on `lower(name)`); a NOT NULL `sort_order`, the
-owner's order on 設定 and in the new-recipe chooser - a new template is given
-the end, and a reorder renumbers every template 0, 1, 2 …, ties falling back
-to the name; a NOT NULL JSONB `body`; and `created_at` / `updated_at`.
-
-`body` is one document in the recipe payload's own shapes, always stored in
-this canonical form:
-
-```json
-{"servings": null, "time": null,
- "lines": [{"ingredient_id": 1, "sub_dish_id": null, "amount": null, "note": null, "is_optional": false,
-            "alternatives": [{"ingredient_id": 2, "sub_dish_id": null, "amount": null, "note": null}]}],
- "line_groups": [{"line_group_id": 5, "name": null, "lines": []}],
- "steps": [{"body": "…", "kind": "step"}],
- "step_groups": [{"step_group_id": null, "name": "收尾", "steps": []}],
- "method_ids": [], "equipment_ids": []}
-```
-
-A line and an alternative each name exactly one of an ingredient and a dish,
-and a group exactly one of a 設定 value and a one-off name, as a recipe's do;
-a template never names an ingredient or a dish that does not exist yet. A body
-stored before alternatives existed has no `alternatives` key on its lines and
-reads as having none.
-
-**Nothing in the body is a foreign key**, and nothing references the table.
-An ingredient, a dish, a method, a piece of equipment or a group value a body
-names can be deleted without a refusal; the API leaves the missing reference
-out when it reads the template, and counts it - a line whose target is gone
-takes its alternatives with it. An ingredient merge rewrites the merged
-ingredient's id to the target's in every body, lines and alternatives alike,
-dropping an alternative that then repeats its line or a sibling. Why JSONB rather than
-tables mirroring the recipe's is in `notes/decisions.md`.
 
 ## `schedule_day`, `schedule_meal` and `schedule_meal_item`
 
@@ -680,6 +658,7 @@ shared.
 | --- | --- |
 | ingredient → its aliases, preservation rows, heating rows, links, label links, gallery rows | `CASCADE` |
 | ingredient → its 常用食材 row | `CASCADE` |
+| 常用食材 group → its chips | `SET NULL` |
 | ingredient → its children | `RESTRICT` |
 | ingredient → the recipe lines and line alternatives that name it | `RESTRICT` |
 | category → its ingredients and child categories | `RESTRICT` |
@@ -694,13 +673,12 @@ shared.
 | schedule meal → its items | `CASCADE` |
 | dish → the meal items on the schedule that name it | `RESTRICT` |
 | recipe → the meal items on the schedule that name it | `SET NULL` — the item keeps its dish |
-| recipe template → what its body names | none — not a foreign key; a missing reference is left out when the template is read |
 | line or step group → the lines or steps in it | `SET NULL` — they become ungrouped |
 | kitchen note → its label links and gallery rows | `CASCADE` |
 | TBD entry → its links | `CASCADE` |
 | author → its links | `CASCADE` |
 | course or region → the dishes filed in it | `RESTRICT` |
-| status → the recipes in it; source platform or author → the sources naming it | `RESTRICT` |
+| status or difficulty → the recipes in it; source platform or author → the sources naming it | `RESTRICT` |
 | course → its serves-as links; label → any link | `CASCADE` |
 | cooking method → the heating rows and recipe links that use it | `RESTRICT` |
 | equipment → the recipe links that use it | `RESTRICT` |

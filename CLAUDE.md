@@ -39,9 +39,8 @@ reference work.
 
 ## Status
 
-**Modules 1 and 2 are built, with dishes, recipe templates, kitchen notes,
-the weekly schedule, 加熱 and TBD.** The schema is at revision `r2eheat`
-(the head).
+**Modules 1 and 2 are built, with dishes, kitchen notes, the weekly
+schedule, 加熱 and TBD.** The schema is at revision `c3ommon` (the head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
   parent, rating, labels, storage as a state x method grid with day ranges, a
@@ -70,19 +69,15 @@ the weekly schedule, 加熱 and TBD.** The schema is at revision `r2eheat`
   their own amount and note, and steps (each a 步驟, 可省略
   or 備註), each in groups (a 設定 材料分組 / 步驟分組 value or a one-off name,
   rows dragged within and between them), sources with an author picked or
-  made by the save, a status, methods, equipment, 保存 / 加熱 / 筆記 notes,
+  made by the save, a status, an optional 難易度, methods, equipment, 保存 / 加熱 / 筆記 notes,
   galleries, "used in" for
-  ingredients, and 常用 chips above the lines that add one in a tap. A new
-  recipe starts blank, from a template, or as a copy of another recipe.
+  ingredients, and 常用 chips above the lines, under their 常用食材 groups'
+  headings, that add an ungrouped line in a tap. A new
+  recipe starts blank or as a copy of another recipe.
 - **Authors** - a 設定 vocabulary that also carries links (a name and a
   url each, in the owner's order) and a 備註, edited on the author's row
   and shown above the recipe library when it is filtered to that author;
   a source's author on a recipe links to that filter.
-- **Recipe templates** - a named skeleton (servings, time, lines with their
-  alternatives and steps in their groups, methods, equipment) stored as one
-  JSONB body, made on its own
-  form or from a recipe (存成範本), ordered on 設定; a reference to something
-  since deleted is dropped when it is read, and counted.
 - **Kitchen notes** - bookmarks with a title, a kind, a link, a body, labels
   and a gallery.
 - **The weekly schedule (排程)** - per date, four meals (早, 中, 下午, 晚),
@@ -101,10 +96,12 @@ the weekly schedule, 加熱 and TBD.** The schema is at revision `r2eheat`
   (search and filters in the URL, a sidebar or a phone drawer, covers or a
   table), their detail pages, their add and edit forms with the gallery
   picker, one delete dialog, ingredient merge, 設定 for every vocabulary
-  (categories, labels, courses, regions, recipe statuses, source platforms, authors,
+  (categories, labels, courses, regions, recipe statuses, recipe difficulties
+  (難易度), source platforms, authors,
   材料分組, 步驟分組, cooking methods, equipment), for 常用食材 (the
-  recipe form's chips, an ordered pick of ingredients) and for 範本 (the
-  recipe templates), and 圖片, the image library.
+  recipe form's chips, an ordered pick of ingredients, ungrouped or in
+  named groups dragged within and between), and 圖片, the image
+  library.
 
 **The starting ingredient list is loaded by `i3import`**: 194 names from the
 recipe document's ingredient lists, approved by the owner, read from

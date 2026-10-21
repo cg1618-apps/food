@@ -380,6 +380,8 @@ class RecipeCreate(BaseModel):
     name: str | None = None
     # Left out, the first status in sort order (`recipes.create`).
     status_id: int | None = None
+    # 難易度, optional: left out or null, the recipe has none.
+    difficulty_id: int | None = None
     servings: str | None = None
     time: str | None = None
     storage_notes: str | None = None
@@ -426,6 +428,8 @@ class RecipeUpdate(BaseModel):
     new_dish: NewDishIn | None = None
     name: str | None = None
     status_id: int | None = None
+    # Null clears it: a difficulty is optional, unlike the status.
+    difficulty_id: int | None = None
     servings: str | None = None
     time: str | None = None
     storage_notes: str | None = None
@@ -487,6 +491,7 @@ class RecipeSummary(BaseModel):
     name: str | None = None
     dish: DishRef
     status: VocabRef
+    difficulty: VocabRef | None = None
     course: VocabRef | None = None
     methods: list[VocabRef] = []
     authors: list[VocabRef] = []
@@ -501,6 +506,7 @@ class RecipeResponse(BaseModel):
     name: str | None = None
     dish: DishBrief
     status: VocabRef
+    difficulty: VocabRef | None = None
     servings: str | None = None
     time: str | None = None
     storage_notes: str | None = None

@@ -1,8 +1,8 @@
 """An author on the wire: the shared vocabulary shape plus a remark and links.
 
 Authors are served by the vocabulary factory (app/routers/vocabulary.py) like
-the other eight; these are the schemas it is given for them, so the other
-eight keep refusing `notes` and `links` as extra fields.
+the other nine; these are the schemas it is given for them, so the other
+nine keep refusing `notes` and `links` as extra fields.
 
 A link is a TBD link in every rule - `normalise_link` and the blank label -
 because it is the same thing: a web address the owner typed, with an optional

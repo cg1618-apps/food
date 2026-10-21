@@ -1,6 +1,5 @@
 // Frontend: 做法、器材 - the cooking methods and equipment a recipe uses, as
-// the recipe form and the template form both pick them: chips from 設定's
-// lists, in their order.
+// the recipe form picks them: chips from 設定's lists, in their order.
 //
 //   methodIds, equipmentIds   the chosen ids
 //   onChange                  (field, ids) => void, field being 'method_ids'

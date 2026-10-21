@@ -63,7 +63,7 @@ describe('recipe lines', () => {
     expect(line.alternatives[0]).toMatchObject({ target: { type: 'ingredient', id: 2 }, amount: '250g', note: '較柴' })
     expect(line.alternatives[1]).toMatchObject({ target: { type: 'dish', id: 9 }, amount: '', note: '' })
     expect(line.alternatives[0]._key).not.toEqual(line.alternatives[1]._key)
-    // A template body stored before alternatives existed has none.
+    // A line without alternatives reads as none.
     expect(lineFromResponse({ ingredient: { id: 1, display_name: 'x' } }).alternatives).toEqual([])
   })
 

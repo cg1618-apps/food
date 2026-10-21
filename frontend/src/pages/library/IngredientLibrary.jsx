@@ -2,7 +2,7 @@
 //
 // The sidebar: the category tree with counts and, under each category, the
 // groups filed there (an ingredient with varieties - lib/ingredientGroups.js);
-// 品種 (全部 / 只看主項 / 只看品種); the stub backlog (with its size); rating;
+// 品種 (全部 / 只看主項); the stub backlog (with its size); rating;
 // labels. Every filter is in the URL, which is what makes the ingredient
 // page's category link - /ingredients?category=3 - land on that category, the
 // defect the first version had.
@@ -38,7 +38,6 @@ import { flatten } from '../../lib/tree'
 const VARIETY_OPTIONS = [
   { value: '', label: '全部' },
   { value: 'top', label: '只看主項' },
-  { value: 'only', label: '只看品種' },
 ]
 
 const SPEC = {
@@ -46,9 +45,8 @@ const SPEC = {
   label: { type: 'single', api: 'label_id', id: true },
   stub: { type: 'bool', api: 'needs_detail' },
   group: { type: 'single', api: 'group_id', id: true },
-  // 只看主項 sends has_parent=false, which a bool key cannot. `1` is what the
-  // 只看品種 switch this replaced wrote, so an old link still lands.
-  variety: { type: 'single', api: 'has_parent', values: { top: false, only: true }, aliases: { 1: 'only' } },
+  // 只看主項 sends has_parent=false, which a bool key cannot.
+  variety: { type: 'single', api: 'has_parent', values: { top: false } },
   rating: { type: 'single', api: 'rating' },
 }
 

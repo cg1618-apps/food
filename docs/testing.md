@@ -260,17 +260,6 @@ is load-bearing and says so. Some examples worth knowing about:
   carried by nothing (and the eight seeded ones), and separately one carried
   by two libraries. On an empty `label` table the backfill, the deletion and
   the refusal all pass by doing nothing.
-- `body_refs` (`tests/api/test_recipe_templates.py`) gives a template one of
-  everything its body can name - an ingredient, a dish, a 材料分組 value, a
-  method, a piece of equipment - so the stale-reference test has something to
-  drop, and that test reads the same template first and asserts `dropped`
-  is 0: a count that was always 4, or always 0, fails one of the two reads.
-  The merge test names a third ingredient beside the source, so a rewrite
-  that changed every line would fail; it was proved to fail with the rewrite
-  removed from `merge()`. The `new_ingredient` / `new_dish` refusal has its
-  mirror in a line naming an existing ingredient, and the unique-name
-  refusal in a template renamed to its own name in another case.
-
 - `chicken_tree` (`tests/api/test_category_clash.py`) gives the clashing
   category 雞肉 every kind of row a conversion touches - a top-level
   ingredient, one already a variety of an ingredient filed elsewhere, a child
@@ -304,15 +293,15 @@ the entire failure.
 | `tests/api/test_label_scope.py` | every label in one library: `scope` required and known, names unique per scope, `?scope=`, a move allowed while unused and the in-use 409, and each owner (ingredient create, update and attach; dish; note) refusing another library's label, each with its mirror |
 | `tests/test_label_scope_migration.py` | `l1abels` on a scratch database: used labels scoped by their one library, unused ones deleted, uniqueness per scope, the refusal on a label two libraries carry (changing nothing), and the downgrade with its own refusal |
 | `tests/api/test_ingredient_storage.py` | storage state and range, heating, links, rating, the new list filters (the category filter over a subtree, its sibling mirror, and the list agreeing with the tree's subtree totals), the delete counts and the 409 that names the moved one, `/api/vocabularies/fixed` |
-| `tests/api/test_vocabularies.py` | the nine vocabularies, parametrised over one factory, the in-use 409 for each (a course or region a dish is filed in), and authors in name order |
-| `tests/api/test_author_details.py` | an author's links and 備註: the blank-url CHECK and CASCADE to links (with two links really present), the round trip in order, a blank 備註 as null, `https://` given to a link without a scheme, the 422 for a blank, `javascript:` or other non-web url with nothing written and the mirror that saves, a refused `PATCH` keeping the stored links, links replaced wholesale, left alone, cleared by `[]` and the null refused, the delete taking the links, and the other eight vocabularies refusing `notes` and `links` with the author accepting the same body |
+| `tests/api/test_vocabularies.py` | the ten vocabularies, parametrised over one factory, the in-use 409 for each (a course or region a dish is filed in; a difficulty a recipe is rated with, beside an unrated recipe and an unused value as the mirror), and authors in name order |
+| `tests/api/test_author_details.py` | an author's links and 備註: the blank-url CHECK and CASCADE to links (with two links really present), the round trip in order, a blank 備註 as null, `https://` given to a link without a scheme, the 422 for a blank, `javascript:` or other non-web url with nothing written and the mirror that saves, a refused `PATCH` keeping the stored links, links replaced wholesale, left alone, cleared by `[]` and the null refused, the delete taking the links, and the other nine vocabularies refusing `notes` and `links` with the author accepting the same body |
 | `tests/api/test_images.py` | upload, re-encode, deduplication, ingredient, dish and recipe galleries (kitchen-note galleries are in `test_kitchen_notes.py`), a dish's cover falling back to its first recipe's, an image's owners, deletion, serving |
 | `tests/api/test_recipe_model.py` | every named dish and recipe constraint, each refusal with its mirror; a recipe's display name falling back to its dish's; CASCADE and RESTRICT on delete, and a recipe's delete leaving its dish |
 | `tests/api/test_dish_crud.py` | the dish round trip, kind, names, unknown ids, its recipes and "used in", the two delete refusals with their mirrors, the stale alias count, 404s |
 | `tests/api/test_dish_library.py` | the dish list's summary, search and "any of" filters, and the recipe list's filters that read through the dish (dish, kind, course, region, label) and its search over the dish's names |
-| `tests/api/test_recipe_crud.py` | the recipe round trip, its dish (`dish_id`, `new_dish`, reuse by name, moving), 其他版本, `PATCH` list semantics, status, the default status and the 422 with none, the moved fields refused, sources and their platforms, `reheating_notes` (加熱) round-tripping and cleared as `storage_notes` is, delete leaving the dish, stale counts |
+| `tests/api/test_recipe_crud.py` | the recipe round trip, its dish (`dish_id`, `new_dish`, reuse by name, moving), 其他版本, `PATCH` list semantics, status, the default status and the 422 with none, a difficulty set, changed, cleared by null and left alone when not sent, none by default, an unknown one refused, the moved fields refused, sources and their platforms, `reheating_notes` (加熱) round-tripping and cleared as `storage_notes` is, delete leaving the dish, stale counts |
 | `tests/api/test_recipe_lines.py` | line targets (ingredient, dish, new ingredient, new dish), the claimed-type refusal, the own-dish rule and the cycle guard through dishes, stub and dish creation and reuse |
-| `tests/api/test_recipe_line_alternatives.py` | a line's alternatives: the round trip in order with amount and note, in a group, new names resolved with the lines' (one stub for a name typed on both), the unknown-id 422 writing nothing, exactly one target, redundant alternatives dropped, a re-save replacing them; the own-dish rule, the cycle guard and a dish move through an alternative; "used in" for an ingredient (a variety's included) and a dish with `alternative_only`, the recipe filter; both delete refusals with mirrors, the RESTRICT itself, the CASCADE with the recipe; the ingredient merge moving and dropping them with the preview's counts and the fingerprint; templates carrying them, dropping a deleted one, `from-recipe`, a body stored before them, and a merge rewriting them |
+| `tests/api/test_recipe_line_alternatives.py` | a line's alternatives: the round trip in order with amount and note, in a group, new names resolved with the lines' (one stub for a name typed on both), the unknown-id 422 writing nothing, exactly one target, redundant alternatives dropped, a re-save replacing them; the own-dish rule, the cycle guard and a dish move through an alternative; "used in" for an ingredient (a variety's included) and a dish with `alternative_only`, the recipe filter; both delete refusals with mirrors, the RESTRICT itself, the CASCADE with the recipe; the ingredient merge moving and dropping them with the preview's counts and the fingerprint |
 | `tests/test_line_alternatives_migration.py` | `a2lternatives` on a scratch database: the downgrade drops the table with an alternative in it and keeps the line, and the chain upgrades again |
 | `tests/api/test_recipe_step_kinds.py` | a step's kind: the `step` default, the round trip through create, read and `PATCH` in and out of groups, the 422 for an unknown or null kind, the `step_kinds` fixed list |
 | `tests/api/test_recipe_groups.py` | lines and steps in groups: order and positions, a name stored as its 設定 value, the empty group, duplicate and malformed groups, the `PATCH` pair rule, stubs, cycles and a dish's "used in" through grouped lines, the delete counts, the in-use 409, SET NULL from a group to its rows |
@@ -322,12 +311,12 @@ the entire failure.
 | `tests/api/test_homemade_version.py` | an ingredient's 自製版: the round trip and `PATCH` set / change / clear, any dish kind, one dish named by several ingredients as the dish's `bought_as`, the 422 for an id naming no dish (writing nothing), SET NULL through the API and in raw SQL, the cascade's `bought_as`, and the merge keeping the target's or taking the source's, with its preview word and fingerprint |
 | `tests/api/test_category_clash.py` | a name is a category or an ingredient, never both: the 409 and its `category_clash` preview (English name and case included; aliases and `name_alt` not), the conversion's every outcome, the ingredient keeping its own category and description, the ancestor kept top-level, conversion on update and no check on an update leaving the names, a top-level category's target and its 422s, a parent's other target refused, the sibling-name block (422, nothing changed), a child sharing the category's name moving up, the stale fingerprint (409, nothing changed), the fallback's 422, two clashing categories' 409, a category created or renamed under an ingredient's name refused (409) and a drag not, the recipe stub's 422 |
 | `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, ordering after the target's rows, the fingerprint and its 409, refusals |
-| `tests/api/test_common_ingredients.py` | 常用食材: the whole-list `PUT` and its order, the unknown-id and duplicate 422s that change nothing, the write only under the gated prefix, CASCADE on an ingredient's delete, and a merge moving or dropping the source's entry |
+| `tests/api/test_common_ingredients.py` | 常用食材: the whole-structure `PUT` and its order - 未分組, the groups, each group's chips, an empty group; a rename keeping the id, two groups swapping names in one `PUT`, a group not sent deleted with its chips where the body puts them, SET NULL when a group goes underneath its chips; each 422 changing nothing against a stored structure - an ingredient in two groups and in a group and 未分組 (each with the mirror that succeeds), an unknown ingredient or group id, a group id twice, a blank name, a duplicate name in any case (with its mirror), extra fields, the old flat body; the write only under the gated prefix, CASCADE on an ingredient's delete, and a merge moving the source's entry with its group and place or dropping it |
+| `tests/test_common_ingredient_groups_migration.py` | `c3ommon` on a scratch database: the upgrade leaving every chip ungrouped in its order, and the downgrade flattening two groups and 未分組 into one list numbered 0 … n - 未分組 first, groups in their order rather than their ids' - with every chip kept, and the chain upgrading again |
 | `tests/api/test_heating.py` | 加熱: the blank-name CHECK, the round trip with line breaks kept, a blank body stored as null, the no-name 422 on create and the blank-name `PATCH` 422 with the mirror that renames, a `PATCH` applying only what it sends, a new note last, the delete, the order `PUT` and each of its 422s against three real notes, the writes only under the gated prefix |
 | `tests/api/test_tbd.py` | TBD: the blank-url CHECK and CASCADE to links, the round trip, the name-or-link 422 on create and on a `PATCH` that would leave neither (with the mirror that keeps a name), a new entry last, `https://` given to a link without a scheme and the 422 for a blank or non-web one, links replaced wholesale or left alone, the delete, the order `PUT` and each of its 422s against three real entries, the writes only under the gated prefix |
 | `tests/api/test_schedule.py` | the schedule: the Saturday a week starts on, the default range from a pinned today, every date answered stored or not, the `days` bounds, the day round trip with its meals, marks defaulting to false and refusing text, `PUT` replacing the whole day, blanks as null and empty meals and days not stored, unknown slots and fields, a meal of text only, of items only and of both, several items kept in order, a recipe implying its dish, a recipe of another dish, an item naming nothing and a duplicate item refused, unknown ids, a refused `PUT` changing nothing, a dish delete refused while meal items name it (with the dates) and its mirrors, a recipe delete leaving the item its dish, `meal_slots` in the fixed vocabularies |
 | `tests/test_schedule_migration.py` | `s4chedule` on a scratch database: marks turned into booleans from the stored text, each meal's dish and recipe moved into one item, and the downgrade writing ✓ and keeping the first item |
-| `tests/api/test_recipe_templates.py` | recipe templates: the round trip with every reference resolved, the empty template, a group name stored as its 設定 value, the list's order and counts, the `new_*` 422 that creates nothing (with its mirror), unknown ids, the case-insensitive unique name and blank name, fields a template does not carry, `PATCH` semantics and a refused `PATCH` changing nothing, delete, the order `PUT` and its 422s, stale references dropped and counted (a dropped group's lines kept as ungrouped), a template from a recipe's structure, and an ingredient merge rewriting template lines |
 | `tests/test_seed_migration.py` | the seeds, the storage migration's copy and lossy downgrade, `v2ocabulary`'s string-to-row mapping, `a1uthors`'s creator-to-author mapping, `g1roups`' sections-to-groups move, `s1tepkinds`' default for existing steps and `d1ishes`' grouping of recipes into dishes, each with its downgrade, on a scratch database |
 | `tests/test_ingredient_import.py` | `i3import`: the committed CSV passes validation, each validation refusal with a good mirror, and the load on a scratch database — stubs, aliases, parents, categories, the skip rule, the cycle guard, a second run, the no-op downgrade |
 | `tests/unit/test_prod_compose.py` | the production compose file, including the image bind mount |
@@ -397,21 +386,15 @@ payload; and the unpicked refusal sending nothing),
 `pages/detail/details.test.jsx` (a line's alternatives after it with their
 links, amounts and notes, a line without them unchanged; 替代 in an
 ingredient's and a sauce's 用在), `lib/mergePreview.test.js` (the moved and
-dropped counts) and the payload expectations of every recipe and template
-form test, which now carry `alternatives: []`.
+dropped counts) and the payload expectations of every recipe form test,
+which now carry `alternatives: []`.
 
-Recipe templates are covered in: `pages/edit/templates.test.jsx` (the
-new-recipe chooser's three ways in and the URL each writes, `?dish=` kept
-through them; the form prefilled from a template - the dropped notice, and
-nothing written before 儲存 - and from another recipe - its dish unless
-`?dish=` names one, and not its name, sources, status or pictures; a
-template that cannot be read; the template form's payload, its refusal of
-新增 and of a missing name, and a saved template sent back whole),
-`pages/edit/settings.test.jsx` (the 範本 tab: order, counts and links, the
-keyboard reorder frozen until the `PUT` lands and put back on a refusal,
-rename with a refused name explained in the row, delete after asking),
-`pages/detail/details.test.jsx` (存成範本: the name asked for, a refused
-name, the link to the new template), `lib/newRecipe.test.js`,
+How a new recipe starts is covered in: `components/forms/forms.test.jsx`
+(the new-recipe chooser's two ways in - 空白 and 複製另一份食譜 - and the URL
+each writes, `?dish=` kept through them, and no 從範本; the form prefilled
+from another recipe - its dish unless `?dish=` names one, not its name,
+sources, status or pictures, and nothing written before 儲存; a recipe to
+copy that cannot be read), `lib/newRecipe.test.js`,
 `lib/recipeStructure.test.js` and `lib/typeahead.test.js` (recipes as
 options).
 
@@ -433,6 +416,21 @@ sent, and the server's refusal shown on the card with the typing kept),
 payload),
 `pages/detail/details.test.jsx` (a dish delete refused with `meals`, each
 date linked to its week), `lib/nav.test.js` and `routes.test.jsx`.
+
+常用食材 is covered in: `pages/edit/settings.test.jsx` (the flat list with
+no 未分組 heading, its order and badge; the keyboard reorder sending the whole
+structure and frozen until it lands; ✕; a pick going to the end of 未分組 and
+never offering one listed in a group; 「＋ 新增分組」 sent without an id and
+refusing a taken name; the groups under 未分組; a rename on leaving the box
+keeping the id, a blank one going back unsent; groups reordered by their
+handle; a chip moved Down into the next group and Up out of a group to the
+end of the one above, each with its exact body; 刪除分組 asked first,
+cancelled sending nothing, confirmed moving its chips to the end of 未分組;
+a refused change putting the stored structure back with the sentence; the
+empty state) and `components/forms/forms.test.jsx` (the recipe form's chips:
+one unheaded row with no groups, 未分組 then each group under its heading
+with an empty group not drawn, one group alone under its own heading, and a
+grouped chip adding an ungrouped line).
 
 Authors' links and 備註 are covered in: `pages/edit/settings.test.jsx`
 (the row's 編輯 opening the stored links and 備註, a link added and the

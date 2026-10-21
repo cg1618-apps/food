@@ -1,5 +1,5 @@
-// Frontend: 步驟 - a recipe's steps in their groups, as the recipe form and
-// the template form both edit them.
+// Frontend: 步驟 - a recipe's steps in their groups, as the recipe form edits
+// them.
 //
 // Each step row has a kind switch - 步驟 / 可省略 / 備註, the fixed
 // `step_kinds` list - beside its number. Only an ordinary step shows a

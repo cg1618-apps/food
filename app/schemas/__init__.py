@@ -8,8 +8,10 @@ from app.schemas.author import (
     AuthorUpdate,
 )
 from app.schemas.common_ingredient import (
-    CommonIngredientResponse,
+    CommonIngredientGroupIn,
+    CommonIngredientGroupResponse,
     CommonIngredientsIn,
+    CommonIngredientsResponse,
 )
 from app.schemas.dish import DishCreate, DishResponse, DishSummary, DishUpdate
 from app.schemas.heating import (
@@ -83,21 +85,6 @@ from app.schemas.recipe import (
     StepResponse,
     UsedInRef,
 )
-from app.schemas.recipe_template import (
-    TemplateAlternative,
-    TemplateBody,
-    TemplateBodyIn,
-    TemplateCreate,
-    TemplateFromRecipe,
-    TemplateLine,
-    TemplateLineGroup,
-    TemplateOrderIn,
-    TemplateResponse,
-    TemplateStep,
-    TemplateStepGroup,
-    TemplateSummary,
-    TemplateUpdate,
-)
 from app.schemas.schedule import (
     MealIn,
     MealItemIn,
@@ -134,8 +121,10 @@ __all__ = [
     "AuthorLinkResponse",
     "AuthorResponse",
     "AuthorUpdate",
-    "CommonIngredientResponse",
+    "CommonIngredientGroupIn",
+    "CommonIngredientGroupResponse",
     "CommonIngredientsIn",
+    "CommonIngredientsResponse",
     "CoverRef",
     "DishBrief",
     "DishCreate",
@@ -209,19 +198,6 @@ __all__ = [
     "TbdLinkIn",
     "TbdLinkResponse",
     "TbdOrderIn",
-    "TemplateAlternative",
-    "TemplateBody",
-    "TemplateBodyIn",
-    "TemplateCreate",
-    "TemplateFromRecipe",
-    "TemplateLine",
-    "TemplateLineGroup",
-    "TemplateOrderIn",
-    "TemplateResponse",
-    "TemplateStep",
-    "TemplateStepGroup",
-    "TemplateSummary",
-    "TemplateUpdate",
     "UsedInRef",
     "VocabRef",
     "VocabularyCreate",

@@ -14,7 +14,7 @@
 const API = '/api'
 const WRITE = '/api/edit'
 
-// The nine vocabularies the backend builds from one factory
+// The ten vocabularies the backend builds from one factory
 // (app/routers/vocabulary.py) share one URL shape.
 function vocabulary(resource) {
   return {
@@ -46,19 +46,6 @@ export const endpoints = {
     remove: (id) => `${WRITE}/recipes/${id}`,
     // PUT [{image_id, focus}] in order: replaces the gallery.
     images: (id) => `${WRITE}/recipes/${id}/images`,
-  },
-  // 範本: a named skeleton a new recipe starts from. The detail is the body
-  // resolved into a recipe's shapes, with `dropped` counting what no longer
-  // exists; PUT {ids} saves the order of them all after a drag; POST {name}
-  // to fromRecipe makes one from that recipe's structure.
-  templates: {
-    list: () => `${API}/recipe-templates`,
-    detail: (id) => `${API}/recipe-templates/${id}`,
-    create: () => `${WRITE}/recipe-templates`,
-    update: (id) => `${WRITE}/recipe-templates/${id}`,
-    remove: (id) => `${WRITE}/recipe-templates/${id}`,
-    order: () => `${WRITE}/recipe-templates/order`,
-    fromRecipe: (recipeId) => `${WRITE}/recipe-templates/from-recipe/${recipeId}`,
   },
   ingredients: {
     list: () => `${API}/ingredients`,
@@ -137,6 +124,8 @@ export const endpoints = {
   // 地區: where a dish comes from.
   regions: vocabulary('regions'),
   statuses: vocabulary('recipe-statuses'),
+  // 難易度: optional on a recipe.
+  difficulties: vocabulary('recipe-difficulties'),
   platforms: vocabulary('source-platforms'),
   methods: vocabulary('cooking-methods'),
   equipment: vocabulary('equipment'),

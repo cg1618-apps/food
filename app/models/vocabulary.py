@@ -1,8 +1,8 @@
-"""Small managed vocabularies: courses, regions, recipe statuses, source
-platforms, cooking methods, equipment, authors, and the groups a recipe's
-ingredient lines and steps sit in.
+"""Small managed vocabularies: courses, regions, recipe statuses, recipe
+difficulties, source platforms, cooking methods, equipment, authors, and the
+groups a recipe's ingredient lines and steps sit in.
 
-Nine tables with one shape, declared once through a mixin. They are tables
+Ten tables with one shape, declared once through a mixin. They are tables
 rather than lists in `app/constants.py` because the owner edits them - renaming
 煮 to 水煮 must be one row, not a deploy. The closed lists in constants are the
 ones the app's own logic branches on (storage state, dish kind); these are
@@ -10,7 +10,7 @@ the ones it only displays and filters by.
 
 `declared_attr` builds each table's constraints from its own name and its own
 copied columns: `cls.name_cn` inside it is the subclass's column, not the
-mixin's, which is what lets one definition produce nine correctly-bound
+mixin's, which is what lets one definition produce ten correctly-bound
 expression indexes.
 
 An author alone carries more than the shared shape - a remark and a child
@@ -74,6 +74,14 @@ class RecipeStatus(Base, VocabularyMixin):
     without one is given."""
 
     __tablename__ = "recipe_status"
+
+
+class RecipeDifficulty(Base, VocabularyMixin):
+    """簡單, 普通, 困難 … - how hard a recipe is to make. Hand-ordered, as
+    statuses are. Optional on a recipe (`recipe.difficulty_id`), so unlike a
+    status there is no first value a recipe is given."""
+
+    __tablename__ = "recipe_difficulty"
 
 
 class SourcePlatform(Base, VocabularyMixin):

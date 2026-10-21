@@ -10,7 +10,14 @@ label, dish - are `test_dish_library.py`'s.
 import pytest
 from sqlalchemy import event
 
-from app.models import Author, CookingMethod, Equipment, Ingredient, RecipeCourse
+from app.models import (
+    Author,
+    CookingMethod,
+    Equipment,
+    Ingredient,
+    RecipeCourse,
+    RecipeDifficulty,
+)
 
 # Every recipe needs a status, and a source a platform; the migration seeds
 # both and create_all does not.
@@ -43,8 +50,8 @@ def names(client, **params):
 def three(client, db, fallback_category, recipe_statuses, source_platforms):
     """Three recipes, each with its own value on every filter dimension of
     its own: recipe i carries method i, equipment i, a source by author i and
-    a line naming ingredient i, and has status i. Its dish 菜i is filed under
-    course i."""
+    a line naming ingredient i, and has status i and difficulty i. Its dish
+    菜i is filed under course i."""
     statuses = [row.id for row in recipe_statuses.values()]
     youtube = source_platforms["YouTube"].id
     made = {
@@ -53,9 +60,11 @@ def three(client, db, fallback_category, recipe_statuses, source_platforms):
         "equipment": [],
         "ingredient": [],
         "author": [],
+        "difficulty": [],
     }
     for i in range(3):
         rows = {
+            "difficulty": RecipeDifficulty(name_cn=f"難{i}"),
             "course": RecipeCourse(name_cn=f"課{i}"),
             "method": CookingMethod(name_cn=f"法{i}"),
             "equipment": Equipment(name_cn=f"具{i}"),
@@ -74,6 +83,7 @@ def three(client, db, fallback_category, recipe_statuses, source_platforms):
             client,
             dish_id=dish["id"],
             status_id=statuses[i],
+            difficulty_id=made["difficulty"][i],
             method_ids=[made["method"][i]],
             equipment_ids=[made["equipment"][i]],
             sources=[{"platform_id": youtube, "author_id": made["author"][i]}],
@@ -116,6 +126,7 @@ def test_a_list_row_is_a_summary_of_the_recipe(client, db, recipe_statuses, sour
         "name": "阿基師版",
         "dish": {"id": dish["id"], "display_name": "番茄炒蛋", "kind": "dish"},
         "status": {"id": can_cook.id, "display_name": "可煮"},
+        "difficulty": None,
         "course": {"id": course.id, "display_name": "主菜"},
         "methods": [
             {"id": fry.id, "display_name": "炒"},
@@ -167,6 +178,7 @@ def test_search_treats_like_wildcards_as_literal_characters(client):
     [
         ("course_id", "course"),
         ("status_id", "status"),
+        ("difficulty_id", "difficulty"),
         ("method_id", "method"),
         ("equipment_id", "equipment"),
         ("author_id", "author"),

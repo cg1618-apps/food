@@ -276,7 +276,7 @@ describe('the ingredient library', () => {
     })
 
     // 只看主項 sends has_parent=false; a bool key could never send false.
-    it('sends 只看主項 and 只看品種 as has_parent', async () => {
+    it('sends 只看主項 as has_parent=false', async () => {
       renderAt('/ingredients')
       const sidebar = screen.getByRole('complementary', { name: '篩選' })
       fireEvent.click(within(sidebar).getByRole('button', { name: '只看主項' }))
@@ -286,13 +286,14 @@ describe('the ingredient library', () => {
       )
     })
 
-    it('still reads the old 只看品種 switch from a link', async () => {
-      renderAt('/ingredients?variety=1')
-      await waitFor(() =>
-        expect(listRequests('/api/ingredients')).toContain('/api/ingredients?has_parent=true'),
-      )
+    // 只看品種 was removed: neither its word nor the older switch's is read.
+    it('ignores a link to the removed 只看品種', async () => {
+      renderAt('/ingredients?variety=only')
       const sidebar = screen.getByRole('complementary', { name: '篩選' })
-      expect(within(sidebar).getByRole('button', { name: '只看品種', pressed: true })).toBeTruthy()
+      expect(await within(sidebar).findByRole('button', { name: '全部', pressed: true })).toBeTruthy()
+      expect(within(sidebar).queryByRole('button', { name: '只看品種' })).toBeNull()
+      await waitFor(() => expect(listRequests('/api/ingredients')).toContain('/api/ingredients'))
+      expect(listRequests('/api/ingredients')).not.toContain('/api/ingredients?has_parent=true')
     })
   })
 
@@ -384,18 +385,26 @@ describe('the dish library', () => {
 })
 
 describe('the recipe library', () => {
-  it('filters by dish and by the dish kind, with the dishes as the options', async () => {
+  it('filters by the dish kind, and offers no filter by dish', async () => {
     responses['/api/dishes'] = [TERIYAKI]
     responses['/api/vocabularies/fixed'] = FIXED
     renderAt('/recipes')
     const sidebar = screen.getByRole('complementary', { name: '篩選' })
-    fireEvent.click(await within(sidebar).findByRole('button', { name: /照燒醬/ }))
-    expect(location()).toBe('/recipes?dish=11')
     fireEvent.click(await within(sidebar).findByRole('button', { name: /料理/ }))
-    expect(location()).toBe('/recipes?dish=11&kind=dish')
+    expect(location()).toBe('/recipes?kind=dish')
     await waitFor(() =>
-      expect(listRequests('/api/recipes')).toContain('/api/recipes?dish_id=11&kind=dish'),
+      expect(listRequests('/api/recipes')).toContain('/api/recipes?kind=dish'),
     )
+    // The 料理 group listed every dish; it is gone, and so is its URL key.
+    expect(within(sidebar).getByRole('group', { name: '種類' })).toBeTruthy()
+    expect(within(sidebar).queryByRole('group', { name: '料理' })).toBeNull()
+    expect(within(sidebar).queryByRole('button', { name: /照燒醬/ })).toBeNull()
+  })
+
+  it('ignores a ?dish= link from before the 料理 filter was removed', async () => {
+    renderAt('/recipes?dish=11')
+    await waitFor(() => expect(listRequests('/api/recipes')).toContain('/api/recipes'))
+    expect(listRequests('/api/recipes').some((url) => url.includes('dish_id'))).toBe(false)
   })
 
 
@@ -418,6 +427,26 @@ describe('the recipe library', () => {
     fireEvent.click(await within(sidebar).findByRole('button', { name: /可煮/ }))
     expect(location()).toBe('/recipes?status=3')
     await waitFor(() => expect(listRequests('/api/recipes')).toContain('/api/recipes?status_id=3'))
+  })
+
+  it('filters by difficulty id, and shows the difficulty in the table', async () => {
+    responses['/api/recipe-difficulties'] = [
+      { id: 5, display_name: '簡單', sort_order: 10, usage_count: 1 },
+      { id: 6, display_name: '困難', sort_order: 20, usage_count: 0 },
+    ]
+    renderAt('/recipes')
+    const sidebar = screen.getByRole('complementary', { name: '篩選' })
+    fireEvent.click(await within(sidebar).findByRole('button', { name: /困難/ }))
+    expect(location()).toBe('/recipes?difficulty=6')
+    await waitFor(() => expect(listRequests('/api/recipes')).toContain('/api/recipes?difficulty_id=6'))
+
+    cleanup()
+    responses['/api/recipes'] = [{ ...RECIPE, difficulty: { id: 5, display_name: '簡單' } }]
+    localStorage.setItem('cg1618:food:recipes-view', 'list')
+    renderAt('/recipes')
+    const table = await screen.findByRole('table')
+    expect(within(table).getByRole('columnheader', { name: '難易度' })).toBeTruthy()
+    expect(within(table).getByText('簡單')).toBeTruthy()
   })
 
   it('filters by author id, with the authors as the options', async () => {

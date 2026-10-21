@@ -1,10 +1,8 @@
 // Frontend: a recipe's structure - servings, time, its lines and steps in
 // their groups, its methods and equipment - between the API and a form.
 //
-// Shared by the recipe form and the template form, and by the recipe form's
-// prefill from a template or from another recipe: a recipe response and a
-// template's body carry these fields in the same shapes
-// (app/schemas/recipe_template.py), so one reader serves all three. Form
+// Used by the recipe form both to load the recipe it edits and to prefill a
+// new recipe copied from another, so one reader serves both. Form
 // state is lib/groupedRows.js's for the lines and steps, lib/recipeLines.js's
 // rows inside them, and lib/steps.js's step rows.
 import { emptyGrouped, groupsFromResponse, groupsPayload } from './groupedRows'
@@ -24,7 +22,7 @@ export const emptyStructure = () => ({
 
 const ids = (refs) => (refs ?? []).map((ref) => ref.id)
 
-/** A recipe response, or a template's body -> the form's structure fields. */
+/** A recipe response -> the form's structure fields. */
 export function structureFromResponse(row) {
   return {
     servings: row.servings ?? '',

@@ -15,14 +15,12 @@
 //
 // What a change here makes stale is named per vocabulary: a renamed course or
 // region is shown on every dish and on its recipes' pages, a renamed status,
-// source platform, author or 材料分組 / 步驟分組 on every recipe, a renamed
+// difficulty, source platform, author or 材料分組 / 步驟分組 on every recipe, a renamed
 // method on recipes and on ingredient heating rows, a renamed label on all
 // three kinds of owner - ingredients, dishes and notes - and on the recipes
 // that show their dish's. 標籤 is its own editor (LabelEditor): a section per
 // library a label can belong to, and a label moved between them while unused. 常用食材 is not a vocabulary but an ordered pick of ingredients -
-// the recipe form's chips - and makes only its own list stale. 範本 is not a
-// vocabulary either: the recipe templates a new recipe can start from,
-// ordered, renamed and deleted here and edited on their own form.
+// the recipe form's chips - and makes only its own list stale.
 //
 // 作者 is a factory vocabulary with more than names: its row's 編輯 opens
 // the names, the author's links and 備註 together
@@ -33,7 +31,6 @@ import CategoryEditor from '../../components/settings/CategoryEditor'
 import AuthorDetails from '../../components/settings/AuthorDetails'
 import CommonIngredientsEditor from '../../components/settings/CommonIngredientsEditor'
 import LabelEditor from '../../components/settings/LabelEditor'
-import TemplatesEditor from '../../components/settings/TemplatesEditor'
 import VocabularyEditor from '../../components/settings/VocabularyEditor'
 import { LinkButton, Tabs } from '../../components/ui/primitives'
 import { useUrlTab } from '../../hooks/useUrlTab'
@@ -55,7 +52,7 @@ const AUTHOR_DETAILS = {
   body: authorBody,
 }
 
-// The nine factory vocabularies: one shape, one count (`usage_count`, the
+// The ten factory vocabularies: one shape, one count (`usage_count`, the
 // RESTRICT references that would stop a delete). Authors are listed by name
 // like labels, so they have no order to move by. `key` is the tab id and,
 // unless `vocabulary` says otherwise, the api/endpoints.js group.
@@ -80,6 +77,13 @@ const FACTORY = [
     hint: '食譜做到哪一步：想試、可煮、常煮…。新食譜預設排第一的那個。',
     addLabel: '新增狀態',
     invalidate: [endpoints.statuses.list(), RECIPES],
+  },
+  {
+    key: 'difficulties',
+    title: '難易度',
+    hint: '食譜做起來難不難：簡單、普通、困難…。食譜可以不選；表單和篩選依這裡的順序列出。',
+    addLabel: '新增難易度',
+    invalidate: [endpoints.difficulties.list(), RECIPES],
   },
   {
     key: 'platforms',
@@ -152,7 +156,6 @@ function FactoryEditor({ vocabulary, ...section }) {
 const TABS = [
   { id: 'categories', label: '食材分類', render: () => <CategoryEditor /> },
   { id: 'common-ingredients', label: '常用食材', render: () => <CommonIngredientsEditor /> },
-  { id: 'templates', label: '範本', render: () => <TemplatesEditor /> },
   { id: 'labels', label: '標籤', render: () => <LabelEditor /> },
   ...FACTORY.map(({ key, vocabulary = key, ...section }) => ({
     id: key,
