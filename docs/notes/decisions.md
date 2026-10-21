@@ -863,6 +863,11 @@ What the branch after module 1 chose, and what it turned down.
   has. The design named `/edit/dishes/:id/edit`; that path redirects, so a
   link written to the design still lands, and the house convention is the
   one a reader can guess.
+- **The recipe library has no filter by dish**, removed at the owner's
+  request. It listed every dish as an option; a dish's own page already
+  lists its recipes. `?dish=` on `/recipes` is no
+  longer read; the API's `dish_id` filter stays, since it costs nothing and
+  the read API is public.
 
 ## How a new recipe starts
 

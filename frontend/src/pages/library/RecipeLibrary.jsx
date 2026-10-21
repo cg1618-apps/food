@@ -1,9 +1,9 @@
 // Frontend: the recipe library, /recipes. Every
 // recipe, of every dish.
 //
-// The sidebar: dish, kind, course, status, difficulty, method, equipment,
-// author, label,
-// and written up / bookmark only. Kind, course and label are the dish's - the
+// The sidebar: kind, course, status, difficulty, method, equipment, author,
+// label, and written up / bookmark only. There is no filter by dish: a dish's
+// own page lists its recipes. Kind, course and label are the dish's - the
 // API filters through it. Every filter but the last is "any of" (the API
 // takes the parameter repeated); written-up is one choice of two, since both
 // at once is no filter. All of it is in the URL. A card or a table row is
@@ -30,7 +30,6 @@ import { useUrlFilters } from '../../hooks/useUrlFilters'
 import { linkText } from '../../lib/format'
 
 const SPEC = {
-  dish: { type: 'multi', api: 'dish_id', id: true },
   course: { type: 'multi', api: 'course_id', id: true },
   status: { type: 'multi', api: 'status_id', id: true },
   difficulty: { type: 'multi', api: 'difficulty_id', id: true },
@@ -89,7 +88,6 @@ export default function RecipeLibrary() {
   const recipes = useApiQuery(endpoints.recipes.list(), filters.apiParams, {
     placeholderData: keepPreviousData,
   })
-  const dishes = useApiQuery(endpoints.dishes.list())
   const courses = useApiQuery(endpoints.courses.list())
   const statuses = useApiQuery(endpoints.statuses.list())
   const difficulties = useApiQuery(endpoints.difficulties.list())
@@ -138,13 +136,6 @@ export default function RecipeLibrary() {
           options={WRITTEN_OPTIONS}
           selected={values.written}
           onToggle={(value) => toggle('written', value)}
-        />
-      </FilterGroup>
-      <FilterGroup title="料理">
-        <FilterOptions
-          options={asOptions(dishes.data)}
-          selected={values.dish}
-          onToggle={(value) => toggle('dish', value)}
         />
       </FilterGroup>
       <FilterGroup title="種類">

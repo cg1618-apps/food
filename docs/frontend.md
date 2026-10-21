@@ -144,7 +144,7 @@ words and its filters:
 | Library | URL keys | Table columns | Badges |
 | --- | --- | --- | --- |
 | 料理 `/dishes` | `kind`, `course`, `region`, `label` (all "any of") | 種類, 類別, 地區, 食譜 (how many) | - |
-| 食譜 `/recipes` | `dish` (ids, sent as `dish_id`), `kind`, `course`, `status` (ids, sent as `status_id`), `difficulty` (ids, sent as `difficulty_id`), `method`, `equipment`, `author` (ids, sent as `author_id`), `label` (all "any of"); `written` = `true` / `false`. `kind`, `course` and `label` are the dish's | 類別, 做法, 時間, 作者, 狀態, 難易度 | 書籤 when not written up |
+| 食譜 `/recipes` | `kind`, `course`, `status` (ids, sent as `status_id`), `difficulty` (ids, sent as `difficulty_id`), `method`, `equipment`, `author` (ids, sent as `author_id`), `label` (all "any of"); `written` = `true` / `false`. `kind`, `course` and `label` are the dish's | 類別, 做法, 時間, 作者, 狀態, 難易度 | 書籤 when not written up |
 | 食材 `/ingredients` | `category`, `group` (an ingredient id, sent as `group_id`), `label`, `rating` (one each); `variety` = `top` (sent as `has_parent=false`); `stub` (switch) | 品種, 冷藏, 用於, 評等 | 待補, rating |
 | 筆記 `/notes` | `kind`, `label` (both "any of") | 種類, 連結 (host only) | - |
 

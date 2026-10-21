@@ -385,18 +385,26 @@ describe('the dish library', () => {
 })
 
 describe('the recipe library', () => {
-  it('filters by dish and by the dish kind, with the dishes as the options', async () => {
+  it('filters by the dish kind, and offers no filter by dish', async () => {
     responses['/api/dishes'] = [TERIYAKI]
     responses['/api/vocabularies/fixed'] = FIXED
     renderAt('/recipes')
     const sidebar = screen.getByRole('complementary', { name: '篩選' })
-    fireEvent.click(await within(sidebar).findByRole('button', { name: /照燒醬/ }))
-    expect(location()).toBe('/recipes?dish=11')
     fireEvent.click(await within(sidebar).findByRole('button', { name: /料理/ }))
-    expect(location()).toBe('/recipes?dish=11&kind=dish')
+    expect(location()).toBe('/recipes?kind=dish')
     await waitFor(() =>
-      expect(listRequests('/api/recipes')).toContain('/api/recipes?dish_id=11&kind=dish'),
+      expect(listRequests('/api/recipes')).toContain('/api/recipes?kind=dish'),
     )
+    // The 料理 group listed every dish; it is gone, and so is its URL key.
+    expect(within(sidebar).getByRole('group', { name: '種類' })).toBeTruthy()
+    expect(within(sidebar).queryByRole('group', { name: '料理' })).toBeNull()
+    expect(within(sidebar).queryByRole('button', { name: /照燒醬/ })).toBeNull()
+  })
+
+  it('ignores a ?dish= link from before the 料理 filter was removed', async () => {
+    renderAt('/recipes?dish=11')
+    await waitFor(() => expect(listRequests('/api/recipes')).toContain('/api/recipes'))
+    expect(listRequests('/api/recipes').some((url) => url.includes('dish_id'))).toBe(false)
   })
 
 
