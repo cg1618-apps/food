@@ -3,12 +3,17 @@
 // Nothing here relates to the rest of the app: an entry is an optional name
 // and any number of links, kept in the owner's order, for something worth
 // keeping before it is decided what it is. So there are no filters, covers
-// or detail pages - one list, read whole. A link is shown by its label, or
-// else by its host and path (lib/format.js linkText), and opens in a new tab.
+// or detail pages - one list, read whole. A search result opens it at one
+// entry's anchor (#tbd-<id>), which is scrolled to and marked. A link is
+// shown by its label, or else by its host and path (lib/format.js linkText),
+// and opens in a new tab.
 import { endpoints } from '../../api/endpoints'
 import { LinkButton } from '../../components/ui/primitives'
 import { Empty, ErrorNote, Loading } from '../../components/ui/states'
 import { useApiQuery } from '../../hooks/useApi'
+import { useHashTarget } from '../../hooks/useHashTarget'
+import { cx } from '../../lib/cx'
+import { entryAnchor } from '../../lib/search'
 import { linkText } from '../../lib/format'
 
 const TITLE = 'TBD'
@@ -16,6 +21,7 @@ const TITLE = 'TBD'
 export default function Tbd() {
   const query = useApiQuery(endpoints.tbd.list())
   const entries = query.data ?? []
+  const target = useHashTarget(entries.length > 0)
   const editButton = (
     <LinkButton to="/edit/tbd" size="sm">
       編輯
@@ -30,7 +36,16 @@ export default function Tbd() {
     body = (
       <ul aria-label={TITLE} className="divide-y divide-border border-y border-border">
         {entries.map((entry) => (
-          <li key={entry.id} aria-label={entry.name ?? '未命名'} className="space-y-1 py-3">
+          <li
+            key={entry.id}
+            id={entryAnchor('tbd', entry.id)}
+            aria-label={entry.name ?? '未命名'}
+            aria-current={target === entryAnchor('tbd', entry.id) ? 'true' : undefined}
+            className={cx(
+              'scroll-mt-20 space-y-1 py-3',
+              target === entryAnchor('tbd', entry.id) && 'bg-brand-soft',
+            )}
+          >
             {entry.name ? <p className="font-medium text-text">{entry.name}</p> : null}
             {entry.links.length ? (
               <ul className="space-y-0.5 text-sm">

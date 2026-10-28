@@ -323,6 +323,7 @@ the entire failure.
 | `tests/test_schedule_migration.py` | `s4chedule` on a scratch database: marks turned into booleans from the stored text, each meal's dish and recipe moved into one item, and the downgrade writing ✓ and keeping the first item |
 | `tests/test_seed_migration.py` | the seeds, the storage migration's copy and lossy downgrade, `v2ocabulary`'s string-to-row mapping, `a1uthors`'s creator-to-author mapping, `g1roups`' sections-to-groups move, `s1tepkinds`' default for existing steps and `d1ishes`' grouping of recipes into dishes, each with its downgrade, on a scratch database |
 | `tests/test_ingredient_import.py` | `i3import`: the committed CSV passes validation, each validation refusal with a good mirror, and the load on a scratch database — stubs, aliases, parents, categories, the skip rule, the cycle guard, a second run, the no-op downgrade |
+| `tests/api/test_search.py` | the universal search: every bucket present and empty for no match, a blank or absent `q` answering empty buckets (with rows present, and the mirror finding them), wildcards literal, read-only; each bucket by name and alias, CN and EN - dishes, recipes (own name, dish names and aliases), ingredients, notes (title, body ranked after), authors (either name), 加熱 (name, then body), TBD (name and link labels, not the url) - with each row's `detail` and a dish's `cover`; ordering exact, prefix, contains, then name, an alias ranking as a name; `limit` per bucket after ranking, the default of 10, the 422 outside 1..50; and the query count equal at two sizes |
 | `tests/unit/test_prod_compose.py` | the production compose file, including the image bind mount |
 
 **The image tests never touch the real `data/images`.** `image_dir` redirects
@@ -358,6 +359,23 @@ Vitest with jsdom, each test file beside its source. The pages are tested
 through the real route table (`AppRoutes`) against a stubbed `fetch`, so a
 test reads what the page asks for and what it sends. jsdom cannot drag:
 every reorder is driven through the handle's keyboard path.
+
+The universal search is covered in `pages/search.test.jsx`, through the real
+route table: the top bar's box asking `?q=&limit=3` once typing settles and
+nothing for a blank term, the dropdown grouped by kind in order with each
+row's secondary line, a click opening a row (a 加熱 row at its anchor),
+Down / Up / Enter (wrapping through "nothing highlighted",
+`aria-activedescendant`), Enter with nothing highlighted opening
+`/search?q=…`, Escape and a click outside closing it, 找不到; the phone row
+opening from the icon focused, closing on the icon, after a search and on a
+second Escape, and the desktop field hidden below `lg`; the results page
+asking `limit=50`, its sections, each row's link and 編輯 target (加熱 and
+TBD to their list and edit pages), a kind with no match left out, the empty,
+error, loading and no-term states; and the 加熱 and TBD pages marking only the
+entry the anchor names. `lib/search.test.js` holds the kind table (labels,
+order, every row and 編輯 target), `searchPath`, and the grouping and the flat
+order the arrows walk. `routes.test.jsx` has `/search` and the navigation
+marking no section on it; `lib/nav.test.js` has `/search` in no section.
 
 Gallery captions are covered in: `lib/gallery.test.js` (the caption through
 the PUT body, and a caption change counting as a change),

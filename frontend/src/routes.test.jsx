@@ -62,6 +62,8 @@ describe('every page has a route', () => {
     ['/edit/heating', '編輯加熱'],
     ['/tbd', 'TBD'],
     ['/edit/tbd', '編輯 TBD'],
+    ['/search', '搜尋'],
+    ['/search?q=x', '搜尋'],
     ['/no/such/page', '找不到這一頁'],
   ])('%s renders its page', (path, heading) => {
     expect(renderAt(path)).toBe(path)
@@ -156,6 +158,13 @@ describe('navigation', () => {
     renderAt('/edit/tbd')
     const current = screen.getAllByRole('link', { current: 'page' }).map((link) => link.textContent)
     expect(current).toEqual(['TBD', 'TBD'])
+  })
+
+  // The results page belongs to no section: a search reaches every one, so
+  // marking any of them would say it came from there.
+  it('marks no section on the search results page', () => {
+    renderAt('/search?q=x')
+    expect(screen.queryAllByRole('link', { current: 'page' })).toEqual([])
   })
 
   it('gives the phone bar one column per section, whatever their number', () => {

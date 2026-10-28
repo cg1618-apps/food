@@ -30,9 +30,13 @@ front of the page someone opens rather than behind their first save. So
 - **List endpoints return a bare array**, not `{items, total}`. No pagination:
   these are small catalogues, and list order is fixed per router rather than a
   query parameter. The one exception is `GET /api/images`, which grows with
-  every upload and takes `limit` and `offset`.
+  every upload and takes `limit` and `offset`, and `GET /api/search`, which
+  answers an object of buckets (see "Search").
 - **Sorting is by display name, done in Python**, because the display name is
   the first non-empty of three columns and no single `ORDER BY` expresses it.
+  The exception is `GET /api/search`, which ranks and limits in SQL so that a
+  bucket of ten never loads the whole table; its `display_order` expresses
+  the same first-non-empty rule as a `coalesce`, compared by code point.
 - **`PATCH` applies only what was sent.** Absent and explicitly null are
   different: `{}` changes nothing, `{"description": null}` clears the note.
 - **Unknown fields are refused, not ignored.** `extra="forbid"`, so a payload
@@ -1040,6 +1044,60 @@ blank or null `name`. The answer is the note, as the `GET` gives it.
 
 **The order `PUT` body is `{"ids": [4, 2, …]}`**, with TBD's rule: exactly the
 current notes, each once, or a 422 that changes nothing.
+
+## Search
+
+| Route | |
+| --- | --- |
+| `GET /api/search?q=&limit=` | one bucket per kind, best match first |
+
+The universal search behind the top bar's search box and `/search`. Public
+and read-only, with no write counterpart.
+
+```json
+{"query": "咖哩",
+ "results": {
+   "dishes":      [{"id": 3, "display_name": "咖哩", "detail": "料理",
+                    "cover": {"thumb_url": "/images/library/thumbs/….jpg", "focus": null}}],
+   "recipes":     [{"id": 9, "display_name": "快速版", "detail": "咖哩 · 阿基師", "cover": null}],
+   "ingredients": [], "notes": [], "authors": [],
+   "heating":     [{"id": 4, "display_name": "咖哩調理包", "detail": "微波 2 分鐘", "cover": null}],
+   "tbd":         []}}
+```
+
+**Every bucket is always present**, `[]` when nothing matched. Each row is
+`id`, `display_name`, `detail` - a short secondary line, or null - and
+`cover`, the first gallery picture as a library row carries it, always null
+for 加熱 and TBD, which have no gallery.
+
+| Bucket | Matches | `detail` |
+| --- | --- | --- |
+| `dishes` | any name slot or alias - the dish library's `q` | the kind, 料理 or 醬料 |
+| `recipes` | the recipe's own name, or any of its dish's names and aliases - the recipe library's `q` | the dish (only when the recipe has a name of its own) and the authors, joined by ` · ` |
+| `ingredients` | any name slot or alias - the ingredient library's `q` | the category, and 待補 for a stub |
+| `notes` | the title or the body - the note library's `q` | the kind, 合輯 / 技巧 / 參考 |
+| `authors` | either name - the author library's search | the English name, when the author has both |
+| `heating` | the name, or the body | the body's first non-blank line |
+| `tbd` | the name, or any link's label - not the url | the number of links |
+
+Matching is case-insensitive and substring, `%` and `_` literal, built from
+the same clauses the libraries filter by (`app/services/search.py`), so the
+search never finds a row its library would not. A TBD entry is shown by its
+name, else its first link's label, else its first link's url; one with
+neither a name nor a labelled link is not findable here.
+
+**Order within a bucket is the tier a row first matches, then the name.**
+The tiers are exact (the whole of a name or an alias equals the term), then
+prefix (one begins with it), then contains; ties go by display name, then
+`id`. So `雞` gives 雞, 雞湯, 雞肉飯, 炒雞. For notes and 加熱 the tiers are on
+the title or name, and a row matching only in its body comes after every
+name match. TBD ties keep unnamed entries last, in the owner's order.
+
+**`q` blank, whitespace or absent answers every bucket empty**, 200 - not
+every row in the app. `limit` is rows per bucket: default 10, 1 to 50, and
+anything else is a 422. Each bucket is one query plus a fixed set of eager
+loads (covers, a category, a dish), so the number of queries does not grow
+with the rows.
 
 ## Categories
 

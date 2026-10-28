@@ -95,6 +95,7 @@ from app.schemas.schedule import (
     ScheduleDayIn,
     ScheduleDayResponse,
 )
+from app.schemas.search import SearchBuckets, SearchHit, SearchResponse
 from app.schemas.tbd import (
     TbdEntryCreate,
     TbdEntryResponse,
@@ -188,6 +189,9 @@ __all__ = [
     "RecipeUpdate",
     "RelatedIngredient",
     "ScheduleDayIn",
+    "SearchBuckets",
+    "SearchHit",
+    "SearchResponse",
     "ScheduleDayResponse",
     "SourceIn",
     "SourceResponse",

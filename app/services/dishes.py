@@ -37,7 +37,7 @@ from app.models import (
 from app.schemas.dish import LIST_FIELDS
 from app.services import images
 from app.services.lookup import check_label_scope, fetch_all
-from app.services.search import ESCAPE, contains
+from app.services.search import CONTAINS, term_match
 
 # The id lists a dish carries, the relationship each fills, the model it
 # names, and the word a 422 uses for it.
@@ -150,18 +150,18 @@ def by_name(db: Session, names: list[str]) -> Dish | None:
     )
 
 
-def matches(q: str):
-    """The clause a search term matches a dish by: any name slot or alias."""
-    term = contains(q)
+def matches(q: str, how: str = CONTAINS):
+    """The clause a search term matches a dish by: any name slot or alias.
+
+    `how` is the library's `contains` unless the universal search asks for a
+    stricter tier to rank by (app/services/search.py)."""
     alias_match = (
-        select(DishAlias.dish_id)
-        .where(func.lower(DishAlias.value).like(func.lower(term), escape=ESCAPE))
-        .scalar_subquery()
+        select(DishAlias.dish_id).where(term_match(DishAlias.value, q, how)).scalar_subquery()
     )
     return or_(
-        Dish.name_cn.ilike(term, escape=ESCAPE),
-        Dish.name_en.ilike(term, escape=ESCAPE),
-        Dish.name_alt.ilike(term, escape=ESCAPE),
+        term_match(Dish.name_cn, q, how),
+        term_match(Dish.name_en, q, how),
+        term_match(Dish.name_alt, q, how),
         Dish.id.in_(alias_match),
     )
 

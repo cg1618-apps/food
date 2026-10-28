@@ -24,11 +24,23 @@
 // bottom bar already gives each section a column at 360px and has no room for
 // a control that is not a destination, and a choice made once per device does
 // not earn a place under the thumb. See docs/notes/decisions.md.
+//
+// The search box (NavSearch.jsx) sits in the top bar too, for the same
+// reason: it is not a destination, so it has no column in the bottom bar. On
+// a wide screen it is a field between the sections and the toggle. Below lg
+// the sections leave it no room - eight of them already fill a tablet's bar -
+// so a search icon beside the toggle opens a full-width row under the bar,
+// and the row closes again once a search has gone somewhere. It is a row in
+// the flow rather than an overlay, so nothing is covered and nothing can be
+// wider than the screen at 360px.
+import { useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 
 import { useTheme } from '../../contexts/theme'
 import { activeSection, SECTIONS } from '../../lib/nav'
 import { Button } from '../ui/primitives'
+import { CloseIcon, MoonIcon, SearchIcon, SunIcon } from './icons'
+import NavSearch from './NavSearch'
 
 function NavItems({ active, className }) {
   return SECTIONS.map((section) => (
@@ -44,35 +56,7 @@ function NavItems({ active, className }) {
 }
 
 // The icon shows where a press goes: a sun while the page is dark, a moon
-// while it is light. Drawn in currentColor, so the button's tokens colour it.
-const ICON_PROPS = {
-  viewBox: '0 0 24 24',
-  className: 'size-5',
-  fill: 'none',
-  stroke: 'currentColor',
-  strokeWidth: 1.75,
-  strokeLinecap: 'round',
-  strokeLinejoin: 'round',
-  'aria-hidden': true,
-}
-
-function SunIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" />
-    </svg>
-  )
-}
-
-function MoonIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" />
-    </svg>
-  )
-}
-
+// while it is light.
 function ThemeToggle({ className }) {
   const { theme, toggle } = useTheme()
   const dark = theme === 'dark'
@@ -94,6 +78,16 @@ function ThemeToggle({ className }) {
 export default function Layout() {
   const { pathname } = useLocation()
   const active = activeSection(pathname)
+  const [searchOpen, setSearchOpen] = useState(false)
+  // Going anywhere else - the bottom bar, a link - closes the search row, as
+  // a search that went somewhere does. Adjusted during render, as
+  // hooks/useUrlFilters.js follows the URL, so the row never lingers a frame.
+  const [seenPath, setSeenPath] = useState(pathname)
+  if (pathname !== seenPath) {
+    setSeenPath(pathname)
+    setSearchOpen(false)
+  }
+  const searchLabel = searchOpen ? '關閉搜尋' : '搜尋'
 
   return (
     <div className="min-h-screen">
@@ -114,8 +108,27 @@ export default function Layout() {
               />
             </div>
           </nav>
-          <ThemeToggle className="ml-auto" />
+          <NavSearch className="ml-auto hidden w-56 lg:block xl:w-72" />
+          <div className="ml-auto flex items-center gap-1 lg:ml-0">
+            <Button
+              kind="ghost"
+              onClick={() => setSearchOpen((open) => !open)}
+              aria-label={searchLabel}
+              title={searchLabel}
+              aria-expanded={searchOpen}
+              aria-controls="phone-search"
+              className="lg:hidden"
+            >
+              {searchOpen ? <CloseIcon /> : <SearchIcon />}
+            </Button>
+            <ThemeToggle />
+          </div>
         </div>
+        {searchOpen ? (
+          <div id="phone-search" className="mx-auto max-w-5xl px-4 pb-2 md:px-6 lg:hidden">
+            <NavSearch variant="sheet" onDone={() => setSearchOpen(false)} />
+          </div>
+        ) : null}
       </header>
 
       <main className="mx-auto max-w-5xl px-4 pt-5 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:px-6 md:pt-8 md:pb-12">

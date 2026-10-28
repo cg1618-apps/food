@@ -143,6 +143,12 @@ export const endpoints = {
   // are picked from; a recipe may also name a group of its own.
   lineGroups: vocabulary('line-groups'),
   stepGroups: vocabulary('step-groups'),
+  // The universal search: GET ?q=&limit= answers one bucket per kind
+  // (app/routers/search.py). Read-only, and invalidated by nothing - a search
+  // is asked again when its term changes, and its staleTime is short.
+  search: {
+    list: () => `${API}/search`,
+  },
   vocabularies: {
     // Every closed list with its display label: preservation methods and
     // states, ratings, dish kinds, note kinds, step kinds, meal slots, label

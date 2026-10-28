@@ -10,7 +10,9 @@ Navigation is 料理 · 食譜 · 食材 · 筆記 · 加熱 · 排程 · TBD ·
 is what you look for and its recipes hang off it: a top bar on a desktop, a bar
 fixed to the bottom of the screen on a phone (`components/layout/Layout.jsx`).
 On a phone the top bar stays, slim and scrolling away with the page, holding
-only 食 (home) and the theme toggle.
+only 食 (home), the search icon and the theme toggle. The universal search
+(see "Search" below) is a field in the top bar from `lg` up, and below it an
+icon that opens a full-width search row under the bar.
 The section a page belongs to - its edit pages included - is marked with
 `aria-current="page"`; `lib/nav.js` holds that match. 設定's section also
 owns 未來固定設定 and the image library, which are reached from 設定. 食譜's
@@ -41,6 +43,7 @@ them readable at 360px with room for more.
 | 排程, the weekly schedule (the front page; `/` redirects here; `?week=` the first Saturday shown) | `/schedule` | public |
 | 加熱 | `/heating` | public |
 | TBD | `/tbd` | public |
+| 搜尋, the universal search's results (`?q=` the term) | `/search` | public |
 | Add / edit a dish | `/edit/dishes/new`, `/edit/dishes/:id` | Access |
 | Add / edit a recipe (a new one first asks how to start; `?dish=<id>` presets the dish) | `/edit/recipes/new`, `/edit/recipes/:id` | Access |
 | Add / edit an author | `/edit/authors/new`, `/edit/authors/:id` | Access |
@@ -231,6 +234,58 @@ one - under 只看主項 the varieties are gone and 雞肉 is still a group.
 - **A row says what its section does not**: 「X 的品種」 for a variety
   outside its parent's block or two levels down, 「N 個品種」 for a group.
   That is the 品種 column in 清單.
+
+## Search
+
+**One box finds anything in the app**: dishes, recipes, ingredients, kitchen
+notes, authors, 加熱 notes and TBD entries, through `GET /api/search`
+(`docs/api.md`, "Search"). It is also how an entry is edited from anywhere -
+food has no media-style "modify" hubs, and every row on `/search` carries an
+編輯 link (`docs/notes/decisions.md`, "Search instead of modify hubs").
+
+**The box (`components/layout/NavSearch.jsx`)** sits in the top bar: a field
+between the sections and the theme toggle from `lg` up; below `lg` a search
+icon beside the toggle (搜尋 / 關閉搜尋, `aria-expanded`) opens a full-width
+row under the bar holding the same component, focused, with a 16px input so
+iOS does not zoom. The row is in the flow, not an overlay, so nothing is
+covered and nothing is wider than the screen at 360px; it closes when a
+search goes somewhere, when the page changes by any other way, on the icon,
+or on a second Escape. It is not a section and has no column in the bottom
+bar - it is not a destination.
+
+- Typing is debounced (`hooks/useDebouncedValue.js`, 250 ms) and asks for
+  three rows per kind (`DROPDOWN_LIMIT`); a blank term asks nothing.
+- The dropdown groups the rows under their kind's label - 料理 · 食譜 · 食材
+  · 筆記 · 作者 · 加熱 · TBD, in that order, a kind with no match left out -
+  each row its name over its secondary line. Nothing matched says
+  「找不到「…」。」. Its last line, 查看全部結果, opens `/search?q=…`.
+- **Keyboard**: Down and Up walk the rows across the groups and wrap through
+  "nothing highlighted"; Enter opens the highlighted row, or `/search?q=…`
+  when none is; Escape closes the dropdown, and on the phone row a second
+  Escape closes the row. A click outside closes the dropdown. The input is
+  a `combobox` and the dropdown a `listbox` of `option`s in `group`s, with
+  `aria-activedescendant` on the highlighted row.
+- Choosing a row opens its page and clears the box.
+
+**`/search` (`pages/Search.jsx`)** is the full result: the term in the URL,
+edited in its own box with the libraries' URL wiring
+(`hooks/useUrlFilters.js` - typing replaces, debounced), up to 50 rows per
+kind. Each kind is a section under its heading and count; each row is a
+thumbnail (kinds with a gallery), the name linking to its page, the
+secondary line, and 編輯 to its edit page. No term invites one; then
+loading, the error, or 「找不到「…」。」.
+
+`lib/search.js` is the one table of kinds: per bucket its label and where a
+row and its 編輯 go. 加熱 and TBD have no page per entry, so a row opens the
+list at the entry - `/heating#heating-<id>`, `/tbd#tbd-<id>` - and 編輯
+opens `/edit/heating` or `/edit/tbd`. The list page marks the entry the
+anchor names (`aria-current`, the brand tint) and scrolls it into view once
+the list has loaded (`hooks/useHashTarget.js`): the browser cannot, since
+the list arrives after the page and a client-side navigation does not move
+`:target`. The edit pages open at the top.
+
+`/search` marks no section in the navigation (`lib/nav.js`): a search
+reaches every section, so marking one would mislead.
 
 ## Two things that are not pages
 
@@ -838,7 +893,8 @@ name, if it has one, and its links under it. A link shows its label, or else
 its host and path without the scheme, `www.`, query or trailing slash, cut to
 40 characters (`lib/format.js` `linkText`); it opens in a new tab
 (`rel="noopener noreferrer"`). 編輯 goes to `/edit/tbd`, and the empty state
-offers the same link.
+offers the same link. A search result opens it at `#tbd-<id>`, and that
+entry is marked and scrolled to (see "Search").
 
 **`/edit/tbd`** (`pages/edit/TbdForm.jsx`) is the same list, editable in
 place. Every entry is a card - 名稱, and its links in a `RowEditor` (網址 and
@@ -870,7 +926,9 @@ is TBD's page with a different card, and works the same way.
 
 **`/heating`** (`pages/library/Heating.jsx`) is one list, read whole: each
 note's name, with how to heat it under it, line breaks kept. 編輯 goes to
-`/edit/heating`, and the empty state offers the same link.
+`/edit/heating`, and the empty state offers the same link. A search result
+opens it at `#heating-<id>`, and that note is marked and scrolled to (see
+"Search").
 
 **`/edit/heating`** (`pages/edit/HeatingForm.jsx`) is the same list,
 editable in place. Every note is a card - 名稱 and 怎麼加熱 - with its own
