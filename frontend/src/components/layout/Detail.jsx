@@ -1,4 +1,4 @@
-// Frontend: the pieces the three detail pages share.
+// Frontend: the pieces the detail pages share.
 //
 // Each page is one reading column - a header, then titled sections, every
 // section hidden when there is nothing in it - and ends the same way: an edit

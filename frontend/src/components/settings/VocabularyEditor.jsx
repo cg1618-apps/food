@@ -19,11 +19,9 @@
 //   meta        (row) => the count line
 //   confirmText (row) => what the delete question says
 //   refusal     (row, error) => the inline sentence when a delete fails
-//   details     optional, for a vocabulary with more than names (authors):
-//               { label, initial(row), render(row)(draft, setDraft),
-//               body(draft) } - the row's button word, the extra draft
-//               fields, the controls drawn under the names, and the
-//               PATCH built from the whole draft
+//   rowActions  optional, (row) => more buttons in the row - an author's
+//               編輯, the link to the author's form, where what an author
+//               has beyond its names is edited
 import { useApiMutation, useApiQuery } from '../../hooks/useApi'
 import { useSortOrderMove } from '../../hooks/useSortOrderMove'
 import { nextSortOrder } from '../../lib/vocabulary'
@@ -43,7 +41,7 @@ export default function VocabularyEditor({
   meta,
   confirmText,
   refusal,
-  details,
+  rowActions,
 }) {
   const list = useApiQuery(group.list())
   const create = useApiMutation({ method: 'POST', invalidate })
@@ -60,17 +58,14 @@ export default function VocabularyEditor({
       key={row.id}
       item={row}
       meta={meta(row)}
-      onRename={(draft) =>
-        update.mutateAsync({ url: group.update(row.id), body: details ? details.body(draft) : draft })
-      }
-      renameLabel={details?.label}
-      initialExtra={details?.initial(row)}
-      renameExtra={details?.render(row)}
+      onRename={(draft) => update.mutateAsync({ url: group.update(row.id), body: draft })}
       sortable={ordered}
       onDelete={() => remove.mutateAsync({ url: group.remove(row.id) })}
       confirmText={confirmText(row)}
       refusal={(error) => refusal(row, error)}
-    />
+    >
+      {rowActions?.(row)}
+    </NameRow>
   ))
 
   return (

@@ -20,13 +20,12 @@
 // while unused. 常用食材 is not a vocabulary but an ordered pick of ingredients
 // - the recipe form's chips - and makes only its own list stale.
 //
-// 作者 is a factory vocabulary with more than names: its row's 編輯 opens the
-// names, the author's links and 備註 together
-// (components/settings/AuthorDetails.jsx), shown above the recipe library when
-// it is filtered to that author.
+// 作者 is a factory vocabulary with more than names, but its tab is a plain
+// list like the rest - add, rename, delete. Its links, 備註 and pictures are
+// edited on the author's own form, and each row's 編輯 goes there
+// (/edit/authors/:id): one editor for them, not two.
 import { endpoints } from '../../api/endpoints'
-import { authorBody, authorDraft } from '../../lib/authors'
-import AuthorDetails from './AuthorDetails'
+import { LinkButton } from '../ui/primitives'
 import CategoryEditor from './CategoryEditor'
 import CommonIngredientsEditor from './CommonIngredientsEditor'
 import FactoryEditor from './FactoryEditor'
@@ -39,15 +38,18 @@ const DISHES = endpoints.dishes.list()
 const RECIPES = endpoints.recipes.list()
 const INGREDIENTS = endpoints.ingredients.list()
 
-// What an author's row opens beyond its names: its links and 備註.
-const AUTHOR_DETAILS = {
-  label: '編輯',
-  initial: authorDraft,
-  render: (row) => (draft, setDraft) => (
-    <AuthorDetails name={row.display_name} draft={draft} setDraft={setDraft} />
-  ),
-  body: authorBody,
-}
+// An author's row links to the author's form, where its links, 備註 and
+// pictures are edited.
+const authorEditLink = (row) => (
+  <LinkButton
+    kind="ghost"
+    size="sm"
+    to={`/edit/authors/${row.id}`}
+    aria-label={`編輯「${row.display_name}」`}
+  >
+    編輯
+  </LinkButton>
+)
 
 // The ten factory vocabularies: one shape, one count (`usage_count`, the
 // RESTRICT references that would stop a delete). Authors are listed by name
@@ -92,10 +94,10 @@ const FACTORY = [
   {
     key: 'authors',
     title: '作者',
-    hint: '食譜來源的作者，依名稱排列。在食譜表單打一個還沒有的名字，存檔時也會加進來。按「編輯」可以加連結和備註，食譜依作者篩選時會顯示在上面。',
+    hint: '食譜來源的作者，依名稱排列。在食譜表單打一個還沒有的名字，存檔時也會加進來。按「編輯」到作者的頁面加連結、備註和圖片。',
     addLabel: '新增作者',
     ordered: false,
-    details: AUTHOR_DETAILS,
+    rowActions: authorEditLink,
     invalidate: [endpoints.authors.list(), RECIPES],
   },
   {

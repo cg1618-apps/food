@@ -1,7 +1,9 @@
 """Every schema, re-exported so call sites write `schemas.IngredientResponse`."""
 
 from app.schemas.author import (
+    AuthorCascade,
     AuthorCreate,
+    AuthorDetail,
     AuthorLinkIn,
     AuthorLinkResponse,
     AuthorResponse,
@@ -116,7 +118,9 @@ __all__ = [
     "AlternativeIn",
     "AlternativeResponse",
     "AttachedImage",
+    "AuthorCascade",
     "AuthorCreate",
+    "AuthorDetail",
     "AuthorLinkIn",
     "AuthorLinkResponse",
     "AuthorResponse",

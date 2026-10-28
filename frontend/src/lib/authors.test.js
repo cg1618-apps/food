@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { authorBody, authorDraft } from './authors'
+import { authorBody, authorDraft, matchesAuthor } from './authors'
 
 const AUTHOR = {
   id: 3,
@@ -64,5 +64,21 @@ describe('authorBody', () => {
   it('still sends a row with only a label, so the server can say it needs a link', () => {
     const draft = { name_cn: '甲', name_en: '', notes: '', links: [{ _key: 'a', url: '', label: 'IG' }] }
     expect(authorBody(draft).links).toEqual([{ url: '', label: 'IG' }])
+  })
+})
+
+describe('matchesAuthor', () => {
+  const author = { id: 3, display_name: '阿基師', name_cn: '阿基師', name_en: 'Chef Ah-Chi' }
+
+  it('matches either name, ignoring case and outer space', () => {
+    expect(matchesAuthor(author, '基師')).toBe(true)
+    expect(matchesAuthor(author, '  chef ')).toBe(true)
+    expect(matchesAuthor(author, 'AH-CHI')).toBe(true)
+  })
+
+  it('refuses a term neither name holds, and takes everyone for no term', () => {
+    expect(matchesAuthor(author, '詹姆士')).toBe(false)
+    expect(matchesAuthor(author, '')).toBe(true)
+    expect(matchesAuthor(author, undefined)).toBe(true)
   })
 })

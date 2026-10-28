@@ -730,8 +730,43 @@ null, and a link has no other field. On a `PATCH`, `links` replaces every
 link in the order sent when it is sent and leaves them alone when it is
 not; `[]` clears them and an explicit null is a 422. The other nine
 vocabularies neither answer with these fields nor accept them - sending
-one is a 422. Deleting an author takes its links with it; the 409 above
-counts only sources.
+one is a 422. Deleting an author takes its links and its gallery rows
+with it (the pictures stay in the library); the 409 below counts only
+sources.
+
+**An author's list row also carries `recipe_count` and `cover`.**
+`recipe_count` is the distinct recipes its sources name - a recipe with two
+sources by the author counts once, where `usage_count` counts both sources,
+since those are what would stop a delete. `cover` is the first gallery
+picture's `{thumb_url, focus}`, or null. The other nine answer with neither.
+
+### An author's page
+
+The list and the writes above are the vocabulary factory's; an author read
+on its own, its delete preview and its gallery are `app/routers/author.py`'s,
+under the same prefix.
+
+| Route | |
+| --- | --- |
+| `GET /api/authors/{id}` | the author's page |
+| `GET /api/authors/{id}/cascade` | what refuses a delete |
+| `PUT /api/edit/authors/{id}/images` | replace the gallery, in order |
+
+**`GET /api/authors/{id}`** is everything a list row has - `id`,
+`display_name`, `name_cn`, `name_en`, `sort_order`, `usage_count`, `notes`,
+`links`, `recipe_count`, `cover` - plus `images` (as an ingredient's, in
+order, each with its `focus` and `caption`) and `recipes`: the recipes whose
+sources name the author, each once, as `GET /api/recipes` lists them
+(`id`, `display_name`, `dish`, `status`, `cover` and the rest), sorted by
+display name. An unknown id is a 404.
+
+**`GET /api/authors/{id}/cascade`** is `{sources, recipes}`: the sources
+naming the author and the distinct recipes they belong to. Either above zero
+means the delete will be refused. Nothing cascades that a person would miss,
+so neither is echoed on the delete, which stays the factory's.
+
+**`PUT /api/edit/authors/{id}/images`** replaces the gallery exactly as an
+ingredient's does, and answers with the author's page.
 
 **Deleting a value that is in use is a 409 carrying `usage_count`**, answered
 before the database is asked; the `RESTRICT` foreign key is the backstop. The
@@ -767,8 +802,8 @@ among them — they are managed vocabularies, above.
 An image is `id`, `url`, `thumb_url`, `width`, `height`, `byte_size`,
 `original_filename`, `uploaded_at` and `attachment_count`; the single-image read
 adds `owners`, a list of `{type, id, display_name}` where `type` is
-`ingredient`, `dish`, `recipe` or `kitchen_note` (whose `display_name` is its
-title).
+`ingredient`, `dish`, `recipe`, `kitchen_note` (whose `display_name` is its
+title) or `author`.
 
 **`GET /api/images` takes `unused`, `limit` (default 60, at most 200) and
 `offset`.** `unused=true` returns only images nothing attaches, `false` only

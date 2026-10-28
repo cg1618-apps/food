@@ -43,6 +43,9 @@ describe('every page has a route', () => {
     ['/dishes', '料理'],
     ['/recipes', '食譜'],
     ['/notes', '筆記'],
+    ['/authors', '作者'],
+    ['/edit/authors/new', '新增作者'],
+    ['/edit/authors/1', '編輯作者'],
     ['/edit/dishes/new', '新增料理'],
     ['/edit/dishes/1', '編輯料理'],
     ['/edit/recipes/new', '新增食譜'],
@@ -69,7 +72,7 @@ describe('every page has a route', () => {
 // The detail pages fetch before they have a heading; their content is
 // pages/detail/details.test.jsx's. Here only that the route is theirs.
 describe('every detail page has a route', () => {
-  it.each(['/dishes/1', '/recipes/1', '/ingredients/1', '/notes/1'])('%s stays on its route', (path) => {
+  it.each(['/dishes/1', '/recipes/1', '/ingredients/1', '/notes/1', '/authors/1'])('%s stays on its route', (path) => {
     expect(renderAt(path)).toBe(path)
     expect(screen.queryByRole('heading', { name: '找不到這一頁' })).toBeNull()
   })
@@ -134,6 +137,12 @@ describe('navigation', () => {
       .getAllByRole('link', { current: 'page' })
       .map((link) => link.textContent)
     // Two navs - the desktop bar and the phone bar - both say 食譜.
+    expect(current).toEqual(['食譜', '食譜'])
+  })
+
+  it.each(['/authors', '/authors/1', '/edit/authors/1'])('marks 食譜 on the author page %s', (path) => {
+    renderAt(path)
+    const current = screen.getAllByRole('link', { current: 'page' }).map((link) => link.textContent)
     expect(current).toEqual(['食譜', '食譜'])
   })
 

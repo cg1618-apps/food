@@ -15,13 +15,12 @@
 //   onRename      async ({ name_cn, name_en, ...extra }) => void
 //   renameExtra   (draft, setDraft) => more controls in rename mode (parent)
 //   initialExtra  extra draft fields rename mode starts from
-//   renameLabel   the button's word: 改名, or 編輯 for a row whose rename
-//                 mode holds more than its names (an author's links)
 //   sortable      whether the row has a drag handle (its id is `item.id`)
 //   onDelete      async () => void, or absent when the row cannot be deleted
 //   confirmText   what the delete question says
 //   refusal       (error) => the inline sentence for a failed delete
-//   children      extra row actions (新增子分類, a label's 移到)
+//   children      extra row actions (新增子分類, a label's 移到, an
+//                 author's 編輯 - a link to the author's form)
 //   nested        drawn under the row, inside it - the category tree's
 //                 children, which a drag carries along with their parent
 import { useState } from 'react'
@@ -38,7 +37,6 @@ export default function NameRow({
   onRename,
   renameExtra,
   initialExtra,
-  renameLabel = '改名',
   sortable = false,
   onDelete,
   confirmText,
@@ -134,8 +132,8 @@ export default function NameRow({
             </span>
             <div className="flex shrink-0 flex-wrap gap-1">
               {children}
-              <Button kind="ghost" size="sm" onClick={startRename} disabled={busy} aria-label={`${renameLabel}「${name}」`}>
-                {renameLabel}
+              <Button kind="ghost" size="sm" onClick={startRename} disabled={busy} aria-label={`改名「${name}」`}>
+                改名
               </Button>
               {onDelete ? (
                 <Button

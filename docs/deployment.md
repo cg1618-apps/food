@@ -108,8 +108,13 @@ it. No ingredient is touched.
 chip is lost: they are first renumbered into one list - 未分組 first, then
 each group's chips in group order, each in its own order.
 
-`m2captions`'s downgrade drops `caption` from the four gallery tables, and
-every picture's caption with it. No picture and no attachment is lost.
+`m2captions`'s downgrade drops `caption` from the four gallery tables it
+added it to, and every picture's caption with it. No picture and no
+attachment is lost.
+
+`a3uthor`'s downgrade drops `author_image`, and every author's gallery with
+it; the pictures stay in `image` and on disk, as for recipes. The authors,
+their links and 備註 are untouched.
 
 `t1bd`'s downgrade drops `tbd_link` and `tbd_entry`, and every entry on the
 TBD page with them. Nothing else is touched.
@@ -251,7 +256,8 @@ they ever do not, believe the box.
 | 難易度, a recipe's difficulty | `d2ifficulty` — forty-seven tables |
 | Recipe templates removed | `t3emplates` — forty-six tables |
 | 常用食材 groups | `c3ommon` — forty-seven tables |
-| A caption per gallery picture | `m2captions` — no new table, the current head |
+| A caption per gallery picture | `m2captions` — no new table |
+| An author's gallery; the author library | `a3uthor` — forty-eight tables, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

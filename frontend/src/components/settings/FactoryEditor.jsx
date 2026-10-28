@@ -5,7 +5,7 @@
 //
 //   vocabulary   the api/endpoints.js group
 //   ...section   the rest of VocabularyEditor's props (title, hint, addLabel,
-//                invalidate, ordered, details)
+//                invalidate, ordered, rowActions)
 import { endpoints } from '../../api/endpoints'
 import { inUseMessage } from '../../lib/vocabulary'
 import VocabularyEditor from './VocabularyEditor'

@@ -51,7 +51,7 @@ alphabet is wanted, the label table needs the column (a migration), its
 attached to, so `/edit/images` fetches `GET /api/images/{id}` for each tile
 that has any attachment - up to 30 requests for a page. It is fine at a
 kitchen's scale and slow over the tunnel on a phone. The list could return
-the owners itself (one query joining the four gallery tables), and the page
+the owners itself (one query joining the five gallery tables), and the page
 would drop the per-tile reads.
 
 ## `updated_at` does not move when only child rows change

@@ -13,21 +13,17 @@
 // library to be written up later, and the badge is what makes that backlog
 // visible from the cover view.
 //
-// Filtered to exactly one author, the list is that author's recipes, so the
-// author's own links and 備註 are drawn above it (AuthorIntro) - the panel
-// a category's notes get on the ingredient library. An author with neither
-// draws nothing there, and two authors chosen draw nothing: neither is
-// the page's subject.
+// The header's 作者 goes to the author library (/authors). An author's links,
+// 備註 and pictures are read on the author's own page, not above this list:
+// one place for them (docs/notes/decisions.md).
 import { keepPreviousData } from '@tanstack/react-query'
 
 import { endpoints } from '../../api/endpoints'
 import { FilterGroup, FilterOptions } from '../../components/layout/FilterPanel'
-import { Prose } from '../../components/layout/Detail'
 import LibraryLayout from '../../components/layout/LibraryLayout'
-import { Badge, Card } from '../../components/ui/primitives'
+import { Badge, LinkButton } from '../../components/ui/primitives'
 import { useApiQuery, useFixedVocabularies, useLabels } from '../../hooks/useApi'
 import { useUrlFilters } from '../../hooks/useUrlFilters'
-import { linkText } from '../../lib/format'
 
 const SPEC = {
   course: { type: 'multi', api: 'course_id', id: true },
@@ -54,33 +50,6 @@ const fixedOptions = (list) => (list ?? []).map(({ value, label }) => ({ value, 
 
 const joinNames = (refs) => (refs?.length ? refs.map((ref) => ref.display_name).join('、') : null)
 
-// The one chosen author's links and 備註, or nothing when there are none.
-function AuthorIntro({ author }) {
-  if (!author || (!author.notes && !author.links?.length)) return null
-  return (
-    <Card role="region" aria-label={`關於${author.display_name}`} className="space-y-2">
-      <h2 className="text-sm font-medium text-text-muted">{author.display_name}</h2>
-      {author.links?.length ? (
-        <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-          {author.links.map((link, index) => (
-            <li key={index} className="min-w-0 truncate">
-              <a
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-brand hover:underline"
-              >
-                {link.label ?? linkText(link.url)}
-              </a>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <Prose>{author.notes}</Prose>
-    </Card>
-  )
-}
-
 export default function RecipeLibrary() {
   const filters = useUrlFilters(SPEC)
   const { values, toggle } = filters
@@ -96,11 +65,6 @@ export default function RecipeLibrary() {
   const authors = useApiQuery(endpoints.authors.list())
   const labels = useLabels('dish')
   const fixed = useFixedVocabularies()
-
-  const chosenAuthor =
-    values.author.length === 1
-      ? (authors.data ?? []).find((row) => String(row.id) === values.author[0])
-      : null
 
   const card = (row) => ({
     cover: row.cover,
@@ -207,13 +171,13 @@ export default function RecipeLibrary() {
       title="食譜"
       library="recipes"
       add={{ to: '/edit/recipes/new', label: '新增食譜' }}
+      actions={<LinkButton to="/authors">作者</LinkButton>}
       filters={filters}
       sidebar={sidebar}
       query={recipes}
       card={card}
       columns={columns}
       itemTo={(row) => `/recipes/${row.id}`}
-      intro={<AuthorIntro author={chosenAuthor} />}
       searchPlaceholder="搜尋食譜或料理的名稱、別名…"
       emptyText="還沒有任何食譜。"
       noMatchText="沒有符合條件的食譜。"

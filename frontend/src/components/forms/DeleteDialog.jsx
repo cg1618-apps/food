@@ -24,7 +24,9 @@
 //      many).
 //
 // A kitchen note has no cascade to count, so it is a plain question in the
-// same chrome.
+// same chrome. An author's cascade only refuses - the recipes whose sources
+// name it - and echoes nothing; its refusal is the vocabulary delete's 409
+// sentence.
 //
 // Use:  <DeleteDialog kind="recipe" id={id} name={name} onClose={...} />
 // `onDeleted` defaults to going to the kind's library; pass one to go
