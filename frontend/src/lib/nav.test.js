@@ -11,11 +11,10 @@ describe('activeSection', () => {
     ['/recipes', 'recipes'],
     ['/recipes/12', 'recipes'],
     ['/edit/recipes/new', 'recipes'],
-    // The author library and its pages are filed under 食譜.
-    ['/authors', 'recipes'],
-    ['/authors/6', 'recipes'],
-    ['/edit/authors/new', 'recipes'],
-    ['/edit/authors/6', 'recipes'],
+    ['/authors', 'authors'],
+    ['/authors/6', 'authors'],
+    ['/edit/authors/new', 'authors'],
+    ['/edit/authors/6', 'authors'],
     ['/ingredients', 'ingredients'],
     ['/ingredients/3', 'ingredients'],
     ['/edit/ingredients/3', 'ingredients'],
@@ -47,6 +46,6 @@ describe('activeSection', () => {
   })
 
   it('has the eight sections, in navigation order, 料理 first', () => {
-    expect(SECTIONS.map((s) => s.label)).toEqual(['料理', '食譜', '食材', '筆記', '加熱', '排程', 'TBD', '設定'])
+    expect(SECTIONS.map((s) => s.label)).toEqual(['料理', '食譜', '作者', '食材', '筆記', '加熱', '排程', 'TBD', '設定'])
   })
 })

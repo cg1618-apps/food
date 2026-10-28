@@ -74,7 +74,7 @@ schedule, 加熱 and TBD.** The schema is at revision `a3uthor` (the head).
   ingredients, and 常用 chips above the lines, under their 常用食材 groups'
   headings, that add an ungrouped line in a tap. A new
   recipe starts blank or as a copy of another recipe.
-- **Authors** - a library of its own under 食譜 (`/authors`, searched by
+- **Authors** - a library of its own, 作者 in the nav beside 食譜 (`/authors`, searched by
   name, covers or a table with 食譜數): each author's page shows a gallery,
   the names, links (a name and a url each, in the owner's order), a 備註
   and the recipes whose sources name them, with a link to the recipe
@@ -102,8 +102,8 @@ schedule, 加熱 and TBD.** The schema is at revision `a3uthor` (the head).
   exact, prefix, contains; a dropdown grouped by kind, and `/search` with
   every row's 編輯 link - which is how any entry is edited quickly, in place
   of media-style modify hubs.
-- **The notebook UI** - 料理 · 食譜 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定: the five libraries,
-  authors filed under 食譜 (search and filters in the URL, a sidebar or a
+- **The notebook UI** - 料理 · 食譜 · 作者 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定: the five libraries
+  (search and filters in the URL, a sidebar or a
   phone drawer, covers or a table), the 搜尋 box in the top bar and its
   `/search` page, their detail pages, their add and edit forms with the gallery
   picker, one delete dialog, ingredient merge, 設定 for the vocabularies

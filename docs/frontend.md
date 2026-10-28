@@ -6,7 +6,7 @@ is specific to food.
 
 ## Pages
 
-Navigation is 料理 · 食譜 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定 - 料理 first, since a dish
+Navigation is 料理 · 食譜 · 作者 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定 - 料理 first, since a dish
 is what you look for and its recipes hang off it: a top bar on a desktop, a bar
 fixed to the bottom of the screen on a phone (`components/layout/Layout.jsx`).
 On a phone the top bar stays, slim and scrolling away with the page, holding
@@ -15,10 +15,9 @@ only 食 (home), the search icon and the theme toggle. The universal search
 icon that opens a full-width search row under the bar.
 The section a page belongs to - its edit pages included - is marked with
 `aria-current="page"`; `lib/nav.js` holds that match. 設定's section also
-owns 未來固定設定 and the image library, which are reached from 設定. 食譜's
-also owns the author library and its pages (`/authors`, `/edit/authors`),
-which have no nav item of their own and are reached from the recipe
-library's header and from a recipe source's author.
+owns 未來固定設定 and the image library, which are reached from 設定. 作者 sits
+beside 食譜, since an author is who a recipe came from; the recipe library's
+header and a recipe source's author link there too.
 
 **A section is one entry in `SECTIONS` (`lib/nav.js`)** - its label, its
 link and the path prefixes it owns, edit pages included. Both bars draw from
