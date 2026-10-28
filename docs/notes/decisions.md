@@ -305,7 +305,7 @@ so a later reader can tell a decision from an accident. These are food's.
 - **A bar fixed to the bottom of the screen on a phone**, where media's
   navigation folds below `lg` into a menu button that opens a full-screen
   drawer. media has a catalogue of sections and sub-pages to fold away;
-  food has a handful of destinations - 料理 · 食譜 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定 -
+  food has a handful of destinations - 料理 · 食譜 · 作者 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定 -
   which fit in one row under a thumb, and the app is opened one-handed in a shop or at the
   stove, where a menu button and a drawer are two taps and a screen covered
   for every move. Pages are padded at the bottom so the bar never covers

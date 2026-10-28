@@ -142,10 +142,10 @@ describe('navigation', () => {
     expect(current).toEqual(['食譜', '食譜'])
   })
 
-  it.each(['/authors', '/authors/1', '/edit/authors/1'])('marks 食譜 on the author page %s', (path) => {
+  it.each(['/authors', '/authors/1', '/edit/authors/1'])('marks 作者 on the author page %s', (path) => {
     renderAt(path)
     const current = screen.getAllByRole('link', { current: 'page' }).map((link) => link.textContent)
-    expect(current).toEqual(['食譜', '食譜'])
+    expect(current).toEqual(['作者', '作者'])
   })
 
   it('marks 設定 on 未來固定設定 too', () => {
@@ -170,7 +170,7 @@ describe('navigation', () => {
   it('gives the phone bar one column per section, whatever their number', () => {
     renderAt('/recipes')
     const [, phone] = screen.getAllByRole('navigation', { name: '主要' })
-    expect(SECTIONS.length).toBe(8)
+    expect(SECTIONS.length).toBe(9)
     expect(phone.style.gridTemplateColumns).toBe(`repeat(${SECTIONS.length}, minmax(0, 1fr))`)
     expect(within(phone).getAllByRole('link').map((link) => link.textContent)).toEqual(
       SECTIONS.map((section) => section.label),

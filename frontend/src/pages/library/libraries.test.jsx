@@ -461,7 +461,7 @@ describe('the recipe library', () => {
     await waitFor(() => expect(listRequests('/api/recipes')).toContain('/api/recipes?author_id=8'))
   })
 
-  it("links 作者 in its header, and draws no author panel - the author's page holds that", async () => {
+  it("draws no author panel - the author's page holds that", async () => {
     responses['/api/authors'] = [
       {
         id: 6,
@@ -474,7 +474,6 @@ describe('the recipe library', () => {
     ]
     responses['/api/recipes'] = [RECIPE]
     renderAt('/recipes?author=6')
-    expect(screen.getByRole('link', { name: '作者' }).getAttribute('href')).toBe('/authors')
     const sidebar = screen.getByRole('complementary', { name: '篩選' })
     expect(await within(sidebar).findByRole('button', { name: /阿基師/ })).toBeTruthy()
     expect(screen.queryByRole('region', { name: /^關於/ })).toBeNull()

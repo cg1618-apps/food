@@ -13,7 +13,7 @@
 // library to be written up later, and the badge is what makes that backlog
 // visible from the cover view.
 //
-// The header's 作者 goes to the author library (/authors). An author's links,
+// An author's links,
 // 備註 and pictures are read on the author's own page, not above this list:
 // one place for them (docs/notes/decisions.md).
 import { keepPreviousData } from '@tanstack/react-query'
@@ -21,7 +21,7 @@ import { keepPreviousData } from '@tanstack/react-query'
 import { endpoints } from '../../api/endpoints'
 import { FilterGroup, FilterOptions } from '../../components/layout/FilterPanel'
 import LibraryLayout from '../../components/layout/LibraryLayout'
-import { Badge, LinkButton } from '../../components/ui/primitives'
+import { Badge } from '../../components/ui/primitives'
 import { useApiQuery, useFixedVocabularies, useLabels } from '../../hooks/useApi'
 import { useUrlFilters } from '../../hooks/useUrlFilters'
 
@@ -171,7 +171,6 @@ export default function RecipeLibrary() {
       title="食譜"
       library="recipes"
       add={{ to: '/edit/recipes/new', label: '新增食譜' }}
-      actions={<LinkButton to="/authors">作者</LinkButton>}
       filters={filters}
       sidebar={sidebar}
       query={recipes}
