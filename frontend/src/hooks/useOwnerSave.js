@@ -1,7 +1,7 @@
 // Frontend: save a recipe, an ingredient or a note, gallery included.
 //
 // The row and its gallery are two requests - POST/PATCH the row, then PUT
-// `[{image_id, focus}]` to `.../{id}/images` - because the gallery endpoint is
+// `[{image_id, focus, caption}]` to `.../{id}/images` - because the gallery endpoint is
 // shared by all three owners and replaces wholesale. A NEW owner has no id
 // until the first request answers, so its gallery can only go second.
 //

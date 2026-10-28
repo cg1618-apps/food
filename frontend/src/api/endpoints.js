@@ -44,7 +44,7 @@ export const endpoints = {
     // PATCH; a body of only {status_id} is the in-place status change.
     update: (id) => `${WRITE}/recipes/${id}`,
     remove: (id) => `${WRITE}/recipes/${id}`,
-    // PUT [{image_id, focus}] in order: replaces the gallery.
+    // PUT [{image_id, focus, caption}] in order: replaces the gallery.
     images: (id) => `${WRITE}/recipes/${id}/images`,
   },
   ingredients: {

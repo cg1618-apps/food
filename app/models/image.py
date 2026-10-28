@@ -54,6 +54,9 @@ class IngredientImage(Base):
     # centres - per attachment, because one picture may be cropped
     # differently in two galleries.
     focus = Column(String, nullable=True)
+    # What the picture shows, in this gallery: per attachment for the same
+    # reason as `focus`. Trimmed, never "" - a blank caption is NULL.
+    caption = Column(String, nullable=True)
 
     ingredient = relationship("Ingredient", back_populates="images")
     image = relationship("Image", passive_deletes="all")
@@ -76,6 +79,7 @@ class DishImage(Base):
     )
     position = Column(Integer, nullable=False)
     focus = Column(String, nullable=True)
+    caption = Column(String, nullable=True)
 
     dish = relationship("Dish", back_populates="images")
     image = relationship("Image", passive_deletes="all")
@@ -100,6 +104,7 @@ class RecipeImage(Base):
     )
     position = Column(Integer, nullable=False)
     focus = Column(String, nullable=True)
+    caption = Column(String, nullable=True)
 
     recipe = relationship("Recipe", back_populates="images")
     image = relationship("Image", passive_deletes="all")
@@ -124,6 +129,7 @@ class KitchenNoteImage(Base):
     )
     position = Column(Integer, nullable=False)
     focus = Column(String, nullable=True)
+    caption = Column(String, nullable=True)
 
     kitchen_note = relationship("KitchenNote", back_populates="images")
     image = relationship("Image", passive_deletes="all")

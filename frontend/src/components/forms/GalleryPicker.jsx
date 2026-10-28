@@ -5,10 +5,10 @@
 // and food's recipes, ingredients and notes each hold an ordered gallery whose
 // first picture is the cover. So this is a list: upload (several files at
 // once), choose from the library, reorder by dragging a tile's handle
-// (components/ui/Sortable.jsx), set each picture's focus, remove.
+// (components/ui/Sortable.jsx), set each picture's focus and 說明, remove.
 //
 // It is controlled and saves nothing itself. `value` is lib/gallery.js's
-// `[{ image_id, url, thumb_url, focus }]`; the form PUTs it with the rest of
+// `[{ image_id, url, thumb_url, focus, caption }]`; the form PUTs it with the rest of
 // its save (galleryPayload) - after the first save for a new owner, because
 // until then there is no id to put it under. Uploading DOES reach the server
 // at once - the picture goes into the library - but attaching it waits for
@@ -22,7 +22,7 @@ import { addToGallery } from '../../lib/gallery'
 import { focusStyle } from '../../lib/images'
 import { rowsReducer } from '../../lib/rowList'
 import Dialog from '../ui/Dialog'
-import { Button, Chip } from '../ui/primitives'
+import { Button, Chip, TextArea } from '../ui/primitives'
 import { ErrorNote, Loading } from '../ui/states'
 import { DragHandle, SortableItem, SortableList } from '../ui/Sortable'
 import FocusPicker from './FocusPicker'
@@ -104,6 +104,23 @@ export default function GalleryPicker({ value, onChange }) {
                   <IconButton label={`移除圖片 ${index + 1}`} danger onClick={() => remove(index)}>
                     移除
                   </IconButton>
+                </div>
+                <div className="px-1 pb-1">
+                  <TextArea
+                    rows={1}
+                    aria-label={`圖片 ${index + 1} 的說明`}
+                    placeholder="說明"
+                    value={item.caption ?? ''}
+                    onChange={(event) =>
+                      onChange(
+                        rowsReducer(items, {
+                          type: 'update',
+                          index,
+                          patch: { caption: event.target.value },
+                        }),
+                      )
+                    }
+                  />
                 </div>
               </SortableItem>
             ))}

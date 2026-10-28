@@ -252,7 +252,9 @@ each, built from `components/layout/Detail.jsx`: `DetailStatus` (loading; a
 (each label a link to its library filtered by it), `RecipeLinks` and
 `DetailActions` (編輯, then 刪除 through `DeleteDialog`). Pictures are
 `components/ui/Gallery.jsx`: the first image large, the rest a strip of
-thumbnails that swap it in place, every one cropped at its focus.
+thumbnails that swap it in place, every one cropped at its focus. Under the
+large picture is its caption, with its line breaks; a picture without one
+draws nothing there.
 
 **A section with nothing in it is not drawn** - no heading over an empty
 list. A recipe saved only as a bookmark is a short page, not a page of
@@ -612,7 +614,7 @@ Days and °C are whole numbers on the server: the inputs step by 1 and the
 payload reads them with `integerOrNull` (`lib/rowList.js`).
 
 **The gallery** (`components/forms/GalleryPicker.jsx`) is controlled and saves
-nothing itself: `value` is `[{ image_id, url, thumb_url, focus }]`, first is
+nothing itself: `value` is `[{ image_id, url, thumb_url, focus, caption }]`, first is
 the cover (marked 封面). 上傳圖片 takes several files, uploading one at a time
 so a bad file fails alone with its own message; uploading reaches the library
 at once, attaching waits for 儲存. 從圖庫選 opens the library in a dialog,
@@ -620,7 +622,9 @@ at once, attaching waits for 儲存. 從圖庫選 opens the library in a dialog,
 one already in the gallery is marked and can be taken out. Each picture has
 a drag handle - the tiles drag in both directions, as a grid - 焦點
 (`FocusPicker.jsx`: click or drag, arrow keys nudge 1% / 10%, previewed as a
-cover and a thumbnail) and 移除.
+cover and a thumbnail) and 移除, and under them a 說明 box - the caption,
+growing with its text - sent as typed: the API trims it and stores a blank
+one as null.
 
 ## 設定 and 圖片
 
