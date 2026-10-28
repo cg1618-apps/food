@@ -20,8 +20,6 @@
 //   title         - the page heading, e.g. 食譜
 //   library       - the key the view choice is remembered under
 //   add           - { to, label } for the add button
-//   actions       - optional: more links beside the add button (the recipe
-//                   library's 作者)
 //   filters       - the useUrlFilters(spec) result
 //   sidebar       - the filter controls (components/layout/FilterPanel), or
 //                   absent for a library with nothing to filter by but the
@@ -63,7 +61,6 @@ export default function LibraryLayout({
   title,
   library,
   add,
-  actions,
   filters,
   sidebar,
   query,
@@ -102,10 +99,7 @@ export default function LibraryLayout({
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-3xl font-bold">{title}</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          {actions}
-          {addButton}
-        </div>
+        {addButton}
       </div>
 
       <div className={sidebar ? 'lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-8' : undefined}>

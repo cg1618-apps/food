@@ -16,8 +16,8 @@ icon that opens a full-width search row under the bar.
 The section a page belongs to - its edit pages included - is marked with
 `aria-current="page"`; `lib/nav.js` holds that match. 設定's section also
 owns 未來固定設定 and the image library, which are reached from 設定. 作者 sits
-beside 食譜, since an author is who a recipe came from; the recipe library's
-header and a recipe source's author link there too.
+beside 食譜, since an author is who a recipe came from; a recipe source's
+author links there too.
 
 **A section is one entry in `SECTIONS` (`lib/nav.js`)** - its label, its
 link and the path prefixes it owns, edit pages included. Both bars draw from
