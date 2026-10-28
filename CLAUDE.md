@@ -40,14 +40,14 @@ reference work.
 ## Status
 
 **Modules 1 and 2 are built, with dishes, kitchen notes, the weekly
-schedule, 加熱 and TBD.** The schema is at revision `c3ommon` (the head).
+schedule, 加熱 and TBD.** The schema is at revision `a3uthor` (the head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
   parent, rating, labels, storage as a state x method grid with day ranges, a
   heating guide, links, galleries, the 待補 (`needs_detail`) stub backlog,
   and merge.
 - **Category notes** - a category's own `description`, the family's notes
-  (how to pick fresh chicken, how long it keeps), edited on 設定 and shown
+  (how to pick fresh chicken, how long it keeps), edited on 未來固定設定 and shown
   above the ingredient library when that category is chosen.
 - **A name is a category or an ingredient, never both** - an ingredient
   saved under a category's name offers to convert the category into it (one
@@ -67,17 +67,21 @@ schedule, 加熱 and TBD.** The schema is at revision `c3ommon` (the head).
   dish, or a new stub or dish made by the save, each with any number of
   alternatives (或 - 雞腿 或 雞胸肉) naming the same kinds of target with
   their own amount and note, and steps (each a 步驟, 可省略
-  or 備註), each in groups (a 設定 材料分組 / 步驟分組 value or a one-off name,
+  or 備註), each in groups (a 未來固定設定 材料分組 / 步驟分組 value or a one-off name,
   rows dragged within and between them), sources with an author picked or
   made by the save, a status, an optional 難易度, methods, equipment, 保存 / 加熱 / 筆記 notes,
   galleries, "used in" for
   ingredients, and 常用 chips above the lines, under their 常用食材 groups'
   headings, that add an ungrouped line in a tap. A new
   recipe starts blank or as a copy of another recipe.
-- **Authors** - a 設定 vocabulary that also carries links (a name and a
-  url each, in the owner's order) and a 備註, edited on the author's row
-  and shown above the recipe library when it is filtered to that author;
-  a source's author on a recipe links to that filter.
+- **Authors** - a library of its own under 食譜 (`/authors`, searched by
+  name, covers or a table with 食譜數): each author's page shows a gallery,
+  the names, links (a name and a url each, in the owner's order), a 備註
+  and the recipes whose sources name them, with a link to the recipe
+  library filtered to them; one form edits all of it. Still a vocabulary
+  underneath - 設定's 作者 tab adds, renames and deletes, and links each
+  row to the form - and a delete is refused while a source names the
+  author. A source's author on a recipe links to the author's page.
 - **Kitchen notes** - bookmarks with a title, a kind, a link, a body, labels
   and a gallery.
 - **The weekly schedule (排程)** - per date, four meals (早, 中, 下午, 晚),
@@ -92,16 +96,23 @@ schedule, 加熱 and TBD.** The schema is at revision `c3ommon` (the head).
 - **TBD** - a standalone page of entries, each an optional name and any
   number of links, in the owner's order; read at `/tbd`, edited in place at
   `/edit/tbd`.
-- **The notebook UI** - 料理 · 食譜 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定: the four libraries
-  (search and filters in the URL, a sidebar or a phone drawer, covers or a
-  table), their detail pages, their add and edit forms with the gallery
-  picker, one delete dialog, ingredient merge, 設定 for every vocabulary
-  (categories, labels, courses, regions, recipe statuses, recipe difficulties
-  (難易度), source platforms, authors,
-  材料分組, 步驟分組, cooking methods, equipment), for 常用食材 (the
-  recipe form's chips, an ordered pick of ingredients, ungrouped or in
-  named groups dragged within and between), and 圖片, the image
-  library.
+- **搜尋, the universal search** - one box in the top bar (an icon that
+  opens a full-width row on a phone) finding dishes, recipes, ingredients,
+  notes, authors, 加熱 and TBD by their libraries' own matching, ranked
+  exact, prefix, contains; a dropdown grouped by kind, and `/search` with
+  every row's 編輯 link - which is how any entry is edited quickly, in place
+  of media-style modify hubs.
+- **The notebook UI** - 料理 · 食譜 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定: the five libraries,
+  authors filed under 食譜 (search and filters in the URL, a sidebar or a
+  phone drawer, covers or a table), the 搜尋 box in the top bar and its
+  `/search` page, their detail pages, their add and edit forms with the gallery
+  picker, one delete dialog, ingredient merge, 設定 for the vocabularies
+  the owner keeps growing (labels, regions, source platforms, authors,
+  equipment) and 圖片, the image library; and 未來固定設定 for the system
+  options expected to become fixed (categories, 常用食材 - the recipe
+  form's chips, an ordered pick of ingredients, ungrouped or in named
+  groups dragged within and between - courses, recipe statuses, recipe
+  difficulties (難易度), 材料分組, 步驟分組, cooking methods).
 
 **The starting ingredient list is loaded by `i3import`**: 194 names from the
 recipe document's ingredient lists, approved by the owner, read from

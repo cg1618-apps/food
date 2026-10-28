@@ -44,7 +44,7 @@ export const endpoints = {
     // PATCH; a body of only {status_id} is the in-place status change.
     update: (id) => `${WRITE}/recipes/${id}`,
     remove: (id) => `${WRITE}/recipes/${id}`,
-    // PUT [{image_id, focus}] in order: replaces the gallery.
+    // PUT [{image_id, focus, caption}] in order: replaces the gallery.
     images: (id) => `${WRITE}/recipes/${id}/images`,
   },
   ingredients: {
@@ -129,12 +129,26 @@ export const endpoints = {
   platforms: vocabulary('source-platforms'),
   methods: vocabulary('cooking-methods'),
   equipment: vocabulary('equipment'),
-  // A source's author; listed by name, and grown by the recipe form too.
-  authors: vocabulary('authors'),
+  // A source's author; listed by name, and grown by the recipe form too. The
+  // list, create, update and delete are the factory's; the page, its delete
+  // preview and its gallery are app/routers/author.py's.
+  authors: {
+    ...vocabulary('authors'),
+    detail: (id) => `${API}/authors/${id}`,
+    cascade: (id) => `${API}/authors/${id}/cascade`,
+    // PUT [{image_id, focus, caption}] in order: replaces the gallery.
+    images: (id) => `${WRITE}/authors/${id}/images`,
+  },
   // The groups a recipe's ingredient lines (材料分組) and steps (步驟分組)
   // are picked from; a recipe may also name a group of its own.
   lineGroups: vocabulary('line-groups'),
   stepGroups: vocabulary('step-groups'),
+  // The universal search: GET ?q=&limit= answers one bucket per kind
+  // (app/routers/search.py). Read-only, and invalidated by nothing - a search
+  // is asked again when its term changes, and its staleTime is short.
+  search: {
+    list: () => `${API}/search`,
+  },
   vocabularies: {
     // Every closed list with its display label: preservation methods and
     // states, ratings, dish kinds, note kinds, step kinds, meal slots, label

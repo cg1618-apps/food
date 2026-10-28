@@ -30,9 +30,13 @@ front of the page someone opens rather than behind their first save. So
 - **List endpoints return a bare array**, not `{items, total}`. No pagination:
   these are small catalogues, and list order is fixed per router rather than a
   query parameter. The one exception is `GET /api/images`, which grows with
-  every upload and takes `limit` and `offset`.
+  every upload and takes `limit` and `offset`, and `GET /api/search`, which
+  answers an object of buckets (see "Search").
 - **Sorting is by display name, done in Python**, because the display name is
   the first non-empty of three columns and no single `ORDER BY` expresses it.
+  The exception is `GET /api/search`, which ranks and limits in SQL so that a
+  bucket of ten never loads the whole table; its `display_order` expresses
+  the same first-non-empty rule as a `coalesce`, compared by code point.
 - **`PATCH` applies only what was sent.** Absent and explicitly null are
   different: `{}` changes nothing, `{"description": null}` clears the note.
 - **Unknown fields are refused, not ignored.** `extra="forbid"`, so a payload
@@ -153,7 +157,7 @@ default `unused`), `method`, `duration_min_days`, `duration_max_days` and
 `notes`. A heating entry is `method` (`{id, display_name}`), `temperature_c`,
 `temperature_f` (computed, never sent), `duration`, `preheat`, `flip` and
 `notes`; a link is `url` and `title`. An image is `image_id`, `url`,
-`thumb_url`, `width`, `height` and `focus`. Heating rows and links come back
+`thumb_url`, `width`, `height`, `focus` and `caption`. Heating rows and links come back
 with a `sort_order`, but it is not sent: their order is the order of the list,
 and a request naming `sort_order` on either is a 422.
 
@@ -340,11 +344,14 @@ Two clashes no conversion resolves:
   owner's to say, by renaming the other first.
 
 **`PUT /api/edit/ingredients/{id}/images`** takes a list of
-`{"image_id": 12, "focus": "50% 30%"}` and makes it the gallery, in that order;
-index 0 is the cover. `[]` clears it. An unknown `image_id` is 422 naming the
+`{"image_id": 12, "focus": "50% 30%", "caption": "切面"}` and makes it the
+gallery, in that order; index 0 is the cover. `focus` and `caption` are both
+optional. A caption is trimmed - its inner line breaks kept - and a blank one
+is stored as null; it has no length limit, like every free-text field here. `[]` clears it. An unknown `image_id` is 422 naming the
 id (see "An id in the body that names nothing is 422"), the same image twice
 is 422, and a `focus` that is not `"X% Y%"` with each between 0 and
-100 is 422. Putting the same list twice in a row succeeds. The answer is the
+100 is 422, as is a `caption` that is not a string. Putting the same list twice
+in a row succeeds. The answer is the
 full ingredient.
 
 ## Dishes
@@ -499,7 +506,7 @@ makes), `notes`, `created_at`, `updated_at`, and:
   `{id, position, ingredient, sub_dish, amount, note}` with exactly one target
   set as a line's; a null `amount` is "the same as the line";
 - `line_groups` - the recipe's 材料分組, in order, each `{id, position, group,
-  name, display_name, lines}`: `group` is the 設定 value (`{id,
+  name, display_name, lines}`: `group` is the 未來固定設定 value (`{id,
   display_name}`) or null, `name` the one-off name or null - exactly one is
   set - `display_name` is whichever it is, and `lines` the group's lines, as
   above. An empty group is listed with `lines: []`;
@@ -565,7 +572,7 @@ name on two sources is one author. A step is `{body, kind}` with a non-blank
 when left out - any other value, null included, is a 422.
 
 A group is `{line_group_id, name, lines}` (or `{step_group_id, name, steps}`):
-exactly one of the 設定 value's id and a one-off `name`, and its rows, which
+exactly one of the 未來固定設定 value's id and a one-off `name`, and its rows, which
 may be none - an empty group is kept. A `name` equal to a value's `name_cn`
 or `name_en`, trimmed and ignoring case, is stored as that value. A recipe may
 not hold the same group twice: the same value, a value and its name, or one
@@ -727,8 +734,43 @@ null, and a link has no other field. On a `PATCH`, `links` replaces every
 link in the order sent when it is sent and leaves them alone when it is
 not; `[]` clears them and an explicit null is a 422. The other nine
 vocabularies neither answer with these fields nor accept them - sending
-one is a 422. Deleting an author takes its links with it; the 409 above
-counts only sources.
+one is a 422. Deleting an author takes its links and its gallery rows
+with it (the pictures stay in the library); the 409 below counts only
+sources.
+
+**An author's list row also carries `recipe_count` and `cover`.**
+`recipe_count` is the distinct recipes its sources name - a recipe with two
+sources by the author counts once, where `usage_count` counts both sources,
+since those are what would stop a delete. `cover` is the first gallery
+picture's `{thumb_url, focus}`, or null. The other nine answer with neither.
+
+### An author's page
+
+The list and the writes above are the vocabulary factory's; an author read
+on its own, its delete preview and its gallery are `app/routers/author.py`'s,
+under the same prefix.
+
+| Route | |
+| --- | --- |
+| `GET /api/authors/{id}` | the author's page |
+| `GET /api/authors/{id}/cascade` | what refuses a delete |
+| `PUT /api/edit/authors/{id}/images` | replace the gallery, in order |
+
+**`GET /api/authors/{id}`** is everything a list row has - `id`,
+`display_name`, `name_cn`, `name_en`, `sort_order`, `usage_count`, `notes`,
+`links`, `recipe_count`, `cover` - plus `images` (as an ingredient's, in
+order, each with its `focus` and `caption`) and `recipes`: the recipes whose
+sources name the author, each once, as `GET /api/recipes` lists them
+(`id`, `display_name`, `dish`, `status`, `cover` and the rest), sorted by
+display name. An unknown id is a 404.
+
+**`GET /api/authors/{id}/cascade`** is `{sources, recipes}`: the sources
+naming the author and the distinct recipes they belong to. Either above zero
+means the delete will be refused. Nothing cascades that a person would miss,
+so neither is echoed on the delete, which stays the factory's.
+
+**`PUT /api/edit/authors/{id}/images`** replaces the gallery exactly as an
+ingredient's does, and answers with the author's page.
 
 **Deleting a value that is in use is a 409 carrying `usage_count`**, answered
 before the database is asked; the `RESTRICT` foreign key is the backstop. The
@@ -764,8 +806,8 @@ among them — they are managed vocabularies, above.
 An image is `id`, `url`, `thumb_url`, `width`, `height`, `byte_size`,
 `original_filename`, `uploaded_at` and `attachment_count`; the single-image read
 adds `owners`, a list of `{type, id, display_name}` where `type` is
-`ingredient`, `dish`, `recipe` or `kitchen_note` (whose `display_name` is its
-title).
+`ingredient`, `dish`, `recipe`, `kitchen_note` (whose `display_name` is its
+title) or `author`.
 
 **`GET /api/images` takes `unused`, `limit` (default 60, at most 200) and
 `offset`.** `unused=true` returns only images nothing attaches, `false` only
@@ -837,7 +879,7 @@ and the structure becomes exactly that: 未分組's chips, each group's chips an
 the groups themselves numbered 0, 1, 2 … in the order sent. A group sent
 with an `id` is that group, renamed and moved; one without is created; a
 stored group not sent is deleted, and its chips are wherever the body puts
-them (設定 sends them at the end of 未分組). Adding, removing and moving a
+them (未來固定設定 sends them at the end of 未分組). Adding, removing and moving a
 chip, and adding, renaming, reordering and deleting a group, are each this
 one call. A name is stored trimmed. The answer is the structure, as the
 `GET` gives it.
@@ -1002,6 +1044,60 @@ blank or null `name`. The answer is the note, as the `GET` gives it.
 
 **The order `PUT` body is `{"ids": [4, 2, …]}`**, with TBD's rule: exactly the
 current notes, each once, or a 422 that changes nothing.
+
+## Search
+
+| Route | |
+| --- | --- |
+| `GET /api/search?q=&limit=` | one bucket per kind, best match first |
+
+The universal search behind the top bar's search box and `/search`. Public
+and read-only, with no write counterpart.
+
+```json
+{"query": "咖哩",
+ "results": {
+   "dishes":      [{"id": 3, "display_name": "咖哩", "detail": "料理",
+                    "cover": {"thumb_url": "/images/library/thumbs/….jpg", "focus": null}}],
+   "recipes":     [{"id": 9, "display_name": "快速版", "detail": "咖哩 · 阿基師", "cover": null}],
+   "ingredients": [], "notes": [], "authors": [],
+   "heating":     [{"id": 4, "display_name": "咖哩調理包", "detail": "微波 2 分鐘", "cover": null}],
+   "tbd":         []}}
+```
+
+**Every bucket is always present**, `[]` when nothing matched. Each row is
+`id`, `display_name`, `detail` - a short secondary line, or null - and
+`cover`, the first gallery picture as a library row carries it, always null
+for 加熱 and TBD, which have no gallery.
+
+| Bucket | Matches | `detail` |
+| --- | --- | --- |
+| `dishes` | any name slot or alias - the dish library's `q` | the kind, 料理 or 醬料 |
+| `recipes` | the recipe's own name, or any of its dish's names and aliases - the recipe library's `q` | the dish (only when the recipe has a name of its own) and the authors, joined by ` · ` |
+| `ingredients` | any name slot or alias - the ingredient library's `q` | the category, and 待補 for a stub |
+| `notes` | the title or the body - the note library's `q` | the kind, 合輯 / 技巧 / 參考 |
+| `authors` | either name - the author library's search | the English name, when the author has both |
+| `heating` | the name, or the body | the body's first non-blank line |
+| `tbd` | the name, or any link's label - not the url | the number of links |
+
+Matching is case-insensitive and substring, `%` and `_` literal, built from
+the same clauses the libraries filter by (`app/services/search.py`), so the
+search never finds a row its library would not. A TBD entry is shown by its
+name, else its first link's label, else its first link's url; one with
+neither a name nor a labelled link is not findable here.
+
+**Order within a bucket is the tier a row first matches, then the name.**
+The tiers are exact (the whole of a name or an alias equals the term), then
+prefix (one begins with it), then contains; ties go by display name, then
+`id`. So `雞` gives 雞, 雞湯, 雞肉飯, 炒雞. For notes and 加熱 the tiers are on
+the title or name, and a row matching only in its body comes after every
+name match. TBD ties keep unnamed entries last, in the owner's order.
+
+**`q` blank, whitespace or absent answers every bucket empty**, 200 - not
+every row in the app. `limit` is rows per bucket: default 10, 1 to 50, and
+anything else is a 422. Each bucket is one query plus a fixed set of eager
+loads (covers, a category, a dish), so the number of queries does not grow
+with the rows.
 
 ## Categories
 

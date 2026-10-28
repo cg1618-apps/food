@@ -31,6 +31,8 @@ from sqlalchemy.orm import Session
 from app import config
 from app.errors import AppError
 from app.models import (
+    Author,
+    AuthorImage,
     Dish,
     DishImage,
     Image,
@@ -57,6 +59,7 @@ OWNER_TABLES: list[tuple[type, str, type]] = [
     (DishImage, "dish", Dish),
     (RecipeImage, "recipe", Recipe),
     (KitchenNoteImage, "kitchen_note", KitchenNote),
+    (AuthorImage, "author", Author),
 ]
 
 
@@ -225,7 +228,7 @@ def set_images(db: Session, owner, relationship: str, attachment: type, entries)
 
     One function for every gallery: `relationship` names the owner's gallery
     attribute and `attachment` the row class it holds (`IngredientImage`, `DishImage`,
-    `RecipeImage`, `KitchenNoteImage`). Cleared and flushed BEFORE the new rows are assigned: the
+    `RecipeImage`, `KitchenNoteImage`, `AuthorImage`). Cleared and flushed BEFORE the new rows are assigned: the
     unit of work INSERTs before it DELETEs, so replacing in one step collides
     with the gallery's position (and once) unique key whenever a position or an
     image is reused - which a reorder always does.
@@ -237,7 +240,9 @@ def set_images(db: Session, owner, relationship: str, attachment: type, entries)
         owner,
         relationship,
         [
-            attachment(image_id=found[e.image_id].id, position=i, focus=e.focus)
+            attachment(
+                image_id=found[e.image_id].id, position=i, focus=e.focus, caption=e.caption
+            )
             for i, e in enumerate(entries)
         ],
     )
@@ -254,6 +259,7 @@ def attached(rows) -> list[AttachedImage]:
             width=a.image.width,
             height=a.image.height,
             focus=a.focus,
+            caption=a.caption,
         )
         for a in rows
     ]

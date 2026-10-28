@@ -461,56 +461,24 @@ describe('the recipe library', () => {
     await waitFor(() => expect(listRequests('/api/recipes')).toContain('/api/recipes?author_id=8'))
   })
 
-  describe("the chosen author's panel", () => {
-    const AUTHORS = [
+  it("links 作者 in its header, and draws no author panel - the author's page holds that", async () => {
+    responses['/api/authors'] = [
       {
         id: 6,
         display_name: '阿基師',
         sort_order: 0,
         usage_count: 1,
-        notes: '台菜。\n影片比較詳細。',
-        links: [
-          { label: 'YouTube', url: 'https://youtube.com/@a' },
-          { label: null, url: 'https://blog.example/a' },
-        ],
+        notes: '台菜。',
+        links: [{ label: 'YouTube', url: 'https://youtube.com/@a' }],
       },
-      { id: 8, display_name: '詹姆士', sort_order: 0, usage_count: 1, notes: null, links: [] },
     ]
-
-    it('draws the name, the links opening in a new tab, and the 備註 above the list', async () => {
-      responses['/api/authors'] = AUTHORS
-      responses['/api/recipes'] = [RECIPE]
-      renderAt('/recipes?author=6')
-      const panel = await screen.findByRole('region', { name: '關於阿基師' })
-      expect(within(panel).getByRole('heading', { name: '阿基師' })).toBeTruthy()
-      const links = within(panel).getAllByRole('link')
-      // The label when there is one, else the address as words.
-      expect(links.map((link) => link.textContent)).toEqual(['YouTube', 'blog.example/a'])
-      expect(links.map((link) => link.getAttribute('href'))).toEqual([
-        'https://youtube.com/@a',
-        'https://blog.example/a',
-      ])
-      for (const link of links) {
-        expect(link.getAttribute('target')).toBe('_blank')
-        expect(link.getAttribute('rel')).toBe('noopener noreferrer')
-      }
-      // Line breaks kept.
-      expect(within(panel).getByText(/台菜。/).textContent).toBe('台菜。\n影片比較詳細。')
-    })
-
-    it('draws nothing for an author with neither links nor 備註, or for two authors', async () => {
-      responses['/api/authors'] = AUTHORS
-      renderAt('/recipes?author=8')
-      // The filter options have loaded, so the panel had what it needed.
-      const sidebar = screen.getByRole('complementary', { name: '篩選' })
-      expect(await within(sidebar).findByRole('button', { name: /詹姆士/ })).toBeTruthy()
-      expect(screen.queryByRole('region', { name: /^關於/ })).toBeNull()
-      cleanup()
-
-      renderAt('/recipes?author=6&author=8')
-      expect(await within(screen.getByRole('complementary', { name: '篩選' })).findByRole('button', { name: /阿基師/ })).toBeTruthy()
-      expect(screen.queryByRole('region', { name: /^關於/ })).toBeNull()
-    })
+    responses['/api/recipes'] = [RECIPE]
+    renderAt('/recipes?author=6')
+    expect(screen.getByRole('link', { name: '作者' }).getAttribute('href')).toBe('/authors')
+    const sidebar = screen.getByRole('complementary', { name: '篩選' })
+    expect(await within(sidebar).findByRole('button', { name: /阿基師/ })).toBeTruthy()
+    expect(screen.queryByRole('region', { name: /^關於/ })).toBeNull()
+    expect(screen.queryByText('台菜。')).toBeNull()
   })
 
   it('shows the status and the authors by name in the table', async () => {
@@ -579,5 +547,76 @@ describe('the label filter', () => {
       const word = { ingredient: '食材', note: '筆記' }[scope]
       expect(await within(sidebar).findByText(`還沒有${word}標籤。`)).toBeTruthy()
     }
+  })
+})
+
+describe('the author library', () => {
+  const AUTHORS = [
+    {
+      id: 8,
+      display_name: 'Babish',
+      name_cn: null,
+      name_en: 'Babish',
+      sort_order: 0,
+      usage_count: 0,
+      recipe_count: 0,
+      cover: null,
+      notes: null,
+      links: [],
+    },
+    {
+      id: 6,
+      display_name: '阿基師',
+      name_cn: '阿基師',
+      name_en: 'Chef Ah-Chi',
+      sort_order: 0,
+      usage_count: 3,
+      recipe_count: 2,
+      cover: { thumb_url: '/images/a.jpg', focus: '20% 80%' },
+      notes: null,
+      links: [],
+    },
+  ]
+
+  it('lists every author as a cover to its page, with its recipe count, and an add button', async () => {
+    responses['/api/authors'] = AUTHORS
+    renderAt('/authors')
+    expect(screen.getByRole('heading', { level: 1, name: '作者' })).toBeTruthy()
+    const chef = await screen.findByRole('link', { name: /阿基師/ })
+    expect(chef.getAttribute('href')).toBe('/authors/6')
+    expect(chef.textContent).toContain('2 份食譜')
+    expect(chef.querySelector('img').getAttribute('src')).toBe('/images/a.jpg')
+    expect(screen.getByRole('link', { name: /Babish/ }).textContent).toContain('還沒有食譜')
+    expect(screen.getByRole('link', { name: '新增作者' }).getAttribute('href')).toBe('/edit/authors/new')
+    // Nothing to filter by but the name: no sidebar, no 篩選 button.
+    expect(screen.queryByRole('complementary', { name: '篩選' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^篩選/ })).toBeNull()
+  })
+
+  it('searches either name from the URL, without asking the server again', async () => {
+    responses['/api/authors'] = AUTHORS
+    renderAt('/authors?q=chef')
+    expect(await screen.findByRole('link', { name: /阿基師/ })).toBeTruthy()
+    expect(screen.queryByRole('link', { name: /Babish/ })).toBeNull()
+    expect(screen.getByText('共 1 筆')).toBeTruthy()
+    expect(listRequests('/api/authors')).toEqual(['/api/authors'])
+  })
+
+  it('says nothing matches, and offers clearing the search', async () => {
+    responses['/api/authors'] = AUTHORS
+    renderAt('/authors?q=詹姆士')
+    expect(await screen.findByText('沒有符合的作者。')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '清除搜尋與篩選' }))
+    expect(await screen.findByRole('link', { name: /Babish/ })).toBeTruthy()
+  })
+
+  it('shows the recipe count as a column in the table', async () => {
+    responses['/api/authors'] = AUTHORS
+    localStorage.setItem('cg1618:food:authors-view', 'list')
+    renderAt('/authors')
+    const table = await screen.findByRole('table')
+    expect(within(table).getByRole('columnheader', { name: '食譜數' })).toBeTruthy()
+    const row = within(table).getByText('阿基師').closest('tr')
+    expect(within(row).getByText('2')).toBeTruthy()
   })
 })

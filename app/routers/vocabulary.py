@@ -5,11 +5,13 @@ count, before the database is asked. The RESTRICT foreign keys are the
 backstop, and through the IntegrityError handler they would only be able to
 say "something still refers to this".
 
-Nine vocabularies are names and nothing else. An author also has a remark
-and links, so `build` takes a `Shape`: the schemas a vocabulary is read and
-written with, how a write is applied, and what its list loads alongside. The
-default is the plain one, and only authors pass another - so the other nine
-still refuse `notes` and `links` as extra fields.
+Nine vocabularies are names and nothing else. An author also has a remark,
+links and a gallery, so `build` takes a `Shape`: the schemas a vocabulary is
+read and written with, how a write is applied, what its list loads alongside,
+and what a row carries beyond its columns. The default is the plain one, and
+only authors pass another - so the other nine still refuse `notes` and
+`links` as extra fields. An author's page and its gallery PUT are not the
+factory's; they are app/routers/author.py.
 """
 
 from collections.abc import Callable
@@ -43,17 +45,25 @@ def _set_fields(row, values: dict) -> None:
         setattr(row, field, value)
 
 
+def _no_extra(db: Session) -> Callable[[object], dict]:
+    return lambda row: {}
+
+
 @dataclass(frozen=True)
 class Shape:
     """How one vocabulary is read and written. `apply(row, values)` writes a
     create or the sent fields of an update; `load` is query options for the
-    list; the response is built from the response schema's own fields."""
+    list; `extra(db)` returns a function giving a row's computed fields (an
+    author's `recipe_count` and `cover`), asked once per request so a list
+    counts in one query. Every other field of the response schema is read
+    off the row."""
 
     create: type = schemas.VocabularyCreate
     update: type = schemas.VocabularyUpdate
     response: type = schemas.VocabularyResponse
     apply: Callable = _set_fields
     load: tuple = ()
+    extra: Callable[[Session], Callable[[object], dict]] = _no_extra
 
 
 PLAIN = Shape()
@@ -63,6 +73,7 @@ AUTHOR = Shape(
     response=schemas.AuthorResponse,
     apply=authors.apply,
     load=authors.load,
+    extra=authors.extra,
 )
 
 
@@ -73,15 +84,16 @@ def build(
     edit = write_router(resource, tag)
     Create, Update, Out = shape.create, shape.update, shape.response
 
-    def _response(row, counts: dict[int, int]):
+    def _response(row, counts: dict[int, int], extra: Callable[[object], dict]):
+        computed = {"usage_count": counts.get(row.id, 0), **extra(row)}
         return Out.model_validate(
             {
                 **{
                     field: getattr(row, field)
                     for field in Out.model_fields
-                    if field != "usage_count"
+                    if field not in computed
                 },
-                "usage_count": counts.get(row.id, 0),
+                **computed,
             },
             from_attributes=True,
         )
@@ -97,7 +109,8 @@ def build(
         counts = vocabularies.usage(db, model)
         rows = db.query(model).options(*shape.load).all()
         rows.sort(key=lambda r: (r.sort_order, r.display_name.casefold()))
-        return [_response(row, counts) for row in rows]
+        extra = shape.extra(db)
+        return [_response(row, counts, extra) for row in rows]
 
     @edit.post("", response_model=Out, status_code=201)
     def create_value(payload: Create, db: Session = Depends(get_db)):
@@ -106,7 +119,7 @@ def build(
         db.add(row)
         db.commit()
         db.refresh(row)
-        return _response(row, {})
+        return _response(row, {}, shape.extra(db))
 
     @edit.patch("/{row_id}", response_model=Out)
     def update_value(row_id: int, payload: Update, db: Session = Depends(get_db)):
@@ -116,7 +129,7 @@ def build(
             raise AppError(422, f"A {noun} needs at least one name.")
         db.commit()
         db.refresh(row)
-        return _response(row, vocabularies.usage(db, model))
+        return _response(row, vocabularies.usage(db, model), shape.extra(db))
 
     @edit.delete("/{row_id}", status_code=204)
     def delete_value(row_id: int, db: Session = Depends(get_db)):
@@ -154,7 +167,8 @@ method_router, method_edit = build(
 equipment_router, equipment_edit = build(Equipment, "equipment", "Equipment", "piece of equipment")
 # Listed by name: every author has sort_order 0 (app/models/vocabulary.py), so
 # the (sort_order, name) order above needs nothing of its own.
-# The one vocabulary with a remark and links (AUTHOR above).
+# The one vocabulary with a remark, links and a gallery (AUTHOR above); its
+# page is app/routers/author.py.
 author_router, author_edit = build(Author, "authors", "Authors", "author", AUTHOR)
 # Hand-ordered like courses: the order is the one the recipe form offers them
 # in when a group is added.

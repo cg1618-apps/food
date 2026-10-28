@@ -322,11 +322,17 @@ so a later reader can tell a decision from an accident. These are food's.
   single picture for an owner's role and attaches it the moment it is picked.
   food's recipes, ingredients and notes each hold an ordered gallery whose
   first picture is the cover, so `GalleryPicker` is a list - several uploads at
-  once, reorder, a focus per picture - and it attaches nothing itself: the form
+  once, reorder, a focus and a caption per picture - and it attaches nothing itself: the form
   PUTs the whole gallery with its save, after the first save for a new owner.
   A cancelled form therefore leaves at most an unused picture in the library
   and changes no owner, where media's attach-on-pick changes the owner before
   Save is pressed.
+- **A caption belongs to the attachment, not to the picture**, beside
+  `focus` and for the same reason: one picture in a dish's gallery and a
+  recipe's may need to say different things, and a caption on `image` would
+  make editing one silently edit the other. It has no length limit, because
+  no free-text field here has one: a caption is short by nature, and a cap
+  would be the first and only one in the app.
 - **The typeahead searches the server and is driven from the keyboard**, where
   media's `ComboBox` filters a list it was handed and handles only Escape and
   Tab. A recipe line may name any ingredient or any recipe, so handing the box
@@ -353,15 +359,33 @@ so a later reader can tell a decision from an accident. These are food's.
   keys is the standard pattern for a tab bar, which `aria-current` (a link in
   a set of links) is not. The look and the wrapping row are media's
   `AdminTabBar`'s.
+- **The vocabularies are split between 設定 and 未來固定設定.** Some of them
+  are system options rather than the owner's data - 食材分類, 常用食材, 類別,
+  狀態, 難易度, 材料分組, 步驟分組, 做法 - and are expected to become fixed,
+  hard-coded, eventually; they stay editable only because the app is still
+  changing a lot. The owner wanted them on a page of their own, named for
+  that, so 設定 holds only what stays theirs to grow: 標籤, 地區, 來源, 作者
+  and 器材, beside the way into 圖片. Both pages are one component over one
+  set of tab definitions (`components/settings/SettingsPage.jsx`,
+  `settingsTabs.jsx`) rather than two copies, so moving a vocabulary - or
+  fixing one, later - is a line moved between two lists. **The tab ids did
+  not change**, and a `?tab=` naming the other page's tab is redirected there
+  with `replace`, so every link written before the split - a bookmark,
+  `/edit/vocabularies?tab=courses` - still lands on its tab and Back does not
+  bounce through the redirect. Rejected: a second section in the navigation,
+  which would spend a phone column on pages visited rarely and by one person;
+  the new page belongs to 設定's section, reached by a button from 設定.
 - **The theme toggle is in a slim top bar on a phone**, where media puts it
   in the header strip on a desktop and as a row in its menu drawer below `lg`.
   food has no drawer: its phone navigation is the bottom bar, one column per
   section, which at 360px has no room for a ninth column that is a control
   rather than a destination - and a choice made once per device does not earn
   a place under the thumb. So the desktop's top bar is kept on a phone, shown
-  with only 食 and the toggle, not sticky, so it scrolls away and costs the
-  page no height while reading. Rejected: a floating button, which would sit
-  over each page's own top-right actions; and putting it on 設定, which is
+  with only 食, the search icon and the toggle, not sticky, so it scrolls
+  away and costs the page no height while reading. The search box went
+  there for the same reason (see "Search instead of modify hubs").
+  Rejected: a floating button, which would sit over each page's own
+  top-right actions; and putting it on 設定, which is
   behind Access and so out of reach of a reader who is not the owner. The
   storage key is `cg1618:food:theme` rather than media's `cg1618:theme`:
   every app is its own origin on its own hostname, so a shared name would
@@ -457,7 +481,7 @@ What the branch after module 1 chose, and what it turned down.
 - **A gallery table per owner type, not media's polymorphic table.** Media has
   one attachment table keyed by `owner_type` and `owner_id`, which nothing
   constrains, and records that nothing stops an attachment outliving its owner.
-  food has four owner types (ingredients, dishes, recipes, kitchen notes), so four small tables with real foreign keys
+  food has five owner types (ingredients, dishes, recipes, kitchen notes, authors), so five small tables with real foreign keys
   remove the whole class at the price of one shared module's worth of
   repetition. `images.OWNER_TABLES` is the one list the library's usage counts
   and owner listings read. The owner side cascades and the image side
@@ -591,7 +615,7 @@ What the branch after module 1 chose, and what it turned down.
 - **A recipe created without a status gets the first in sort order**, the
   oldest among equals, and with no status at all the create is a 422 saying
   so. There is no server default because the first status is the owner's
-  data: a column default would name an id that 設定 can reorder or delete.
+  data: a column default would name an id that 未來固定設定 can reorder or delete.
   Rejected: making the status optional, which would leave every list and the
   status toggle a "none" case for a recipe that has simply not been touched;
   and a fixed "first status" flag, a second ordering beside `sort_order` for
@@ -695,7 +719,7 @@ What the branch after module 1 chose, and what it turned down.
   trailing space were two groups. `recipe_line_group` and
   `recipe_step_group` make the group the thing the rows point at - it has a
   position, may be empty, and is renamed once.
-- **A group is a 設定 value or a one-off name, exactly one.** Most recipes
+- **A group is a 未來固定設定 value or a one-off name, exactly one.** Most recipes
   reuse the same few groups (主料, 調味料 / 備料, 烹飪), which should be one
   tap and one spelling; a few need their own (漢堡醬, 醃料), which should not
   have to be added to 設定 first. One column each, a CHECK that exactly one is
@@ -787,7 +811,7 @@ What the branch after module 1 chose, and what it turned down.
   surviving row and keeps its place; when the target is already listed the
   source's chip is simply dropped. The move is outside the merge plan and its
   fingerprint: it moves no content the preview would need to warn about.
-- **Groups of its own, not 設定's 材料分組.** The owner chose this. A
+- **Groups of its own, not 未來固定設定's 材料分組.** The owner chose this. A
   材料分組 (主料, 醬汁) says where a line sits in one recipe; a 常用食材 group
   (肉, 調味料) only arranges shortcuts so a long row of chips can be scanned.
   Reusing 材料分組 would tie the two lists together - renaming 醬汁 would
@@ -802,7 +826,7 @@ What the branch after module 1 chose, and what it turned down.
 - **SET NULL from a group to its chips.** Deleting a group must never delete
   a chip: the chip is an ingredient the owner picked, and the group only a
   heading. RESTRICT would make a group with chips undeletable for no gain.
-  The `PUT` writes each chip's group and place explicitly, so 設定's delete
+  The `PUT` writes each chip's group and place explicitly, so 未來固定設定's delete
   puts a deleted group's chips at the end of 未分組 itself; SET NULL is the
   schema saying the same thing for any other path, where the chips keep
   their old positions among 未分組's.
@@ -813,7 +837,7 @@ What the branch after module 1 chose, and what it turned down.
   index on `lower(name)` is checked row by row and two groups swapping names
   would otherwise collide with themselves. A duplicate ingredient is refused
   across the whole structure, as the list's duplicate always was.
-- **Deleting a group asks first**, as every delete on 設定 does, though
+- **Deleting a group asks first**, as every delete on the settings pages does, though
   nothing is lost - the question says how many chips move to 未分組.
 - **A tapped chip adds to the ungrouped lines and focuses the amount.** The
   chip cannot know which group the owner means, and the ungrouped area is the
@@ -1089,7 +1113,7 @@ files them into sub-categories (肉類 › 雞肉 / 豬肉 / 牛肉, 海鮮 › 
 query over the category tree, as `group_id` is over `parent_id`, and the
 sidebar's count is the subtree total, summed from the same tree, so the
 number and the list cannot disagree. Each sub-category keeps its own section
-under its path. `ingredient_count` on the tree stays the node's own: 設定
+under its path. `ingredient_count` on the tree stays the node's own: 未來固定設定
 refuses deleting a category with ingredients filed directly in it, and that
 is the number the refusal is about. Every caller of the filter wants the
 subtree - the library, and the ingredient page's category link - so there
@@ -1310,19 +1334,130 @@ migration's to decide.
   list order, the in-use 409 and the name rules; widening the shared
   schemas would have let the other eight accept and silently drop `notes`.
   As it is they refuse it as an extra field, and a test says so.
-- **The panel lives on the filtered recipe library, not on an author
-  page.** A source's author on a recipe already linked to
-  `/recipes?author=<id>`, and that list - the author's recipes - is what an
-  author page would mostly be. Putting the links and 備註 above it adds the
-  one thing missing without a route, a detail page and a second list of
-  the same recipes. It is drawn only for exactly one author, because with
-  two the page is about neither, and not at all for an author with nothing
-  to say: a box holding only the name repeats the filter chip.
-- **Edited on 設定's row, not on a form of its own.** The row's rename mode
-  already held the two names; it now holds the links (TBD's
-  `RowEditor`) and the 備註 under them, and the button says 編輯 because it
-  opens more than a name. An author is a short record, and a separate
-  page for three fields would be a round trip for every one.
+
+## The author library
+
+- **An author is a library with pages, like a dish or a note.** It has a
+  gallery now, and pictures, links, 備註 and the author's recipes together
+  are a page's worth - more than a panel or a settings row holds. The
+  pages are food's per-entity shape (`/authors`, `/authors/:id`,
+  `/edit/authors/new|:id`), not media's add / modify / delete hubs: every
+  other library here is per entity, and someone moving between them should
+  not meet a second shape. The universal search links to `/authors/:id`
+  for the same reason it links to `/dishes/:id`.
+- **One place for an author's information: the panel above the recipe
+  library is gone.** Before the library, an author's links and 備註 were
+  drawn above `/recipes?author=<id>` (`AuthorIntro`), the filtered list
+  standing in for an author page. With a real page, keeping the panel too
+  would be two renderings of the same record that drift, so the recipe
+  library filtered by an author is only a filtered list again, a recipe
+  source's author links to the author's page, and the page links back to
+  the filter (「在食譜庫篩選」) for narrowing by the rest of the sidebar.
+- **One editor for links, 備註 and pictures: the author's form.** 設定's
+  作者 row used to open the links and 備註 inline under the names. A gallery
+  does not fit in a row, and two editors for the same fields is the drift
+  above again, so the row is a plain vocabulary row - 改名 for the names,
+  刪除, the add form - with 編輯 linking to `/edit/authors/:id`. Of the two
+  options (the row's 編輯 linking to the form, or the whole row linking to
+  the author's page), the link is the one that keeps the tab shaped like
+  every other tab: a row still renames in place, and only the extra action
+  is new. `VocabularyEditor`'s `details` prop, which existed only for the
+  inline editor, became `rowActions`.
+- **Still on the vocabulary factory, with a router beside it.** Listing,
+  creating, renaming and deleting an author is the factory's, so the name
+  rules, the name order and the in-use 409 stay shared with the other nine.
+  What the factory has no shape for - one author read whole, its delete
+  preview and its gallery PUT - is `app/routers/author.py`, under the same
+  prefix. A second create / update / delete was rejected: two writers for
+  one table is how their rules diverge. The factory's `Shape` gained
+  `extra(db)` for computed list fields, which only authors use, so the
+  author list carries `recipe_count` and `cover` and the other nine answer
+  exactly as before.
+- **`recipe_count` beside `usage_count`, not instead of it.** The library
+  shows recipes, and a recipe with two sources by one author is one recipe;
+  the delete refusal counts sources, because each is a reference that would
+  stop it. Both are true and answer different questions, so both are sent.
+- **The library searches in the browser.** The author list is small, read
+  whole and already cached by the recipe form and the recipe-library
+  filter, so the library filters that list rather than giving the factory a
+  `q` parameter only one of ten vocabularies would use. The search term
+  still lives in the URL, as every library's does.
+- **The delete preview only refuses.** An author's delete takes its links
+  and gallery rows, which nobody would miss (the pictures stay), so there is
+  nothing to count and echo; `cascade` exists to say *before* the button is
+  pressed that the sources naming the author refuse it, as a dish's dialog
+  says its recipes do.
+- **The gallery is the fifth gallery table, the other four's shape
+  exactly** (`author_image`), registered in `images.OWNER_TABLES` so the
+  image library's owner list and its "still attached" 409 name authors
+  without code of their own.
+
+## Search instead of modify hubs
+
+- **One search box finds anything, and it is how an entry is edited from
+  anywhere.** media has "modify" hubs - a page per type that lists every
+  entry for editing. The owner decided food does not get them: every
+  library here already has a page per entry with an 編輯 button, so what a
+  hub adds is only the finding. The universal search does the finding
+  across all seven kinds at once, and every row on `/search` carries an 編輯
+  link straight to the entry's edit page - so "find it and change it" is two
+  taps from any page, with no second shape of page to maintain per kind.
+- **media's NavSearch and `/api/search` are the reference; food keeps the
+  shape and drops the rest.** Kept: one debounced request answering a bucket
+  per kind, a dropdown in the top bar, Enter for the full page, Escape and a
+  click outside to close, the phone's search as a row opened from an icon.
+  Dropped: the scope menu and the gated types, since food has no auth and
+  every kind is everyone's; and the quota-and-round-robin merge, because
+  food's seven kinds are few enough to show grouped under their labels,
+  three rows each - grouped rows say what each row is without a badge per
+  row, and a phone scrolls the list rather than losing a kind to a quota.
+  The response is one uniform row shape (`id`, `display_name`, `detail`,
+  `cover`) rather than media's full entity per bucket: a result row needs
+  four things, and seven response shapes would be seven chances for the
+  dropdown and the page to read a field the other does not.
+- **A bucket matches by its library's own clauses.** `dishes.matches`,
+  `ingredients.matches`, `recipes.matches` and `kitchen_notes.matches` are
+  the functions the libraries' `q` filters with, and the search filters with
+  the same calls (`app/services/universal_search.py`), so the top bar can
+  never find a row that the library's own box would not. Authors, 加熱 and
+  TBD have no server-side `q`, so their rules are written beside the search:
+  authors as the author library's browser filter, 加熱 by name and then
+  body ("微波" finds every microwave note), TBD by name and link label. Not a
+  TBD link's url: every one contains "https", and a term matching the whole
+  page is not a search.
+- **Ranking is tiers, in SQL.** `app/services/search.py` gives each library
+  matcher a `how` - `contains` (the library's), `prefix` or `exact` - and
+  `rank` orders by the first tier a row satisfies, then by the display name,
+  then by id. Asking the same matcher three times keeps one definition of
+  "matches a dish" for the filter and every tier, aliases included, rather
+  than a ranking that knows the name columns but forgets the alias table.
+  It is in SQL because the `limit` is: a bucket of ten ranked in Python
+  would have to load every match first, and an exact match ranked
+  eleventh by name would be cut before it could be floated (media's reason
+  for doing the same). The display name in SQL is `display_order`, a
+  `coalesce` of the name slots compared by code point, which is the order
+  the libraries' Python `casefold()` sort gives. Rejected: PostgreSQL
+  trigram similarity, which would rank better on typos but needs an
+  extension and a migration, for catalogues small enough that substring
+  tiers already put the right row first.
+- **A blank term answers empty buckets.** The libraries treat a blank `q` as
+  no filter and list everything, which is right for a library and wrong
+  here: an empty box is not a request for every row in the app. 200 with
+  empty buckets rather than a 422, as media's search answers, so a client
+  clearing its box needs no error path.
+- **加熱 and TBD rows open the list at the entry.** Neither has a page per
+  entry, so a row links to `/heating#heating-<id>` or `/tbd#tbd-<id>`, and
+  the page marks and scrolls to it (`hooks/useHashTarget.js`) once the list
+  has loaded - the browser cannot, because the list arrives after the page
+  and a client-side navigation does not update `:target`. 編輯 opens the
+  list's edit page at the top: the cards there each hold their own form
+  state, and reaching into one from a URL was more than the case is worth.
+- **Below `lg` the box is an icon that opens a row, not a field in the
+  bar.** At 360px the bar holds 食 and two icons; a field would squeeze to
+  nothing. On a tablet the eight sections already fill the bar. So the
+  field shows only from `lg`, and below it the icon opens a full-width row
+  in the flow under the bar - an overlay was rejected because it covers
+  the page's own top-right actions, as a floating button would.
 
 ## The starting ingredient list
 

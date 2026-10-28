@@ -3,7 +3,7 @@
 // The rows with no group come first, then each group as a box of its own:
 // a header with its drag handle, its name and 移除分組, its rows, and its own
 // add button, so a row added there belongs to it. 「＋ 加分組」 under the
-// boxes offers the 設定 values this list does not use yet as one-tap chips,
+// boxes offers the 未來固定設定 values this list does not use yet as one-tap chips,
 // and a box to type a one-off name; a typed name that is a 設定 value (any
 // case) is that value. The header's name box renames or repicks the same way.
 // Removing a group moves its rows to the end of the ungrouped rows - nothing
@@ -17,7 +17,7 @@
 //
 //   value      { ungrouped, groups } (lib/groupedRows.js)
 //   onChange   (nextValue) => void
-//   values     the 設定 list the groups are picked from ([{ id, display_name, … }])
+//   values     the 未來固定設定 list the groups are picked from ([{ id, display_name, … }])
 //   newRow     () => a fresh row
 //   itemLabel  one row ("材料"), numbered through the whole list
 //   addLabel   the add button's words ("加一行材料")
@@ -117,7 +117,7 @@ export default function GroupedRowEditor({
                     className="min-w-0 flex-1 font-bold"
                   />
                   <span className="hidden shrink-0 text-xs text-text-faint sm:inline">
-                    {group.groupId ? '設定裡的分組' : '只用在這道'}
+                    {group.groupId ? '未來固定設定裡的分組' : '只用在這道'}
                   </span>
                   <Button
                     size="sm"
@@ -189,7 +189,7 @@ function AddGroup({ value, values, groupLabel, onAdd }) {
           ))}
         </div>
       ) : (
-        <p className="text-xs text-text-faint">設定裡的{groupLabel}都用上了；可以打一個只用在這道的名稱。</p>
+        <p className="text-xs text-text-faint">未來固定設定裡的{groupLabel}都用上了；可以打一個只用在這道的名稱。</p>
       )}
       <div className="flex flex-wrap items-center gap-2">
         <Input

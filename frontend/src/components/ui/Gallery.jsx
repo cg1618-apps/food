@@ -5,6 +5,8 @@
 // it in place; nothing navigates. Every image is cropped at its focal point,
 // the large one included, so a subject set off-centre in the picker stays in
 // frame here too. No images, no block: the page does not draw an empty frame.
+// The large picture's caption - its attachment's, so this gallery's - sits
+// under it with its line breaks kept, and is not drawn when there is none.
 import { useState } from 'react'
 
 import { cx } from '../../lib/cx'
@@ -33,6 +35,9 @@ export default function Gallery({ images, title, className }) {
           style={focusStyle(shown.focus)}
         />
       </a>
+      {shown.caption ? (
+        <p className="whitespace-pre-line text-sm leading-relaxed text-text-muted">{shown.caption}</p>
+      ) : null}
       {images.length > 1 ? (
         <ul className="flex gap-2 overflow-x-auto pb-1" aria-label="其他圖片">
           {images.map((image, i) => (

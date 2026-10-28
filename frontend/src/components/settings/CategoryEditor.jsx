@@ -1,4 +1,4 @@
-// Frontend: the ingredient category tree on 設定.
+// Frontend: the ingredient category tree on 未來固定設定.
 //
 // The tree is drawn as nested lists, each node a NameRow: rename (and, while
 // renaming, move under another parent), drag among its siblings - each

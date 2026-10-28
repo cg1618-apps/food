@@ -13,8 +13,8 @@ import json
 from dataclasses import dataclass
 
 from sqlalchemy import delete as delete_rows
-from sqlalchemy import func, or_, select
 from sqlalchemy import inspect as inspect_row
+from sqlalchemy import or_, select
 from sqlalchemy import update as update_rows
 from sqlalchemy.orm import Session, selectinload
 
@@ -39,7 +39,7 @@ from app.services import category_clash
 from app.services.hierarchy import check_parent, is_descendant
 from app.services.lookup import fetch_all, fetch_labels
 from app.services.recipes import distinct_alternatives
-from app.services.search import ESCAPE, contains
+from app.services.search import CONTAINS, term_match
 
 
 def _loaded(query):
@@ -105,6 +105,29 @@ def category_subtree_ids(category_id: int):
     return select(subtree.c.id)
 
 
+def matches(q: str, how: str = CONTAINS):
+    """The clause a search term matches an ingredient by: any name slot or
+    alias. `how` is the library's `contains` unless the universal search asks
+    for a stricter tier to rank by (app/services/search.py).
+
+    The alias arm is a subquery rather than a join, so that an ingredient
+    matching on two aliases comes back once. A join would duplicate the row
+    per matching alias, and the duplicate only appears for rows with several
+    aliases - which is exactly the data a small test set lacks.
+    """
+    alias_match = (
+        select(IngredientAlias.ingredient_id)
+        .where(term_match(IngredientAlias.value, q, how))
+        .scalar_subquery()
+    )
+    return or_(
+        term_match(Ingredient.name_cn, q, how),
+        term_match(Ingredient.name_en, q, how),
+        term_match(Ingredient.name_alt, q, how),
+        Ingredient.id.in_(alias_match),
+    )
+
+
 def search(
     db: Session,
     q: str | None = None,
@@ -119,24 +142,7 @@ def search(
     query = _loaded(db.query(Ingredient))
 
     if q:
-        term = contains(q)
-        # The alias arm is a subquery rather than a join, so that an ingredient
-        # matching on two aliases comes back once. A join would duplicate the
-        # row per matching alias, and the duplicate only appears for rows with
-        # several aliases - which is exactly the data a small test set lacks.
-        alias_match = (
-            select(IngredientAlias.ingredient_id)
-            .where(func.lower(IngredientAlias.value).like(func.lower(term), escape=ESCAPE))
-            .scalar_subquery()
-        )
-        query = query.filter(
-            or_(
-                Ingredient.name_cn.ilike(term, escape=ESCAPE),
-                Ingredient.name_en.ilike(term, escape=ESCAPE),
-                Ingredient.name_alt.ilike(term, escape=ESCAPE),
-                Ingredient.id.in_(alias_match),
-            )
-        )
+        query = query.filter(matches(q))
 
     if category_id is not None:
         query = query.filter(Ingredient.category_id.in_(category_subtree_ids(category_id)))

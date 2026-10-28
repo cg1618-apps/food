@@ -1,8 +1,12 @@
-"""An author on the wire: the shared vocabulary shape plus a remark and links.
+"""An author on the wire: the shared vocabulary shape plus a remark, links and
+a gallery.
 
-Authors are served by the vocabulary factory (app/routers/vocabulary.py) like
-the other nine; these are the schemas it is given for them, so the other
-nine keep refusing `notes` and `links` as extra fields.
+Authors are listed and written by the vocabulary factory
+(app/routers/vocabulary.py) like the other nine; these are the schemas it is
+given for them, so the other nine keep refusing `notes` and `links` as extra
+fields and answer without a `cover` or a `recipe_count`. The author's own page
+reads `AuthorDetail` (app/routers/author.py). The gallery is written by its
+own PUT, as every gallery is, never through the create or update body.
 
 A link is a TBD link in every rule - `normalise_link` and the blank label -
 because it is the same thing: a web address the owner typed, with an optional
@@ -12,7 +16,8 @@ refused and [] clears, as on a TBD entry.
 
 from pydantic import BaseModel, field_validator
 
-from app.schemas.recipe import _normalise
+from app.schemas.image import AttachedImage, CoverRef
+from app.schemas.recipe import RecipeSummary, _normalise
 from app.schemas.tbd import TbdLinkIn
 from app.schemas.vocabulary import VocabularyCreate, VocabularyResponse, VocabularyUpdate
 
@@ -54,5 +59,28 @@ class AuthorLinkResponse(BaseModel):
 
 
 class AuthorResponse(VocabularyResponse):
+    """A list row, and what a create or an update answers. `usage_count` is
+    the sources naming the author - what would stop a delete; `recipe_count`
+    is the distinct recipes they belong to - what the library shows."""
+
     notes: str | None = None
     links: list[AuthorLinkResponse] = []
+    recipe_count: int = 0
+    cover: CoverRef | None = None
+
+
+class AuthorDetail(AuthorResponse):
+    """The author's page: everything a list row has, the gallery in order,
+    and the recipes whose sources name the author, as the recipe library
+    lists them."""
+
+    images: list[AttachedImage] = []
+    recipes: list[RecipeSummary] = []
+
+
+class AuthorCascade(BaseModel):
+    """What refuses a delete: the sources naming the author, and the recipes
+    they belong to. Neither is echoed on the delete - nothing cascades."""
+
+    sources: int
+    recipes: int

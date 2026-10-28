@@ -1,8 +1,9 @@
-// Frontend: save a recipe, an ingredient or a note, gallery included.
+// Frontend: save a gallery owner - a dish, a recipe, an ingredient, a note or an
+// author - gallery included.
 //
 // The row and its gallery are two requests - POST/PATCH the row, then PUT
-// `[{image_id, focus}]` to `.../{id}/images` - because the gallery endpoint is
-// shared by all three owners and replaces wholesale. A NEW owner has no id
+// `[{image_id, focus, caption}]` to `.../{id}/images` - because the gallery endpoint is
+// shaped alike for every owner and replaces wholesale. A NEW owner has no id
 // until the first request answers, so its gallery can only go second.
 //
 // If the row saved and the gallery did not, the row exists: the id is kept,

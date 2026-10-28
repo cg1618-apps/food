@@ -1,7 +1,9 @@
 """Every schema, re-exported so call sites write `schemas.IngredientResponse`."""
 
 from app.schemas.author import (
+    AuthorCascade,
     AuthorCreate,
+    AuthorDetail,
     AuthorLinkIn,
     AuthorLinkResponse,
     AuthorResponse,
@@ -93,6 +95,7 @@ from app.schemas.schedule import (
     ScheduleDayIn,
     ScheduleDayResponse,
 )
+from app.schemas.search import SearchBuckets, SearchHit, SearchResponse
 from app.schemas.tbd import (
     TbdEntryCreate,
     TbdEntryResponse,
@@ -116,7 +119,9 @@ __all__ = [
     "AlternativeIn",
     "AlternativeResponse",
     "AttachedImage",
+    "AuthorCascade",
     "AuthorCreate",
+    "AuthorDetail",
     "AuthorLinkIn",
     "AuthorLinkResponse",
     "AuthorResponse",
@@ -184,6 +189,9 @@ __all__ = [
     "RecipeUpdate",
     "RelatedIngredient",
     "ScheduleDayIn",
+    "SearchBuckets",
+    "SearchHit",
+    "SearchResponse",
     "ScheduleDayResponse",
     "SourceIn",
     "SourceResponse",

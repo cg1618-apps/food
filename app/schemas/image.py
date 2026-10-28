@@ -1,4 +1,4 @@
-"""Image shapes, and the one focus-point rule every gallery shares."""
+"""Image shapes, and the focus-point and caption rules every gallery shares."""
 
 import re
 from datetime import datetime
@@ -45,11 +45,19 @@ class ImageAttachmentIn(BaseModel):
 
     image_id: int
     focus: str | None = None
+    caption: str | None = None
 
     @field_validator("focus")
     @classmethod
     def focus_is_valid(cls, value):
         return check_focus(value)
+
+    @field_validator("caption")
+    @classmethod
+    def blank_caption_is_absent(cls, value: str | None) -> str | None:
+        # Trimmed; inner line breaks are kept, since the caption is shown
+        # with them. A blank one is no caption.
+        return (value.strip() or None) if value is not None else None
 
 
 class AttachedImage(BaseModel):
@@ -59,6 +67,7 @@ class AttachedImage(BaseModel):
     width: int
     height: int
     focus: str | None = None
+    caption: str | None = None
 
 
 class CoverRef(BaseModel):

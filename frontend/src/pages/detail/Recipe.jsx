@@ -21,7 +21,7 @@
 // The status is the one thing changed in place: 想試 -> 可煮 -> 常煮 is what
 // happens after cooking, standing at the stove with the page open, and a
 // round trip through the form for it would be the form's whole job. The
-// choices are the statuses 設定 manages, in their order. It is a PATCH of
+// choices are the statuses 未來固定設定 manages, in their order. It is a PATCH of
 // `status_id` alone; the control shows the chosen value while the
 // request runs, then the recipe the PATCH answers with (put straight into the
 // detail read's cache), and goes back, with the server's sentence, if it
@@ -77,8 +77,8 @@ function StatusControl({ recipe }) {
   )
 }
 
-// Each source: its platform, its author (a link to the library filtered by
-// them, as the course is), and its title - the link out when there is a URL,
+// Each source: its platform, its author (a link to the author's page), and
+// its title - the link out when there is a URL,
 // the URL's host standing in for a missing title.
 function Sources({ sources }) {
   if (!sources.length) return null
@@ -90,7 +90,7 @@ function Sources({ sources }) {
           <li key={source.id} className="flex flex-wrap items-baseline gap-2">
             <Chip>{source.platform.display_name}</Chip>
             {source.author ? (
-              <Link to={`/recipes?author=${source.author.id}`} className="hover:text-brand hover:underline">
+              <Link to={`/authors/${source.author.id}`} className="hover:text-brand hover:underline">
                 {source.author.display_name}
               </Link>
             ) : null}

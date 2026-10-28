@@ -130,15 +130,18 @@ is load-bearing and says so. Some examples worth knowing about:
   test that a create with no status at all is a 422 empties the table first,
   on purpose. The 409 tests for a status, a platform and an author put a
   recipe or sources on the value; an unused value beside it deletes, as the
-  mirror. Authors are not seeded and have no fixture: each test that needs
-  one makes it, and the `new_author` reuse test's existing author is what
+  mirror. Authors are not seeded and have no shared fixture: each test that
+  needs one makes it (`sourced` in `tests/api/test_author_library.py` is
+  that module's own - an author two recipes' sources name, one of them
+  twice, beside an author none names; it is what makes the delete refusal
+  and the cascade counts able to fail, and the unused author is the mirror), and the `new_author` reuse test's existing author is what
   makes "reuses, does not create" able to fail. A recipe also needs a dish:
   the API tests send `new_dish` (which the save finds or makes by name) or
   create the dish first, and the model tests' `make` makes one per recipe
   unless given `dish_id`.
 - `line_groups` and `step_groups` (`tests/api/conftest.py`) are the
   材料分組 and 步驟分組 values `g1roups` seeds. They are what let a one-off
-  group name be "stored as the 設定 value": with no value to match, every
+  group name be "stored as the 未來固定設定 value": with no value to match, every
   name stays one-off and that test would pass for the wrong reason. The 409
   test for a group value puts a recipe group on 主料 / 備料, and the unused
   配料 / 烹飪 beside them delete, as the mirror.
@@ -294,8 +297,9 @@ the entire failure.
 | `tests/test_label_scope_migration.py` | `l1abels` on a scratch database: used labels scoped by their one library, unused ones deleted, uniqueness per scope, the refusal on a label two libraries carry (changing nothing), and the downgrade with its own refusal |
 | `tests/api/test_ingredient_storage.py` | storage state and range, heating, links, rating, the new list filters (the category filter over a subtree, its sibling mirror, and the list agreeing with the tree's subtree totals), the delete counts and the 409 that names the moved one, `/api/vocabularies/fixed` |
 | `tests/api/test_vocabularies.py` | the ten vocabularies, parametrised over one factory, the in-use 409 for each (a course or region a dish is filed in; a difficulty a recipe is rated with, beside an unrated recipe and an unused value as the mirror), and authors in name order |
+| `tests/api/test_author_library.py` | an author's page: the detail (names, 備註, links, an empty gallery), a 404, each recipe its sources name listed once with what a cover card needs, the list's `recipe_count` (distinct recipes) beside `usage_count` (sources) and `cover`, the other nine answering with neither, the gallery round trip in order with focus and caption, a repeated PUT and a clear, an unknown image or author refused, the delete keeping the pictures, the cascade's `{sources, recipes}` with the unused author's zeros as the mirror, the delete refused while sources name the author and the unused one deleting, and an image an author attaches naming the author as its owner, refusing its delete, and deleting once the author lets go |
 | `tests/api/test_author_details.py` | an author's links and 備註: the blank-url CHECK and CASCADE to links (with two links really present), the round trip in order, a blank 備註 as null, `https://` given to a link without a scheme, the 422 for a blank, `javascript:` or other non-web url with nothing written and the mirror that saves, a refused `PATCH` keeping the stored links, links replaced wholesale, left alone, cleared by `[]` and the null refused, the delete taking the links, and the other nine vocabularies refusing `notes` and `links` with the author accepting the same body |
-| `tests/api/test_images.py` | upload, re-encode, deduplication, ingredient, dish and recipe galleries (kitchen-note galleries are in `test_kitchen_notes.py`), a dish's cover falling back to its first recipe's, an image's owners, deletion, serving |
+| `tests/api/test_images.py` | upload, re-encode, deduplication, ingredient, dish and recipe galleries (kitchen-note galleries are in `test_kitchen_notes.py`), a dish's cover falling back to its first recipe's, captions (trimmed with their line breaks, blank as null, a non-string refused, one picture captioned separately in all four galleries; an author's caption is in `test_author_library.py`), an image's owners, deletion, serving |
 | `tests/api/test_recipe_model.py` | every named dish and recipe constraint, each refusal with its mirror; a recipe's display name falling back to its dish's; CASCADE and RESTRICT on delete, and a recipe's delete leaving its dish |
 | `tests/api/test_dish_crud.py` | the dish round trip, kind, names, unknown ids, its recipes and "used in", the two delete refusals with their mirrors, the stale alias count, 404s |
 | `tests/api/test_dish_library.py` | the dish list's summary, search and "any of" filters, and the recipe list's filters that read through the dish (dish, kind, course, region, label) and its search over the dish's names |
@@ -304,7 +308,7 @@ the entire failure.
 | `tests/api/test_recipe_line_alternatives.py` | a line's alternatives: the round trip in order with amount and note, in a group, new names resolved with the lines' (one stub for a name typed on both), the unknown-id 422 writing nothing, exactly one target, redundant alternatives dropped, a re-save replacing them; the own-dish rule, the cycle guard and a dish move through an alternative; "used in" for an ingredient (a variety's included) and a dish with `alternative_only`, the recipe filter; both delete refusals with mirrors, the RESTRICT itself, the CASCADE with the recipe; the ingredient merge moving and dropping them with the preview's counts and the fingerprint |
 | `tests/test_line_alternatives_migration.py` | `a2lternatives` on a scratch database: the downgrade drops the table with an alternative in it and keeps the line, and the chain upgrades again |
 | `tests/api/test_recipe_step_kinds.py` | a step's kind: the `step` default, the round trip through create, read and `PATCH` in and out of groups, the 422 for an unknown or null kind, the `step_kinds` fixed list |
-| `tests/api/test_recipe_groups.py` | lines and steps in groups: order and positions, a name stored as its 設定 value, the empty group, duplicate and malformed groups, the `PATCH` pair rule, stubs, cycles and a dish's "used in" through grouped lines, the delete counts, the in-use 409, SET NULL from a group to its rows |
+| `tests/api/test_recipe_groups.py` | lines and steps in groups: order and positions, a name stored as its 未來固定設定 value, the empty group, duplicate and malformed groups, the `PATCH` pair rule, stubs, cycles and a dish's "used in" through grouped lines, the delete counts, the in-use 409, SET NULL from a group to its rows |
 | `tests/api/test_recipe_library.py` | the list's summary (its dish), search over the dish's names and aliases (wildcards literal) and the recipe's own filters (`author_id` among them), and the query count |
 | `tests/api/test_kitchen_notes.py` | every named kitchen-note constraint with its mirror, CASCADE on delete, the round trip, title, kind, link and label refusals, newest-first order, `q` over title and body (wildcards literal), the "any of" filters, the query count, the gallery and the image 409 naming a note |
 | `tests/api/test_ingredient_used_in.py` | "used in" over descendants, the list filter agreeing with it, the delete refusal, the query count |
@@ -319,6 +323,7 @@ the entire failure.
 | `tests/test_schedule_migration.py` | `s4chedule` on a scratch database: marks turned into booleans from the stored text, each meal's dish and recipe moved into one item, and the downgrade writing ✓ and keeping the first item |
 | `tests/test_seed_migration.py` | the seeds, the storage migration's copy and lossy downgrade, `v2ocabulary`'s string-to-row mapping, `a1uthors`'s creator-to-author mapping, `g1roups`' sections-to-groups move, `s1tepkinds`' default for existing steps and `d1ishes`' grouping of recipes into dishes, each with its downgrade, on a scratch database |
 | `tests/test_ingredient_import.py` | `i3import`: the committed CSV passes validation, each validation refusal with a good mirror, and the load on a scratch database — stubs, aliases, parents, categories, the skip rule, the cycle guard, a second run, the no-op downgrade |
+| `tests/api/test_search.py` | the universal search: every bucket present and empty for no match, a blank or absent `q` answering empty buckets (with rows present, and the mirror finding them), wildcards literal, read-only; each bucket by name and alias, CN and EN - dishes, recipes (own name, dish names and aliases), ingredients, notes (title, body ranked after), authors (either name), 加熱 (name, then body), TBD (name and link labels, not the url) - with each row's `detail` and a dish's `cover`; ordering exact, prefix, contains, then name, an alias ranking as a name; `limit` per bucket after ranking, the default of 10, the 422 outside 1..50; and the query count equal at two sizes |
 | `tests/unit/test_prod_compose.py` | the production compose file, including the image bind mount |
 
 **The image tests never touch the real `data/images`.** `image_dir` redirects
@@ -355,6 +360,31 @@ through the real route table (`AppRoutes`) against a stubbed `fetch`, so a
 test reads what the page asks for and what it sends. jsdom cannot drag:
 every reorder is driven through the handle's keyboard path.
 
+The universal search is covered in `pages/search.test.jsx`, through the real
+route table: the top bar's box asking `?q=&limit=3` once typing settles and
+nothing for a blank term, the dropdown grouped by kind in order with each
+row's secondary line, a click opening a row (a 加熱 row at its anchor),
+Down / Up / Enter (wrapping through "nothing highlighted",
+`aria-activedescendant`), Enter with nothing highlighted opening
+`/search?q=…`, Escape and a click outside closing it, 找不到; the phone row
+opening from the icon focused, closing on the icon, after a search and on a
+second Escape, and the desktop field hidden below `lg`; the results page
+asking `limit=50`, its sections, each row's link and 編輯 target (加熱 and
+TBD to their list and edit pages), a kind with no match left out, the empty,
+error, loading and no-term states; and the 加熱 and TBD pages marking only the
+entry the anchor names. `lib/search.test.js` holds the kind table (labels,
+order, every row and 編輯 target), `searchPath`, and the grouping and the flat
+order the arrows walk. `routes.test.jsx` has `/search` and the navigation
+marking no section on it; `lib/nav.test.js` has `/search` in no section.
+
+Gallery captions are covered in: `lib/gallery.test.js` (the caption through
+the PUT body, and a caption change counting as a change),
+`components/ui/Gallery.test.jsx` (the large picture's caption with its line
+breaks, following the chosen thumbnail, and nothing drawn for a picture
+without one - beside one that has one, so the empty case is the one tested)
+and `components/forms/forms.test.jsx` (a typed 說明 in the recipe form's
+gallery PUT).
+
 The dish split is covered in: `pages/library/libraries.test.jsx` (the dish
 library's filters going to the URL and the API, its card and table, the
 empty library; the recipe library's 料理 and 種類 filters and the dish name
@@ -365,10 +395,19 @@ its read-only dish fields and 其他版本), `components/forms/forms.test.jsx`
 (the recipe form's dish picker - an existing dish, a new one as 料理 or
 醬料, the `?dish=` preset, the refusal with none - a line's 新增料理 sent as
 a sauce `new_dish`, and the dish form's payload), `pages/edit/settings.test.jsx`
-(the 地區 tab after 類別), `routes.test.jsx` (the dish
+(the 地區 tab), `routes.test.jsx` (the dish
 routes and the `/edit/dishes/:id/edit` redirect), `lib/nav.test.js` (料理
 first), `lib/typeahead.test.js`, `lib/recipeLines.test.js` and
 `lib/imageOwners.test.js`.
+
+The split between 設定 and 未來固定設定 is covered in:
+`pages/edit/settings.test.jsx` (each page's tabs in order and its default,
+the buttons between them, a moved tab's old link landing on 未來固定設定),
+`routes.test.jsx` (both routes, every moved tab id redirected and every
+remaining one not - the mirror that makes the redirect test bite - the
+reverse redirect, `/edit/vocabularies?tab=courses` reaching its tab, 設定
+marked in the navigation and the sign-in probe on the new page) and
+`lib/nav.test.js` (`/edit/fixed-settings` in 設定's section).
 
 Labels' libraries are covered in: `pages/edit/settings.test.jsx` (the three
 sections in order, an add sending its section's scope, 移到 off for a label in
@@ -432,15 +471,28 @@ one unheaded row with no groups, 未分組 then each group under its heading
 with an empty group not drawn, one group alone under its own heading, and a
 grouped chip adding an ungrouped line).
 
-Authors' links and 備註 are covered in: `pages/edit/settings.test.jsx`
-(the row's 編輯 opening the stored links and 備註, a link added and the
-remark changed sent as one `PATCH` in order, a link removed and a blank
-remark sent as `[]` and null), `pages/library/libraries.test.jsx` (the
-panel above the recipe library filtered to one author - its heading,
-links by label or by address, each `target="_blank"` with
-`rel="noopener noreferrer"`, the 備註 with its line break - and its
-mirror: no panel for an author with neither, nor for two authors, once the
-authors have loaded) and `lib/authors.test.js` (the draft and the body).
+The author library is covered in: `pages/library/libraries.test.jsx` (the
+covers to each author's page with their recipe count and cover image, the
+add button, no sidebar or 篩選; a `?q=` search over either name narrowing
+the list without a second request; the no-match empty clearing back to
+everyone; the 食譜數 column; and the recipe library's header 作者 link with
+no author panel drawn, once the author filter has loaded),
+`pages/detail/details.test.jsx` (the author page's gallery caption, names,
+links by label or by address each `target="_blank"` with
+`rel="noopener noreferrer"`, the 備註 with its line break; its recipes as
+covers, 「在食譜庫篩選」, 編輯 and 刪除; the empty 食譜 with no filter link
+or link list; the delete dialog saying up front that sources refuse it,
+sending no counts and showing the 409, and its mirror deleting an unused
+author and going to `/authors`; and a recipe source's author linking to
+`/authors/:id`), `components/forms/forms.test.jsx` (a new author's POST
+body - names, links, 備註 - with no gallery PUT and the page it goes to; an
+edit's single `PATCH` with a link removed and a blank 備註 sent as `[]` and
+null, an unchanged gallery left alone; 刪除 only on a stored author),
+`pages/edit/settings.test.jsx` (the 作者 tab's row linking 編輯 to the form,
+and its 改名 sending the names alone, with no links or 備註 box),
+`routes.test.jsx` and `lib/nav.test.js` (the routes, and the author pages
+marking 食譜), `lib/imageOwners.test.js` (an author owner's page and kind)
+and `lib/authors.test.js` (the draft, the body and the name search).
 
 The category clash is covered in: `components/forms/forms.test.jsx` (the
 ingredient form's 409 opening 「轉成食材」 with each outcome in words, 轉成食材

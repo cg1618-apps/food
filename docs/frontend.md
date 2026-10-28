@@ -10,9 +10,15 @@ Navigation is 料理 · 食譜 · 食材 · 筆記 · 加熱 · 排程 · TBD ·
 is what you look for and its recipes hang off it: a top bar on a desktop, a bar
 fixed to the bottom of the screen on a phone (`components/layout/Layout.jsx`).
 On a phone the top bar stays, slim and scrolling away with the page, holding
-only 食 (home) and the theme toggle.
+only 食 (home), the search icon and the theme toggle. The universal search
+(see "Search" below) is a field in the top bar from `lg` up, and below it an
+icon that opens a full-width search row under the bar.
 The section a page belongs to - its edit pages included - is marked with
-`aria-current="page"`; `lib/nav.js` holds that match.
+`aria-current="page"`; `lib/nav.js` holds that match. 設定's section also
+owns 未來固定設定 and the image library, which are reached from 設定. 食譜's
+also owns the author library and its pages (`/authors`, `/edit/authors`),
+which have no nav item of their own and are reached from the recipe
+library's header and from a recipe source's author.
 
 **A section is one entry in `SECTIONS` (`lib/nav.js`)** - its label, its
 link and the path prefixes it owns, edit pages included. Both bars draw from
@@ -28,6 +34,8 @@ them readable at 360px with room for more.
 | Dish | `/dishes/:id` | public |
 | Recipe library | `/recipes` | public |
 | Recipe | `/recipes/:id` | public |
+| Author library (`?q=` the search) | `/authors` | public |
+| Author | `/authors/:id` | public |
 | Ingredient library | `/ingredients` | public |
 | Ingredient | `/ingredients/:id` | public |
 | Kitchen-note library | `/notes` | public |
@@ -35,11 +43,14 @@ them readable at 360px with room for more.
 | 排程, the weekly schedule (the front page; `/` redirects here; `?week=` the first Saturday shown) | `/schedule` | public |
 | 加熱 | `/heating` | public |
 | TBD | `/tbd` | public |
+| 搜尋, the universal search's results (`?q=` the term) | `/search` | public |
 | Add / edit a dish | `/edit/dishes/new`, `/edit/dishes/:id` | Access |
 | Add / edit a recipe (a new one first asks how to start; `?dish=<id>` presets the dish) | `/edit/recipes/new`, `/edit/recipes/:id` | Access |
+| Add / edit an author | `/edit/authors/new`, `/edit/authors/:id` | Access |
 | Add / edit an ingredient | `/edit/ingredients/new`, `/edit/ingredients/:id` | Access |
 | Add / edit a note | `/edit/notes/new`, `/edit/notes/:id` | Access |
 | 設定 (`/settings` redirects here) | `/edit/settings` | Access |
+| 未來固定設定 | `/edit/fixed-settings` | Access |
 | Image library | `/edit/images` | Access |
 | Edit the schedule (`?week=` as `/schedule`) | `/edit/schedule` | Access |
 | Edit 加熱 | `/edit/heating` | Access |
@@ -50,7 +61,10 @@ Any other path is a "page not found" page, not a redirect.
 **The first release's paths redirect**, query string included, so bookmarks
 survive: `/library/ingredient` → `/ingredients`, `/ingredient/:id` →
 `/ingredients/:id`, `/edit/ingredient/...` → `/edit/ingredients/...`,
-`/edit/vocabularies` → `/edit/settings`. `/edit/dishes/:id/edit` - the dish
+`/edit/vocabularies` → `/edit/settings`. `/edit/settings?tab=<id>` for a tab
+未來固定設定 holds → `/edit/fixed-settings?tab=<id>`, and the mirror, so a
+link written before the two pages were split lands on the tab it named.
+`/edit/dishes/:id/edit` - the dish
 form's path as its design named it - redirects to `/edit/dishes/:id`, the
 shape every other edit page has. `routes.test.jsx` pins every route and every
 redirect.
@@ -63,9 +77,15 @@ second id went with the integer-primary-key decision, so ours is
 phone in a shop, signed out: selection notes, the preservation methods with
 their durations, where to get the thing. Everything else is a list or a form.
 
-**Every vocabulary shares one page**, 設定, a tab each. They are the
-same kind of work — maintaining a short list — and a page each would be ten
-screens with a handful of rows on them.
+**Every vocabulary is a tab on one of two pages**, 設定 and 未來固定設定.
+They are the same kind of work — maintaining a short list — and a page each
+would be a dozen screens with a handful of rows on them. They are two pages
+rather than one because they are not equally the owner's: 未來固定設定 holds
+the system options the app is built around (食材分類, 常用食材, 類別, 狀態,
+難易度, 材料分組, 步驟分組, 做法), expected to become fixed and stay
+editable only while the app is still changing a lot; 設定 holds what the
+owner keeps growing (標籤, 地區, 來源, 作者, 器材). Both draw on one set of
+tab definitions, so the split is a matter of which list a tab is in.
 
 **There is no route guard, and there must not be one.** The gate is Cloudflare
 Access on the path prefix, in front of the box. A guard in the browser would
@@ -96,12 +116,15 @@ to fetch". So:
 
 ## Libraries
 
-The four libraries - dishes, recipes, ingredients, kitchen notes - are one scaffold,
+The five libraries - dishes, recipes, ingredients, kitchen notes, authors - are one scaffold,
 `components/layout/LibraryLayout.jsx`, with each page supplying its data, its
 words and its filters:
 
-- **Title and add button**, then a search box, the 篩選 button (below `lg`
-  only), the 封面 / 清單 toggle and a result count.
+- **Title and add button** (with any other header links beside it - the
+  recipe library's 作者, to `/authors`), then a search box, the 篩選 button
+  (below `lg` only), the 封面 / 清單 toggle and a result count. A library
+  with nothing to filter by but the search - authors - passes no sidebar,
+  and draws no sidebar, drawer or 篩選 button.
 - **Filters in a sidebar on a desktop and a drawer on a phone.** The sidebar
   is built from `components/layout/FilterPanel.jsx` - `FilterGroup`,
   `FilterOptions` (toggle chips), `FilterSwitch` (a checkbox with a count) and
@@ -147,6 +170,7 @@ words and its filters:
 | 食譜 `/recipes` | `kind`, `course`, `status` (ids, sent as `status_id`), `difficulty` (ids, sent as `difficulty_id`), `method`, `equipment`, `author` (ids, sent as `author_id`), `label` (all "any of"); `written` = `true` / `false`. `kind`, `course` and `label` are the dish's | 類別, 做法, 時間, 作者, 狀態, 難易度 | 書籤 when not written up |
 | 食材 `/ingredients` | `category`, `group` (an ingredient id, sent as `group_id`), `label`, `rating` (one each); `variety` = `top` (sent as `has_parent=false`); `stub` (switch) | 品種, 冷藏, 用於, 評等 | 待補, rating |
 | 筆記 `/notes` | `kind`, `label` (both "any of") | 種類, 連結 (host only) | - |
+| 作者 `/authors` | none - `q` only, matched in the browser | 食譜數 | - |
 
 **A dish card** (`pages/library/DishLibrary.jsx`) is the dish's cover - its
 own first picture, else its first recipe's, as the API answers it - its name,
@@ -156,17 +180,16 @@ under `cg1618:food:dishes-view`. **A recipe card** is the recipe's display
 name, with its dish's name under it when the two differ - the table view
 draws the same subtitle under the name.
 
-**The recipe library filtered to one author introduces them.** With
-exactly one `author` in the URL - which is where a source's author on a
-recipe page links to - a panel above the list (`AuthorIntro` in
-`pages/library/RecipeLibrary.jsx`, drawn through `LibraryLayout`'s
-`intro`) shows the author's name, their links and their 備註 (line breaks
-kept). A link reads as its name, else as its host and path
-(`lib/format.js` `linkText`, as on TBD), and opens in a new tab with
-`rel="noopener noreferrer"`. The author comes from the `GET
-/api/authors` the sidebar already reads; nothing else is fetched. An
-author with neither links nor 備註 draws no panel, and neither do two
-authors chosen at once.
+**An author card** (`pages/library/AuthorLibrary.jsx`) is the author's
+cover - the first picture of their gallery - their display name, their
+English name under it when they have both, and 「N 份食譜」 (還沒有食譜 for
+none), from `recipe_count`. The list is `GET /api/authors` - the one the
+recipe form's typeahead and the recipe library's 作者 filter read - fetched
+whole, so the search (`lib/authors.js` `matchesAuthor`: either name,
+ignoring case) narrows it in the browser rather than asking again. Its view
+is remembered under `cg1618:food:authors-view`. The recipe library filtered
+by an author draws nothing about the author above its list; the author's
+page is where they are read.
 
 **A category lists its sub-categories' ingredients too.** Choosing 肉類 lists
 what is filed under 肉類 itself and under 肉類 › 雞肉, 肉類 › 豬肉 and anything
@@ -212,6 +235,58 @@ one - under 只看主項 the varieties are gone and 雞肉 is still a group.
   outside its parent's block or two levels down, 「N 個品種」 for a group.
   That is the 品種 column in 清單.
 
+## Search
+
+**One box finds anything in the app**: dishes, recipes, ingredients, kitchen
+notes, authors, 加熱 notes and TBD entries, through `GET /api/search`
+(`docs/api.md`, "Search"). It is also how an entry is edited from anywhere -
+food has no media-style "modify" hubs, and every row on `/search` carries an
+編輯 link (`docs/notes/decisions.md`, "Search instead of modify hubs").
+
+**The box (`components/layout/NavSearch.jsx`)** sits in the top bar: a field
+between the sections and the theme toggle from `lg` up; below `lg` a search
+icon beside the toggle (搜尋 / 關閉搜尋, `aria-expanded`) opens a full-width
+row under the bar holding the same component, focused, with a 16px input so
+iOS does not zoom. The row is in the flow, not an overlay, so nothing is
+covered and nothing is wider than the screen at 360px; it closes when a
+search goes somewhere, when the page changes by any other way, on the icon,
+or on a second Escape. It is not a section and has no column in the bottom
+bar - it is not a destination.
+
+- Typing is debounced (`hooks/useDebouncedValue.js`, 250 ms) and asks for
+  three rows per kind (`DROPDOWN_LIMIT`); a blank term asks nothing.
+- The dropdown groups the rows under their kind's label - 料理 · 食譜 · 食材
+  · 筆記 · 作者 · 加熱 · TBD, in that order, a kind with no match left out -
+  each row its name over its secondary line. Nothing matched says
+  「找不到「…」。」. Its last line, 查看全部結果, opens `/search?q=…`.
+- **Keyboard**: Down and Up walk the rows across the groups and wrap through
+  "nothing highlighted"; Enter opens the highlighted row, or `/search?q=…`
+  when none is; Escape closes the dropdown, and on the phone row a second
+  Escape closes the row. A click outside closes the dropdown. The input is
+  a `combobox` and the dropdown a `listbox` of `option`s in `group`s, with
+  `aria-activedescendant` on the highlighted row.
+- Choosing a row opens its page and clears the box.
+
+**`/search` (`pages/Search.jsx`)** is the full result: the term in the URL,
+edited in its own box with the libraries' URL wiring
+(`hooks/useUrlFilters.js` - typing replaces, debounced), up to 50 rows per
+kind. Each kind is a section under its heading and count; each row is a
+thumbnail (kinds with a gallery), the name linking to its page, the
+secondary line, and 編輯 to its edit page. No term invites one; then
+loading, the error, or 「找不到「…」。」.
+
+`lib/search.js` is the one table of kinds: per bucket its label and where a
+row and its 編輯 go. 加熱 and TBD have no page per entry, so a row opens the
+list at the entry - `/heating#heating-<id>`, `/tbd#tbd-<id>` - and 編輯
+opens `/edit/heating` or `/edit/tbd`. The list page marks the entry the
+anchor names (`aria-current`, the brand tint) and scrolls it into view once
+the list has loaded (`hooks/useHashTarget.js`): the browser cannot, since
+the list arrives after the page and a client-side navigation does not move
+`:target`. The edit pages open at the top.
+
+`/search` marks no section in the navigation (`lib/nav.js`): a search
+reaches every section, so marking one would mislead.
+
 ## Two things that are not pages
 
 **The `needs_detail` backlog and the uncategorised pile are filters** on the
@@ -221,7 +296,7 @@ is invisible and stubs accumulate forever.
 **Delete is a dialog, not a page**, and not `window.confirm` — it has to show
 counts and to correct itself. One component, `components/forms/DeleteDialog.jsx`,
 deletes every kind of row (`<DeleteDialog kind="dish" | "recipe" | "ingredient"
-| "note" id name onClose onDeleted? />`; `onDeleted` defaults to the kind's library), and
+| "note" | "author" id name onClose onDeleted? />`; `onDeleted` defaults to the kind's library), and
 `lib/deleteTargets.js` says per kind which `cascade` counts it shows and echoes,
 which block, and which reads go stale:
 
@@ -231,7 +306,8 @@ which block, and which reads go stale:
   field, says so, and re-offers the button (「確認刪除」). Asking for a reload is
   what a prose-only error body forces;
 - a blocking count (`recipes`, `used_in` and `meals` on a dish; `children`
-  and `recipes` on an ingredient) is said up front in words, but the button
+  and `recipes` on an ingredient; `recipes` on an author - the recipes whose
+  sources name them) is said up front in words, but the button
   stays: the refusal is the server's. Its 409 lists recipes, shown as links -
   under 它的食譜： those in `recipes` (a dish's own) and under 用到它的食譜：
   those in `used_in` - and under 排了它的日子： the dates in `meals`, each
@@ -241,18 +317,23 @@ which block, and which reads go stale:
   plain words; it neither blocks the delete nor is echoed;
 - a recipe's dialog has nothing that blocks: lines name dishes, the dish
   stays, and a meal item on the schedule naming the recipe keeps its dish;
-- a kitchen note has no cascade, so its dialog is the plain question.
+- a kitchen note has no cascade, so its dialog is the plain question;
+- an author's cascade (`GET /api/authors/{id}/cascade`) only refuses: nothing
+  is echoed, since the links and the gallery go with the author and the
+  pictures stay, and the refusal is the vocabulary delete's 409 sentence.
 
 ## Detail pages
 
-`/dishes/:id`, `/recipes/:id`, `/ingredients/:id` and `/notes/:id` are one reading column
+`/dishes/:id`, `/recipes/:id`, `/ingredients/:id`, `/notes/:id` and `/authors/:id` are one reading column
 each, built from `components/layout/Detail.jsx`: `DetailStatus` (loading; a
 404 as "not found" with a link back to the library; any other error),
 `Prose` (written notes with their line breaks, no markdown), `LabelLinks`
 (each label a link to its library filtered by it), `RecipeLinks` and
 `DetailActions` (編輯, then 刪除 through `DeleteDialog`). Pictures are
 `components/ui/Gallery.jsx`: the first image large, the rest a strip of
-thumbnails that swap it in place, every one cropped at its focus.
+thumbnails that swap it in place, every one cropped at its focus. Under the
+large picture is its caption, with its line breaks; a picture without one
+draws nothing there.
 
 **A section with nothing in it is not drawn** - no heading over an empty
 list. A recipe saved only as a bookmark is a short page, not a page of
@@ -277,7 +358,7 @@ empties.
   written up; the recipe's display name, and 「<dish> 的一份食譜」 under it
   when the recipe has its own name; a meta line of 難易度 (when it has one),
   servings, time, methods and equipment; the **status, changed in place**; 來源 (platform; author, a
-  link to the library filtered by them; title, linked out when there is a
+  link to the author's page; title, linked out when there is a
   URL, the URL's host standing in for a missing title); **其他版本**, the
   dish's other recipes (`other_recipes`); 材料 and 步驟 in their groups
   (`lib/recipeGroups.js`: the ungrouped rows first, without a heading, then a
@@ -295,7 +376,7 @@ empties.
   to what it measures, and a line without alternatives keeps its amount at
   the row's end.
 - **The status change** is `PATCH /api/edit/recipes/{id}` with `{status_id}`
-  alone. The toggle offers the statuses 設定 manages, in their order
+  alone. The toggle offers the statuses 未來固定設定 manages, in their order
   (`GET /api/recipe-statuses`); it shows the chosen value while the
   request runs and the stored one again, with the server's sentence, if it
   fails. On success the recipe the PATCH answers with goes straight into the
@@ -317,6 +398,17 @@ empties.
   cell is its range (`formatDays`) and its notes; the general preservation
   notes follow the grid.
 - **Note**: title, kind, the link shown by its host, labels, body, pictures.
+- **Author** (`pages/detail/Author.jsx`): its gallery; 作者 (a link to the
+  author library); the display name and the other name slot; the links, each
+  reading as its name, else as its host and path (`lib/format.js`
+  `linkText`, as on TBD), opening in a new tab with
+  `rel="noopener noreferrer"`; the 備註 with its line breaks; then **食譜**,
+  the recipes whose sources name the author as cover cards (the recipe's
+  cover, its display name, its dish under it when the two differ, its
+  status, 書籤 when not written up), with **「在食譜庫篩選」** to
+  `/recipes?author=<id>`, where the rest of the sidebar narrows them further.
+  食譜 is drawn even when empty (還沒有食譜的來源寫著這位作者。). The one page
+  an author's links, 備註 and pictures are read on.
 
 **Merge** is 「合併到…」 on the ingredient page,
 `components/modals/MergeDialog.jsx`: pick the target with the Typeahead
@@ -337,7 +429,7 @@ result list, which would otherwise be clipped by the body's scroll.
 
 ## Forms
 
-`/edit/dishes/...`, `/edit/recipes/...`, `/edit/ingredients/...` and `/edit/notes/...` are one page
+`/edit/dishes/...`, `/edit/recipes/...`, `/edit/ingredients/...`, `/edit/notes/...` and `/edit/authors/...` are one page
 per entity, in sections on the reading column (`Section`), ending in
 `components/forms/FormActions.jsx`: the error, then 儲存 / 取消 / 刪除. **The
 error sits directly above the save button** with the server's own sentence -
@@ -367,7 +459,8 @@ if the categories fail to load.
   marks the dish reads too; an ingredient save, its delete and a merge move the category
   tree, labels, methods (heating rows), recipes (line names, used-in),
   images and 常用食材 (a renamed, deleted or merged ingredient is a changed
-  chip); a note moves labels and images.
+  chip); a note moves labels and images; an author save moves the author
+  list, the recipe reads (a source names the author) and images.
 - **Every list is `components/forms/RowEditor.jsx`**: controlled `rows` /
   `onChange`, each row with a drag handle (⠿) and ✕, an add button under
   the list, and a render prop for the row's cells (`children(row, { index,
@@ -513,6 +606,15 @@ the `lines` / `line_groups` / `steps` / `step_groups` / `method_ids` /
 醬料 toggle), 類別 and 地區 selects, 也可以當作 (never the dish's own course)
 and 標籤 chips, 簡介, 別名 and the gallery; saving goes to the dish's page.
 
+**The author form** (`pages/edit/AuthorForm.jsx`) is the two names (one is
+enough; both blank is the server's 422), 連結 - TBD's link editor
+(`components/forms/RowEditor.jsx`), a row each of 名稱 (optional) and 網址,
+dragged to reorder, ✕ to remove, ＋ 新增連結 to add - 備註 and the gallery;
+saving goes to the author's page. The body is `lib/authors.js` `authorBody`:
+the names as typed, `notes` (a blank one null) and every link in the order
+shown, a link row left wholly empty dropped. It is the one place an
+author's links, 備註 and pictures are edited.
+
 **Recipe lines** hold a `target` - an ingredient, a dish, `{ type: 'new',
 label }` or `{ type: 'new-dish', label, kind }` - from which
 `lib/recipeLines.js` builds exactly one of `ingredient_id`, `sub_dish_id`,
@@ -546,7 +648,7 @@ running index RowEditor gives every row, so each stays unique whatever its
 kind. The save sends each step as `{body, kind}`.
 
 **常用 chips** sit above 材料 (`components/forms/CommonIngredientChips.jsx`),
-one per 設定 常用食材, in its order: 未分組 first, then each group on a row
+one per 未來固定設定 常用食材, in its order: 未分組 first, then each group on a row
 of its own headed by its name. While every chip is in 未分組 - which is how it
 reads with no group at all - they are the single row headed 常用, with no
 未分組 heading; a group with no chips is not drawn. A 常用食材 group is not a
@@ -564,9 +666,11 @@ state and operations in `lib/groupedRows.js`). The ungrouped rows come first,
 with their own add button; then each group is a box: a header with its drag
 handle, its name and 移除分組, its rows, and its own add button
 (「＋ 加一行材料到「醬汁」」), so a row added there belongs to it. 「＋ 加分組」
-under the boxes offers the 設定 values (材料分組 or 步驟分組) this recipe does
-not use yet as one-tap chips, in 設定's order, and a box for a one-off name.
-A typed name that is a 設定 value, trimmed and in any case, is that value -
+under the boxes offers the 未來固定設定 values (材料分組 or 步驟分組) this
+recipe does not use yet as one-tap chips, in their order there, and a box for
+a one-off name; a group's header marks which it is - 未來固定設定裡的分組 or
+只用在這道. A typed name that is such a value, trimmed and in any case, is
+that value -
 in the add box and in a header's name box alike, which is how a group is
 renamed or repicked; one the recipe already has cannot be added again.
 **Removing a group keeps its rows**: they move to the end of the ungrouped
@@ -612,7 +716,7 @@ Days and °C are whole numbers on the server: the inputs step by 1 and the
 payload reads them with `integerOrNull` (`lib/rowList.js`).
 
 **The gallery** (`components/forms/GalleryPicker.jsx`) is controlled and saves
-nothing itself: `value` is `[{ image_id, url, thumb_url, focus }]`, first is
+nothing itself: `value` is `[{ image_id, url, thumb_url, focus, caption }]`, first is
 the cover (marked 封面). 上傳圖片 takes several files, uploading one at a time
 so a bad file fails alone with its own message; uploading reaches the library
 at once, attaching waits for 儲存. 從圖庫選 opens the library in a dialog,
@@ -620,13 +724,23 @@ at once, attaching waits for 儲存. 從圖庫選 opens the library in a dialog,
 one already in the gallery is marked and can be taken out. Each picture has
 a drag handle - the tiles drag in both directions, as a grid - 焦點
 (`FocusPicker.jsx`: click or drag, arrow keys nudge 1% / 10%, previewed as a
-cover and a thumbnail) and 移除.
+cover and a thumbnail) and 移除, and under them a 說明 box - the caption,
+growing with its text - sent as typed: the API trims it and stores a blank
+one as null.
 
-## 設定 and 圖片
+## 設定, 未來固定設定 and 圖片
 
-`/edit/settings` is `pages/edit/Settings.jsx`: a tab each for 食材分類,
-常用食材, 標籤, 類別, 地區, 狀態, 難易度, 來源, 作者, 材料分組, 步驟分組, 做法 and 器材, with 圖片庫 - the way
-into `/edit/images` - beside the heading. 類別 and 地區 file a dish (地區 is
+`/edit/settings` is `pages/edit/Settings.jsx`: a tab each for 標籤, 地區,
+來源, 作者 and 器材, with 未來固定設定 and 圖片庫 - the ways into
+`/edit/fixed-settings` and `/edit/images` - beside the heading.
+`/edit/fixed-settings` is `pages/edit/FixedSettings.jsx`: a tab each for
+食材分類, 常用食材, 類別, 狀態, 難易度, 材料分組, 步驟分組 and 做法, a line
+under the heading saying these are system options that will become fixed
+and stay editable for now while the app is still changing, and 回到設定
+beside the heading. Both are `components/settings/SettingsPage.jsx` - the
+heading, its buttons, the optional intro and the tab bar - over tabs defined
+once in `components/settings/settingsTabs.jsx`; a factory vocabulary's
+panel is `components/settings/FactoryEditor.jsx`. 類別 and 地區 file a dish (地區 is
 台式, 中式, 日式 …, hand-ordered, the order the dish form and filters offer);
 renaming either marks the dish and recipe reads stale. 狀態 is the recipe statuses (想試,
 可煮, 常煮 …; the first is what a new recipe starts on), 難易度 the recipe
@@ -639,25 +753,25 @@ that order - and counted by the recipe groups using them; renaming any of
 them marks every recipe read stale, as a course does. 作者 is listed by name, as 標籤 is, so it has no
 drag handle and a new author is added without a `sort_order`.
 
-**An author's row says 編輯, not 改名**, because it opens more than the
-names: under them, the author's links - TBD's link editor
-(`components/forms/RowEditor.jsx`), a row each of 名稱 (optional) and 網址,
-dragged to reorder, ✕ to remove, ＋ 新增連結 to add - and a multi-line
-備註. 儲存 sends one `PATCH` with the names, `notes` and every link in the
-order shown (`lib/authors.js`): a link row left wholly empty is dropped, a
-blank 備註 is sent as null, and a refusal (a `javascript:` or blank url) is
-said in the row. `VocabularyEditor` takes this as its `details` prop
-(built in `Settings.jsx` around `components/settings/AuthorDetails.jsx`);
-the other vocabularies pass none and are unchanged.
+**An author's row is a plain vocabulary row** - 改名 (its two names, in
+place), 刪除 and the add form, as every other tab - **plus 編輯**, a link
+to the author's form (`/edit/authors/:id`), where its links, 備註 and
+pictures are edited. That is the one editor for them; the row's rename
+sends the names alone and leaves them as stored. `VocabularyEditor` takes
+the link as its `rowActions` prop (built in `settingsTabs.jsx`); the other
+vocabularies pass none.
 
-- **The tab is in the URL**, `?tab=` with `categories`, `common-ingredients`,
-  `labels`, `courses`, `regions`,
-  `statuses`, `difficulties`, `platforms`, `authors`, `line-groups`, `step-groups`, `methods` or
-  `equipment` (`hooks/useUrlTab.js`), so a tab can be linked to
-  and survives a reload. A missing or unknown tab is the first, 食材分類, and
-  the URL is left as it is. Choosing a tab **replaces** the history entry
-  rather than pushing one: Back leaves 設定 instead of walking back through
-  the tabs looked at on the way.
+- **The tab is in the URL**, `?tab=` - on 設定 `labels`, `regions`,
+  `platforms`, `authors` or `equipment`; on 未來固定設定 `categories`,
+  `common-ingredients`, `courses`, `statuses`, `difficulties`,
+  `line-groups`, `step-groups` or `methods` (`hooks/useUrlTab.js`) - so a
+  tab can be linked to and survives a reload. A missing or unknown tab is
+  the page's first, 標籤 or 食材分類, and the URL is left as it is. A tab
+  the other page holds is sent there, query kept, **replacing** the history
+  entry: the ids did not change when the vocabularies were split, so every
+  older link into `/edit/settings` still lands on its tab. Choosing a tab
+  replaces the history entry too rather than pushing one: Back leaves the
+  page instead of walking back through the tabs looked at on the way.
 - **The bar is the `Tabs` primitive** (`components/ui/primitives.jsx`), the
   WAI-ARIA tabs pattern: a `tablist` of `tab`s, each `aria-controls` its
   `tabpanel`; only the selected tab is in the Tab order, and ←/→ (wrapping at
@@ -668,8 +782,11 @@ the other vocabularies pass none and are unchanged.
   has its own loading, error and empty state, and one vocabulary failing to
   load leaves every other tab usable. Switching tabs drops an editor's local
   state - an open rename, a half-typed add.
-- **A new vocabulary is one entry in `TABS`** in `Settings.jsx`: its id, its
-  label and what its panel renders.
+- **A new vocabulary is one entry** in `settingsTabs.jsx` - its id, its
+  label and what its panel renders - and its id in `SETTINGS_TABS` or
+  `FIXED_SETTINGS_TABS`, whichever page it belongs on. Moving a vocabulary
+  between the pages is moving its id between those two lists; the redirect
+  follows.
 
 Each value is a `components/settings/NameRow.jsx`:
 
@@ -726,7 +843,7 @@ offered - and 「＋ 新增分組」 opens a name box and 加入, adding an empt
 last. A group's name is renamed in place and saved when the box is left or on
 Enter; Escape, a blank name or one another group has (any case, said under
 the box) puts the stored name back, and the add box refuses a taken name the
-same way. 刪除分組 asks in a ConfirmModal, as every 設定 delete does, saying
+same way. 刪除分組 asks in a ConfirmModal, as every delete on the settings pages does, saying
 how many chips move; confirmed, its chips go to the end of 未分組.
 
 Every change `PUT`s the whole structure (`{ungrouped, groups}`, a group
@@ -757,7 +874,7 @@ and ingredients). The other vocabularies show `usage_count`.
 `/edit/images` is `pages/edit/ImageLibrary.jsx`, media's admin image page
 without what food lacks: a grid of thumbnails (centred, `data-focus="none"` -
 a focus belongs to an owner, not the file), each with its size and either
-its owners as links (食材 / 料理 / 食譜 / 筆記, `lib/imageOwners.js`) or 未使用 and
+its owners as links (食材 / 料理 / 食譜 / 筆記 / 作者, `lib/imageOwners.js`) or 未使用 and
 刪除. **Only an unused image offers delete**, as in media: taking a picture
 off a recipe is done on the recipe's form. The owners come from each attached
 image's detail, read only for the tiles that have any; the list itself
@@ -776,7 +893,8 @@ name, if it has one, and its links under it. A link shows its label, or else
 its host and path without the scheme, `www.`, query or trailing slash, cut to
 40 characters (`lib/format.js` `linkText`); it opens in a new tab
 (`rel="noopener noreferrer"`). 編輯 goes to `/edit/tbd`, and the empty state
-offers the same link.
+offers the same link. A search result opens it at `#tbd-<id>`, and that
+entry is marked and scrolled to (see "Search").
 
 **`/edit/tbd`** (`pages/edit/TbdForm.jsx`) is the same list, editable in
 place. Every entry is a card - 名稱, and its links in a `RowEditor` (網址 and
@@ -796,7 +914,7 @@ an optional 顯示文字 per row) - with its own 儲存 and 刪除:
   at once with `PUT /api/edit/tbd/order`: the new order shows immediately,
   the list is frozen until the save has landed and the list has been read
   again, and a refusal puts the stored order back with the server's
-  sentence - the rule `hooks/useSortOrderMove.js` applies on 設定.
+  sentence - the rule `hooks/useSortOrderMove.js` applies on the settings pages.
 
 完成 goes back to `/tbd`.
 
@@ -808,7 +926,9 @@ is TBD's page with a different card, and works the same way.
 
 **`/heating`** (`pages/library/Heating.jsx`) is one list, read whole: each
 note's name, with how to heat it under it, line breaks kept. 編輯 goes to
-`/edit/heating`, and the empty state offers the same link.
+`/edit/heating`, and the empty state offers the same link. A search result
+opens it at `#heating-<id>`, and that note is marked and scrolled to (see
+"Search").
 
 **`/edit/heating`** (`pages/edit/HeatingForm.jsx`) is the same list,
 editable in place. Every note is a card - 名稱 and 怎麼加熱 - with its own

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.errors import AppError
 from app.models import KitchenNote, KitchenNoteImage, KitchenNoteLabel
 from app.services.lookup import fetch_labels
-from app.services.search import ESCAPE, contains
+from app.services.search import term_match
 
 
 def _loaded(query):
@@ -28,6 +28,11 @@ def get(db: Session, note_id: int) -> KitchenNote:
     return row
 
 
+def matches(q: str):
+    """The clause a search term matches a note by: its title or its body."""
+    return or_(term_match(KitchenNote.title, q), term_match(KitchenNote.body, q))
+
+
 def search(
     db: Session,
     q: str | None = None,
@@ -40,13 +45,7 @@ def search(
     returned once."""
     query = _loaded(db.query(KitchenNote))
     if q:
-        term = contains(q)
-        query = query.filter(
-            or_(
-                KitchenNote.title.ilike(term, escape=ESCAPE),
-                KitchenNote.body.ilike(term, escape=ESCAPE),
-            )
-        )
+        query = query.filter(matches(q))
     if kind:
         query = query.filter(KitchenNote.kind.in_(kind))
     if label_id:

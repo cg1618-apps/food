@@ -13,8 +13,9 @@ copied columns: `cls.name_cn` inside it is the subclass's column, not the
 mixin's, which is what lets one definition produce ten correctly-bound
 expression indexes.
 
-An author alone carries more than the shared shape - a remark and a child
-table of links (`author_link`) - declared on its own class below.
+An author alone carries more than the shared shape - a remark, a child
+table of links (`author_link`) and a gallery (`author_image`, in `image.py`
+beside the other galleries) - declared on its own class below.
 """
 
 from sqlalchemy import (
@@ -110,9 +111,9 @@ class Author(Base, VocabularyMixin):
     Grows from the recipe form as much as from 設定 - a name typed into a
     source that no author answers to is created by the save.
 
-    The one vocabulary with more than names: a remark (`notes`) and links -
-    a channel, a blog - shown above the recipe library when it is filtered
-    to this author.
+    The one vocabulary with more than names: a remark (`notes`), links - a
+    channel, a blog - and a gallery, read together on the author's own page
+    (`/authors/:id`).
     """
 
     __tablename__ = "author"
@@ -126,6 +127,12 @@ class Author(Base, VocabularyMixin):
         cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="AuthorLink.position",
+    )
+    images = relationship(
+        "AuthorImage",
+        back_populates="author",
+        cascade="all, delete-orphan",
+        order_by="AuthorImage.position",
     )
 
 

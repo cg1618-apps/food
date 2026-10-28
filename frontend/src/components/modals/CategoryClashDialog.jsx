@@ -152,7 +152,7 @@ export default function CategoryClashDialog({ preview: initial, ingredientName, 
 
         {blocked ? (
           <div role="alert" className="space-y-1 rounded-md border border-danger/50 px-3 py-2 text-danger">
-            <p>不能轉換：這些子分類移上去會和同一層的分類同名，請先到設定改名。</p>
+            <p>不能轉換：這些子分類移上去會和同一層的分類同名，請先到未來固定設定改名。</p>
             <ul className="list-disc pl-5">
               {preview.blocked_by.map((pair) => (
                 <li key={pair.category.id}>「{pair.category.display_name}」</li>

@@ -1,11 +1,11 @@
 # Data model
 
-What the database holds today: forty-seven tables, at revision `c3ommon`.
+What the database holds today: forty-eight tables, at revision `a3uthor`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the ten managed
 vocabularies and an author's links (`author_link`), `ingredient_heating`, `ingredient_link`, the image library and
-its four galleries (`image`, `ingredient_image`, `dish_image`, `recipe_image`,
-`kitchen_note_image`), the dish family's four (`dish`, `dish_alias`,
+its five galleries (`image`, `ingredient_image`, `dish_image`, `recipe_image`,
+`kitchen_note_image`, `author_image`), the dish family's four (`dish`, `dish_alias`,
 `dish_serves_as`, `dish_label`), the recipe family's nine (`recipe`,
 `recipe_method`, `recipe_equipment`, `recipe_source`, `recipe_line_group`,
 `recipe_line`, `recipe_line_alternative`, `recipe_step_group`, `recipe_step`), kitchen notes' two (`kitchen_note`, `kitchen_note_label`),
@@ -297,8 +297,9 @@ name, YouTube, IG, 部落格. `ck_author_link_has_a_url` refuses a blank url;
 the API gives a url with no scheme `https://` and refuses any scheme but
 `http` and `https`. A save replaces an author's links wholesale, which is
 why `position` has no unique constraint, as on `tbd_link`. Nothing
-references `author_link`. An author made by a recipe save starts with
-neither.
+references `author_link`. An author also has a gallery, `author_image`
+(below, with the others). An author made by a recipe save starts with
+none of the three.
 
 **The migration seeds them, and the ingredient categories and labels with
 them:**
@@ -368,23 +369,25 @@ are one row. `storage_key` and `thumb_key` are paths under the image directory
 pixels are on disk, not in the database.
 
 **A gallery is a join table per owner type, with real foreign keys.**
-`ingredient_image`, `dish_image`, `recipe_image` and `kitchen_note_image`
-exist. Media has one
+`ingredient_image`, `dish_image`, `recipe_image`, `kitchen_note_image` and
+`author_image` exist. Media has one
 polymorphic table with an `owner_type` and an `owner_id` that nothing
 constrains.
 
 | Column | Notes |
 | --- | --- |
-| `ingredient_id` / `dish_id` / `recipe_id` / `kitchen_note_id` | the owner, `CASCADE` |
+| `ingredient_id` / `dish_id` / `recipe_id` / `kitchen_note_id` / `author_id` | the owner, `CASCADE` |
 | `image_id` | `RESTRICT` |
 | `position` | 0 is the cover; unique per owner |
 | `focus` | `"X% Y%"` with each 0–100, or null for centred |
+| `caption` | what the picture shows in this gallery, line breaks kept; trimmed, never `""` - null when there is none |
 
-The four gallery tables have the same shape. Deleting an owner removes its
+The five gallery tables have the same shape. Deleting an owner removes its
 gallery rows and never the pictures. An image
 that is still attached cannot be deleted: the API answers 409 naming the owners,
-and the foreign key is the backstop. `focus` is per attachment, because one
-picture may be cropped differently in two galleries. An image may appear once in
+and the foreign key is the backstop. `focus` and `caption` are per attachment,
+because one picture may be cropped differently, and described differently, in
+two galleries. An image may appear once in
 a gallery (`uq_<owner>_image_once`) and a position once
 (`uq_<owner>_image_position`).
 
@@ -473,8 +476,8 @@ own — an empty one is kept — has its own place, and is renamed in one place.
 | --- | --- |
 | `recipe_id` | the owner, `CASCADE` |
 | `position` | the group's place among the recipe's groups, unique per recipe (`uq_recipe_line_group_position`, `uq_recipe_step_group_position`) |
-| `line_group_id` / `step_group_id` | → `line_group` / `step_group`, `RESTRICT`, indexed — the 設定 value the group is |
-| `name` | a one-off name, for a group that is no 設定 value |
+| `line_group_id` / `step_group_id` | → `line_group` / `step_group`, `RESTRICT`, indexed — the 未來固定設定 value the group is |
+| `name` | a one-off name, for a group that is no 未來固定設定 value |
 
 **Exactly one of the value and `name` is set** (`ck_recipe_line_group_one_name`,
 `ck_recipe_step_group_one_name`); the write path stores a name matching a
@@ -676,7 +679,7 @@ shared.
 | line or step group → the lines or steps in it | `SET NULL` — they become ungrouped |
 | kitchen note → its label links and gallery rows | `CASCADE` |
 | TBD entry → its links | `CASCADE` |
-| author → its links | `CASCADE` |
+| author → its links and gallery rows | `CASCADE` |
 | course or region → the dishes filed in it | `RESTRICT` |
 | status or difficulty → the recipes in it; source platform or author → the sources naming it | `RESTRICT` |
 | course → its serves-as links; label → any link | `CASCADE` |
