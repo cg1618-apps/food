@@ -322,11 +322,17 @@ so a later reader can tell a decision from an accident. These are food's.
   single picture for an owner's role and attaches it the moment it is picked.
   food's recipes, ingredients and notes each hold an ordered gallery whose
   first picture is the cover, so `GalleryPicker` is a list - several uploads at
-  once, reorder, a focus per picture - and it attaches nothing itself: the form
+  once, reorder, a focus and a caption per picture - and it attaches nothing itself: the form
   PUTs the whole gallery with its save, after the first save for a new owner.
   A cancelled form therefore leaves at most an unused picture in the library
   and changes no owner, where media's attach-on-pick changes the owner before
   Save is pressed.
+- **A caption belongs to the attachment, not to the picture**, beside
+  `focus` and for the same reason: one picture in a dish's gallery and a
+  recipe's may need to say different things, and a caption on `image` would
+  make editing one silently edit the other. It has no length limit, because
+  no free-text field here has one: a caption is short by nature, and a cap
+  would be the first and only one in the app.
 - **The typeahead searches the server and is driven from the keyboard**, where
   media's `ComboBox` filters a list it was handed and handles only Escape and
   Tab. A recipe line may name any ingredient or any recipe, so handing the box

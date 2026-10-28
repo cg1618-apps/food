@@ -40,7 +40,7 @@ reference work.
 ## Status
 
 **Modules 1 and 2 are built, with dishes, kitchen notes, the weekly
-schedule, 加熱 and TBD.** The schema is at revision `c3ommon` (the head).
+schedule, 加熱 and TBD.** The schema is at revision `m2captions` (the head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
   parent, rating, labels, storage as a state x method grid with day ranges, a

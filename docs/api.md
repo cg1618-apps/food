@@ -153,7 +153,7 @@ default `unused`), `method`, `duration_min_days`, `duration_max_days` and
 `notes`. A heating entry is `method` (`{id, display_name}`), `temperature_c`,
 `temperature_f` (computed, never sent), `duration`, `preheat`, `flip` and
 `notes`; a link is `url` and `title`. An image is `image_id`, `url`,
-`thumb_url`, `width`, `height` and `focus`. Heating rows and links come back
+`thumb_url`, `width`, `height`, `focus` and `caption`. Heating rows and links come back
 with a `sort_order`, but it is not sent: their order is the order of the list,
 and a request naming `sort_order` on either is a 422.
 
@@ -340,11 +340,14 @@ Two clashes no conversion resolves:
   owner's to say, by renaming the other first.
 
 **`PUT /api/edit/ingredients/{id}/images`** takes a list of
-`{"image_id": 12, "focus": "50% 30%"}` and makes it the gallery, in that order;
-index 0 is the cover. `[]` clears it. An unknown `image_id` is 422 naming the
+`{"image_id": 12, "focus": "50% 30%", "caption": "切面"}` and makes it the
+gallery, in that order; index 0 is the cover. `focus` and `caption` are both
+optional. A caption is trimmed - its inner line breaks kept - and a blank one
+is stored as null; it has no length limit, like every free-text field here. `[]` clears it. An unknown `image_id` is 422 naming the
 id (see "An id in the body that names nothing is 422"), the same image twice
 is 422, and a `focus` that is not `"X% Y%"` with each between 0 and
-100 is 422. Putting the same list twice in a row succeeds. The answer is the
+100 is 422, as is a `caption` that is not a string. Putting the same list twice
+in a row succeeds. The answer is the
 full ingredient.
 
 ## Dishes

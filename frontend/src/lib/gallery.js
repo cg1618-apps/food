@@ -1,8 +1,9 @@
 // Frontend: an owner's gallery, between the picker and the API.
 //
-// The picker holds `[{ image_id, url, thumb_url, focus }]` in display order;
-// position 0 is the cover. The API takes `[{ image_id, focus }]` in order on
-// PUT .../{id}/images and replaces the whole gallery with it.
+// The picker holds `[{ image_id, url, thumb_url, focus, caption }]` in display
+// order; position 0 is the cover. The API takes `[{ image_id, focus, caption }]`
+// in order on PUT .../{id}/images and replaces the whole gallery with it. A
+// caption is sent as typed; the API trims it and stores a blank one as null.
 
 /** An owner's `images` (AttachedImage) -> the picker's value. */
 export function galleryFromImages(images) {
@@ -11,12 +12,13 @@ export function galleryFromImages(images) {
     url: image.url,
     thumb_url: image.thumb_url,
     focus: image.focus ?? null,
+    caption: image.caption ?? null,
   }))
 }
 
 /** A library image (ImageSummary, as upload and the list answer) -> an item. */
 export function galleryItem(image) {
-  return { image_id: image.id, url: image.url, thumb_url: image.thumb_url, focus: null }
+  return { image_id: image.id, url: image.url, thumb_url: image.thumb_url, focus: null, caption: null }
 }
 
 /**
@@ -37,10 +39,14 @@ export function addToGallery(items, images) {
 
 /** The PUT body. */
 export function galleryPayload(items) {
-  return items.map((item) => ({ image_id: item.image_id, focus: item.focus ?? null }))
+  return items.map((item) => ({
+    image_id: item.image_id,
+    focus: item.focus ?? null,
+    caption: item.caption ?? null,
+  }))
 }
 
-/** Whether the gallery differs from what was loaded - order and focus count. */
+/** Whether the gallery differs from what was loaded - order, focus and caption count. */
 export function galleryChanged(loaded, current) {
   return JSON.stringify(galleryPayload(loaded)) !== JSON.stringify(galleryPayload(current))
 }

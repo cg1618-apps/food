@@ -237,7 +237,9 @@ def set_images(db: Session, owner, relationship: str, attachment: type, entries)
         owner,
         relationship,
         [
-            attachment(image_id=found[e.image_id].id, position=i, focus=e.focus)
+            attachment(
+                image_id=found[e.image_id].id, position=i, focus=e.focus, caption=e.caption
+            )
             for i, e in enumerate(entries)
         ],
     )
@@ -254,6 +256,7 @@ def attached(rows) -> list[AttachedImage]:
             width=a.image.width,
             height=a.image.height,
             focus=a.focus,
+            caption=a.caption,
         )
         for a in rows
     ]

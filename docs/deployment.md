@@ -108,6 +108,9 @@ it. No ingredient is touched.
 chip is lost: they are first renumbered into one list - 未分組 first, then
 each group's chips in group order, each in its own order.
 
+`m2captions`'s downgrade drops `caption` from the four gallery tables, and
+every picture's caption with it. No picture and no attachment is lost.
+
 `t1bd`'s downgrade drops `tbd_link` and `tbd_entry`, and every entry on the
 TBD page with them. Nothing else is touched.
 
@@ -247,7 +250,8 @@ they ever do not, believe the box.
 | A recipe's 加熱 notes | `r2eheat` — no new table |
 | 難易度, a recipe's difficulty | `d2ifficulty` — forty-seven tables |
 | Recipe templates removed | `t3emplates` — forty-six tables |
-| 常用食材 groups | `c3ommon` — forty-seven tables, the current head |
+| 常用食材 groups | `c3ommon` — forty-seven tables |
+| A caption per gallery picture | `m2captions` — no new table, the current head |
 
 `0001_baseline` is deliberately empty; it exists so the chain could be proven to
 build from nothing before there was a table to build. **So the rollback target

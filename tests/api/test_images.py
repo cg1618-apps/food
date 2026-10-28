@@ -373,3 +373,66 @@ def test_a_failure_while_processing_an_opened_image_is_422_not_500(client, image
     response = _upload(client, _png())
     assert response.status_code == 422
     assert response.json()["detail"] == "That file is not an image this app can read."
+
+
+# --- captions --------------------------------------------------------------------
+
+
+def test_a_caption_round_trips_trimmed_with_its_line_breaks(client, fallback_category):
+    ingredient, first, second = _ingredient_with_two_images(client, fallback_category)
+    url = f"/api/edit/ingredients/{ingredient['id']}/images"
+    response = client.put(
+        url,
+        json=[
+            {"image_id": first["id"], "caption": "  切面\n顏色要紅  "},
+            {"image_id": second["id"]},
+        ],
+    )
+    assert response.status_code == 200, response.text
+    assert [i["caption"] for i in response.json()["images"]] == ["切面\n顏色要紅", None]
+    detail = client.get(f"/api/ingredients/{ingredient['id']}").json()
+    assert [i["caption"] for i in detail["images"]] == ["切面\n顏色要紅", None]
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\n\t"])
+def test_a_blank_caption_is_stored_as_none(client, fallback_category, blank):
+    ingredient, first, _ = _ingredient_with_two_images(client, fallback_category)
+    url = f"/api/edit/ingredients/{ingredient['id']}/images"
+    # The gallery held a caption first, so None is a change the PUT made.
+    client.put(url, json=[{"image_id": first["id"], "caption": "舊說明"}])
+    response = client.put(url, json=[{"image_id": first["id"], "caption": blank}])
+    assert response.status_code == 200, response.text
+    assert response.json()["images"][0]["caption"] is None
+
+
+def test_a_caption_that_is_not_a_string_is_refused(client, fallback_category):
+    ingredient, first, _ = _ingredient_with_two_images(client, fallback_category)
+    url = f"/api/edit/ingredients/{ingredient['id']}/images"
+    assert client.put(url, json=[{"image_id": first["id"], "caption": 5}]).status_code == 422
+    assert client.put(url, json=[{"image_id": first["id"], "caption": "5"}]).status_code == 200
+
+
+def test_one_image_on_two_owners_keeps_a_caption_for_each(client, fallback_category):
+    image = _upload(client, _png()).json()
+    recipe = _recipe(client, "芒果布丁")
+    note = client.post("/api/edit/kitchen-notes", json={"title": "芒果"}).json()
+    ingredient = client.post(
+        "/api/edit/ingredients", json={"name_cn": "芒果", "category_id": fallback_category.id}
+    ).json()
+    owners = {
+        f"/api/edit/dishes/{recipe['dish']['id']}/images": "成品",
+        f"/api/edit/recipes/{recipe['id']}/images": "這個食譜的版本",
+        f"/api/edit/ingredients/{ingredient['id']}/images": "熟的芒果",
+        f"/api/edit/kitchen-notes/{note['id']}/images": "筆記的圖",
+    }
+    for url, caption in owners.items():
+        response = client.put(url, json=[{"image_id": image["id"], "caption": caption}])
+        assert response.status_code == 200, response.text
+    reads = {
+        f"/api/dishes/{recipe['dish']['id']}": "成品",
+        f"/api/recipes/{recipe['id']}": "這個食譜的版本",
+        f"/api/ingredients/{ingredient['id']}": "熟的芒果",
+        f"/api/kitchen-notes/{note['id']}": "筆記的圖",
+    }
+    for url, caption in reads.items():
+        assert client.get(url).json()["images"][0]["caption"] == caption, url

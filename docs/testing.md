@@ -295,7 +295,7 @@ the entire failure.
 | `tests/api/test_ingredient_storage.py` | storage state and range, heating, links, rating, the new list filters (the category filter over a subtree, its sibling mirror, and the list agreeing with the tree's subtree totals), the delete counts and the 409 that names the moved one, `/api/vocabularies/fixed` |
 | `tests/api/test_vocabularies.py` | the ten vocabularies, parametrised over one factory, the in-use 409 for each (a course or region a dish is filed in; a difficulty a recipe is rated with, beside an unrated recipe and an unused value as the mirror), and authors in name order |
 | `tests/api/test_author_details.py` | an author's links and 備註: the blank-url CHECK and CASCADE to links (with two links really present), the round trip in order, a blank 備註 as null, `https://` given to a link without a scheme, the 422 for a blank, `javascript:` or other non-web url with nothing written and the mirror that saves, a refused `PATCH` keeping the stored links, links replaced wholesale, left alone, cleared by `[]` and the null refused, the delete taking the links, and the other nine vocabularies refusing `notes` and `links` with the author accepting the same body |
-| `tests/api/test_images.py` | upload, re-encode, deduplication, ingredient, dish and recipe galleries (kitchen-note galleries are in `test_kitchen_notes.py`), a dish's cover falling back to its first recipe's, an image's owners, deletion, serving |
+| `tests/api/test_images.py` | upload, re-encode, deduplication, ingredient, dish and recipe galleries (kitchen-note galleries are in `test_kitchen_notes.py`), a dish's cover falling back to its first recipe's, captions (trimmed with their line breaks, blank as null, a non-string refused, one picture captioned separately in all four galleries), an image's owners, deletion, serving |
 | `tests/api/test_recipe_model.py` | every named dish and recipe constraint, each refusal with its mirror; a recipe's display name falling back to its dish's; CASCADE and RESTRICT on delete, and a recipe's delete leaving its dish |
 | `tests/api/test_dish_crud.py` | the dish round trip, kind, names, unknown ids, its recipes and "used in", the two delete refusals with their mirrors, the stale alias count, 404s |
 | `tests/api/test_dish_library.py` | the dish list's summary, search and "any of" filters, and the recipe list's filters that read through the dish (dish, kind, course, region, label) and its search over the dish's names |
@@ -354,6 +354,14 @@ Vitest with jsdom, each test file beside its source. The pages are tested
 through the real route table (`AppRoutes`) against a stubbed `fetch`, so a
 test reads what the page asks for and what it sends. jsdom cannot drag:
 every reorder is driven through the handle's keyboard path.
+
+Gallery captions are covered in: `lib/gallery.test.js` (the caption through
+the PUT body, and a caption change counting as a change),
+`components/ui/Gallery.test.jsx` (the large picture's caption with its line
+breaks, following the chosen thumbnail, and nothing drawn for a picture
+without one - beside one that has one, so the empty case is the one tested)
+and `components/forms/forms.test.jsx` (a typed 說明 in the recipe form's
+gallery PUT).
 
 The dish split is covered in: `pages/library/libraries.test.jsx` (the dish
 library's filters going to the URL and the API, its card and table, the

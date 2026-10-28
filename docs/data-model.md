@@ -1,6 +1,6 @@
 # Data model
 
-What the database holds today: forty-seven tables, at revision `c3ommon`.
+What the database holds today: forty-seven tables, at revision `m2captions`.
 Module 1's six (`ingredient`, `ingredient_category`, `ingredient_alias`,
 `ingredient_preservation`, `label`, `ingredient_label`), the ten managed
 vocabularies and an author's links (`author_link`), `ingredient_heating`, `ingredient_link`, the image library and
@@ -379,12 +379,14 @@ constrains.
 | `image_id` | `RESTRICT` |
 | `position` | 0 is the cover; unique per owner |
 | `focus` | `"X% Y%"` with each 0–100, or null for centred |
+| `caption` | what the picture shows in this gallery, line breaks kept; trimmed, never `""` - null when there is none |
 
 The four gallery tables have the same shape. Deleting an owner removes its
 gallery rows and never the pictures. An image
 that is still attached cannot be deleted: the API answers 409 naming the owners,
-and the foreign key is the backstop. `focus` is per attachment, because one
-picture may be cropped differently in two galleries. An image may appear once in
+and the foreign key is the backstop. `focus` and `caption` are per attachment,
+because one picture may be cropped differently, and described differently, in
+two galleries. An image may appear once in
 a gallery (`uq_<owner>_image_once`) and a position once
 (`uq_<owner>_image_position`).
 

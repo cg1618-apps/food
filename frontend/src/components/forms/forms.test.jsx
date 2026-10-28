@@ -438,6 +438,8 @@ describe('RecipeForm', () => {
       fireEvent.change(screen.getByLabelText('上傳圖片'), { target: { files: [file] } })
     })
     await screen.findByRole('listitem', { name: '圖片 1' })
+    // Its 說明, sent as typed: the API trims it.
+    fireEvent.change(screen.getByLabelText('圖片 1 的說明'), { target: { value: '成品\n切開' } })
 
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/recipes/42'))
@@ -465,7 +467,7 @@ describe('RecipeForm', () => {
       { body: '煎香', kind: 'step' },
     ])
     expect(body.step_groups).toEqual([])
-    expect(writes[1].body).toEqual([{ image_id: 31, focus: null }])
+    expect(writes[1].body).toEqual([{ image_id: 31, focus: null, caption: '成品\n切開' }])
   })
 
   it('starts on the first status, and a new source on the first platform', async () => {
