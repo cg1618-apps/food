@@ -77,8 +77,8 @@ function StatusControl({ recipe }) {
   )
 }
 
-// Each source: its platform, its author (a link to the library filtered by
-// them, as the course is), and its title - the link out when there is a URL,
+// Each source: its platform, its author (a link to the author's page), and
+// its title - the link out when there is a URL,
 // the URL's host standing in for a missing title.
 function Sources({ sources }) {
   if (!sources.length) return null
@@ -90,7 +90,7 @@ function Sources({ sources }) {
           <li key={source.id} className="flex flex-wrap items-baseline gap-2">
             <Chip>{source.platform.display_name}</Chip>
             {source.author ? (
-              <Link to={`/recipes?author=${source.author.id}`} className="hover:text-brand hover:underline">
+              <Link to={`/authors/${source.author.id}`} className="hover:text-brand hover:underline">
                 {source.author.display_name}
               </Link>
             ) : null}

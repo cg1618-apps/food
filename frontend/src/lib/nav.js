@@ -2,7 +2,8 @@
 //
 // The navigation is 料理 · 食譜 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定. A section
 // is active on its own pages AND on the edit pages behind them - the recipe form is still
-// "in" 食譜 - which react-router's NavLink prefix match cannot say, because the
+// "in" 食譜, and so are the author library and its pages, which have no nav
+// item of their own - which react-router's NavLink prefix match cannot say, because the
 // edit pages live under /edit/... for the Access gate. So the match is written
 // out here, once, and tested.
 //
@@ -13,7 +14,13 @@
 export const SECTIONS = [
   // First: a dish is what you look for, and its recipes hang off it.
   { key: 'dishes', label: '料理', to: '/dishes', prefixes: ['/dishes', '/edit/dishes'] },
-  { key: 'recipes', label: '食譜', to: '/recipes', prefixes: ['/recipes', '/edit/recipes'] },
+  // Authors are filed under 食譜: an author is who a recipe came from.
+  {
+    key: 'recipes',
+    label: '食譜',
+    to: '/recipes',
+    prefixes: ['/recipes', '/edit/recipes', '/authors', '/edit/authors'],
+  },
   {
     key: 'ingredients',
     label: '食材',

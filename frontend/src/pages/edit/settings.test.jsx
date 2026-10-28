@@ -481,63 +481,24 @@ describe('設定', () => {
     )
   })
 
-  it("opens an author's names, links and 備註 together, and sends them in one PATCH", async () => {
+  it("renames an author in place, its names only, and links its 編輯 to the author's form", async () => {
     handler = (call) => (call.method === 'PATCH' ? json(AUTHORS[1]) : settingsData(call))
     renderAt('/edit/settings?tab=authors')
-    // An author's row edits more than its name, so it says 編輯, not 改名.
-    expect(await screen.findByRole('button', { name: '編輯「阿基師」' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '改名「阿基師」' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '編輯「阿基師」' }))
+    const row = await screen.findByRole('listitem', { name: '阿基師' })
+    // The links, 備註 and pictures are the author's form's: one editor.
+    expect(within(row).getByRole('link', { name: '編輯「阿基師」' }).getAttribute('href')).toBe('/edit/authors/3')
 
-    const row = screen.getByRole('listitem', { name: '阿基師' })
-    expect(within(row).getByRole('textbox', { name: '連結 1 網址' }).value).toBe('https://youtube.com/@a')
-    expect(within(row).getByRole('textbox', { name: '連結 1 名稱' }).value).toBe('YouTube')
-    const notes = within(row).getByRole('textbox', { name: '阿基師 的備註' })
-    expect(notes.value).toBe('台菜。')
-
-    fireEvent.change(notes, { target: { value: '台菜。\n影片比較詳細。' } })
-    fireEvent.click(within(row).getByRole('button', { name: '＋ 新增連結' }))
-    fireEvent.change(within(row).getByRole('textbox', { name: '連結 2 網址' }), {
-      target: { value: 'blog.example' },
-    })
-    fireEvent.change(within(row).getByRole('textbox', { name: '連結 2 名稱' }), {
-      target: { value: '部落格' },
+    fireEvent.click(within(row).getByRole('button', { name: '改名「阿基師」' }))
+    expect(within(row).queryByRole('textbox', { name: /的備註$/ })).toBeNull()
+    expect(within(row).queryByRole('textbox', { name: /^連結/ })).toBeNull()
+    fireEvent.change(within(row).getByRole('textbox', { name: '阿基師 的中文名' }), {
+      target: { value: '阿基師傅' },
     })
     fireEvent.click(within(row).getByRole('button', { name: '儲存' }))
+    // Names only: the stored links and 備註 are left alone, never cleared.
     await waitFor(() =>
       expect(writes()).toEqual([
-        {
-          url: '/api/edit/authors/3',
-          method: 'PATCH',
-          body: {
-            name_cn: '阿基師',
-            name_en: '',
-            notes: '台菜。\n影片比較詳細。',
-            links: [
-              { url: 'https://youtube.com/@a', label: 'YouTube' },
-              { url: 'blog.example', label: '部落格' },
-            ],
-          },
-        },
-      ]),
-    )
-  })
-
-  it("clears an author's links and 備註 with an empty list and null", async () => {
-    handler = (call) => (call.method === 'PATCH' ? json(AUTHORS[1]) : settingsData(call))
-    renderAt('/edit/settings?tab=authors')
-    fireEvent.click(await screen.findByRole('button', { name: '編輯「阿基師」' }))
-    const row = screen.getByRole('listitem', { name: '阿基師' })
-    fireEvent.click(within(row).getByRole('button', { name: '移除連結 1' }))
-    fireEvent.change(within(row).getByRole('textbox', { name: '阿基師 的備註' }), { target: { value: ' ' } })
-    fireEvent.click(within(row).getByRole('button', { name: '儲存' }))
-    await waitFor(() =>
-      expect(writes()).toEqual([
-        {
-          url: '/api/edit/authors/3',
-          method: 'PATCH',
-          body: { name_cn: '阿基師', name_en: '', notes: null, links: [] },
-        },
+        { url: '/api/edit/authors/3', method: 'PATCH', body: { name_cn: '阿基師傅', name_en: '' } },
       ]),
     )
   })

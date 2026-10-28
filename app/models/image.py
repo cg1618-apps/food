@@ -4,8 +4,8 @@ Media's two-table library, with one deliberate difference: attachments are a
 join table PER OWNER with real foreign keys, not one polymorphic table with an
 owner_type and an owner_id nothing constrains. Media records that "nothing in
 the database stops an attachment outliving its owner", and carries orphan gaps
-because of it. food has four owner types - ingredients, dishes, recipes and
-kitchen notes; four small tables remove the class.
+because of it. food has five owner types - ingredients, dishes, recipes,
+kitchen notes and authors; five small tables remove the class.
 
 Owner side CASCADE (deleting a recipe removes its gallery, never the picture);
 image side RESTRICT (an attached picture cannot be deleted - the API answers
@@ -137,4 +137,29 @@ class KitchenNoteImage(Base):
     __table_args__ = (
         UniqueConstraint("kitchen_note_id", "position", name="uq_kitchen_note_image_position"),
         UniqueConstraint("kitchen_note_id", "image_id", name="uq_kitchen_note_image_once"),
+    )
+
+
+class AuthorImage(Base):
+    """One picture in one author's gallery. The same shape again."""
+
+    __tablename__ = "author_image"
+
+    id = Column(Integer, primary_key=True)
+    author_id = Column(
+        Integer, ForeignKey("author.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    image_id = Column(
+        Integer, ForeignKey("image.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    position = Column(Integer, nullable=False)
+    focus = Column(String, nullable=True)
+    caption = Column(String, nullable=True)
+
+    author = relationship("Author", back_populates="images")
+    image = relationship("Image", passive_deletes="all")
+
+    __table_args__ = (
+        UniqueConstraint("author_id", "position", name="uq_author_image_position"),
+        UniqueConstraint("author_id", "image_id", name="uq_author_image_once"),
     )

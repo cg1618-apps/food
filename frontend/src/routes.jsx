@@ -15,10 +15,12 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import EditSignIn from './components/layout/EditSignIn'
 import Layout from './components/layout/Layout'
 import Redirect from './components/layout/Redirect'
+import AuthorDetail from './pages/detail/Author'
 import DishDetail from './pages/detail/Dish'
 import IngredientDetail from './pages/detail/Ingredient'
 import NoteDetail from './pages/detail/Note'
 import RecipeDetail from './pages/detail/Recipe'
+import AuthorForm from './pages/edit/AuthorForm'
 import DishForm from './pages/edit/DishForm'
 import FixedSettings from './pages/edit/FixedSettings'
 import HeatingForm from './pages/edit/HeatingForm'
@@ -29,6 +31,7 @@ import RecipeForm from './pages/edit/RecipeForm'
 import ScheduleForm from './pages/edit/ScheduleForm'
 import Settings from './pages/edit/Settings'
 import TbdForm from './pages/edit/TbdForm'
+import AuthorLibrary from './pages/library/AuthorLibrary'
 import DishLibrary from './pages/library/DishLibrary'
 import Heating from './pages/library/Heating'
 import IngredientLibrary from './pages/library/IngredientLibrary'
@@ -49,6 +52,8 @@ export default function AppRoutes() {
         <Route path="/dishes/:id" element={<DishDetail />} />
         <Route path="/recipes" element={<RecipeLibrary />} />
         <Route path="/recipes/:id" element={<RecipeDetail />} />
+        <Route path="/authors" element={<AuthorLibrary />} />
+        <Route path="/authors/:id" element={<AuthorDetail />} />
         <Route path="/ingredients" element={<IngredientLibrary />} />
         <Route path="/ingredients/:id" element={<IngredientDetail />} />
         <Route path="/notes" element={<NoteLibrary />} />
@@ -63,6 +68,8 @@ export default function AppRoutes() {
           <Route path="/edit/dishes/:id" element={<DishForm />} />
           <Route path="/edit/recipes/new" element={<RecipeForm />} />
           <Route path="/edit/recipes/:id" element={<RecipeForm />} />
+          <Route path="/edit/authors/new" element={<AuthorForm />} />
+          <Route path="/edit/authors/:id" element={<AuthorForm />} />
           <Route path="/edit/ingredients/new" element={<IngredientForm />} />
           <Route path="/edit/ingredients/:id" element={<IngredientForm />} />
           <Route path="/edit/notes/new" element={<NoteForm />} />

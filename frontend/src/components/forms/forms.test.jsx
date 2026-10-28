@@ -1261,6 +1261,88 @@ describe('DishForm', () => {
   })
 })
 
+describe('AuthorForm', () => {
+  const STORED = {
+    id: 3,
+    display_name: '阿基師',
+    name_cn: '阿基師',
+    name_en: null,
+    sort_order: 0,
+    usage_count: 0,
+    recipe_count: 0,
+    notes: '台菜。',
+    links: [{ label: 'YouTube', url: 'https://youtube.com/@a' }],
+    cover: null,
+    images: [{ image_id: 9, url: '/images/9.jpg', thumb_url: '/images/t9.jpg', width: 64, height: 48, focus: null, caption: null }],
+    recipes: [],
+  }
+
+  it('saves a new author with its names, links and 備註, then goes to its page', async () => {
+    handler = ({ url, method }) =>
+      url === '/api/edit/authors' && method === 'POST' ? json({ id: 42, images: [] }, 201) : json([])
+    wrap(<AppRoutes />, '/edit/authors/new')
+    expect(await screen.findByRole('heading', { level: 1, name: '新增作者' })).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('英文名'), { target: { value: ' Babish ' } })
+    fireEvent.click(screen.getByRole('button', { name: '＋ 新增連結' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '連結 1 網址' }), { target: { value: 'youtube.com/@babish' } })
+    fireEvent.change(screen.getByRole('textbox', { name: '連結 1 名稱' }), { target: { value: 'YouTube' } })
+    fireEvent.change(screen.getByRole('textbox', { name: '備註' }), { target: { value: '美式。\n講解清楚。' } })
+
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/authors/42'))
+    const writes = calls.filter((c) => c.method !== 'GET')
+    // No pictures chosen, so no gallery PUT.
+    expect(writes.map((c) => `${c.method} ${c.url}`)).toEqual(['POST /api/edit/authors'])
+    expect(writes[0].body).toEqual({
+      name_cn: '',
+      name_en: ' Babish ',
+      notes: '美式。\n講解清楚。',
+      links: [{ url: 'youtube.com/@babish', label: 'YouTube' }],
+    })
+  })
+
+  it('edits a stored author in one PATCH and leaves an unchanged gallery alone', async () => {
+    handler = ({ url, method }) => {
+      if (url === '/api/authors/3') return json(STORED)
+      if (url === '/api/edit/authors/3' && method === 'PATCH') return json(STORED)
+      return json([])
+    }
+    wrap(<AppRoutes />, '/edit/authors/3')
+    expect(await screen.findByRole('heading', { level: 1, name: '編輯作者' })).toBeTruthy()
+    expect((await screen.findByLabelText('中文名')).value).toBe('阿基師')
+    expect(screen.getByRole('textbox', { name: '連結 1 網址' }).value).toBe('https://youtube.com/@a')
+    fireEvent.click(screen.getByRole('button', { name: '移除連結 1' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '備註' }), { target: { value: ' ' } })
+
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/authors/3'))
+    const writes = calls.filter((c) => c.method !== 'GET')
+    expect(writes).toEqual([
+      {
+        url: '/api/edit/authors/3',
+        method: 'PATCH',
+        body: { name_cn: '阿基師', name_en: '', notes: null, links: [] },
+      },
+    ])
+  })
+
+  it('offers 刪除 on a stored author only, through the delete dialog', async () => {
+    handler = ({ url }) => {
+      if (url === '/api/authors/3') return json(STORED)
+      if (url === '/api/authors/3/cascade') return json({ sources: 0, recipes: 0 })
+      return json([])
+    }
+    wrap(<AppRoutes />, '/edit/authors/3')
+    fireEvent.click(await screen.findByRole('button', { name: '刪除' }))
+    expect(await screen.findByRole('dialog', { name: '刪除作者「阿基師」？' })).toBeTruthy()
+    cleanup()
+
+    wrap(<AppRoutes />, '/edit/authors/new')
+    await screen.findByRole('heading', { level: 1, name: '新增作者' })
+    expect(screen.queryByRole('button', { name: '刪除' })).toBeNull()
+  })
+})
+
 describe('IngredientForm', () => {
   const TREE = [{ id: 1, display_name: '預設', is_fallback: true, children: [] }]
 

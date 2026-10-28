@@ -479,7 +479,7 @@ What the branch after module 1 chose, and what it turned down.
 - **A gallery table per owner type, not media's polymorphic table.** Media has
   one attachment table keyed by `owner_type` and `owner_id`, which nothing
   constrains, and records that nothing stops an attachment outliving its owner.
-  food has four owner types (ingredients, dishes, recipes, kitchen notes), so four small tables with real foreign keys
+  food has five owner types (ingredients, dishes, recipes, kitchen notes, authors), so five small tables with real foreign keys
   remove the whole class at the price of one shared module's worth of
   repetition. `images.OWNER_TABLES` is the one list the library's usage counts
   and owner listings read. The owner side cascades and the image side
@@ -1332,19 +1332,63 @@ migration's to decide.
   list order, the in-use 409 and the name rules; widening the shared
   schemas would have let the other eight accept and silently drop `notes`.
   As it is they refuse it as an extra field, and a test says so.
-- **The panel lives on the filtered recipe library, not on an author
-  page.** A source's author on a recipe already linked to
-  `/recipes?author=<id>`, and that list - the author's recipes - is what an
-  author page would mostly be. Putting the links and 備註 above it adds the
-  one thing missing without a route, a detail page and a second list of
-  the same recipes. It is drawn only for exactly one author, because with
-  two the page is about neither, and not at all for an author with nothing
-  to say: a box holding only the name repeats the filter chip.
-- **Edited on 設定's row, not on a form of its own.** The row's rename mode
-  already held the two names; it now holds the links (TBD's
-  `RowEditor`) and the 備註 under them, and the button says 編輯 because it
-  opens more than a name. An author is a short record, and a separate
-  page for three fields would be a round trip for every one.
+
+## The author library
+
+- **An author is a library with pages, like a dish or a note.** It has a
+  gallery now, and pictures, links, 備註 and the author's recipes together
+  are a page's worth - more than a panel or a settings row holds. The
+  pages are food's per-entity shape (`/authors`, `/authors/:id`,
+  `/edit/authors/new|:id`), not media's add / modify / delete hubs: every
+  other library here is per entity, and someone moving between them should
+  not meet a second shape. The universal search to come links to
+  `/authors/:id` for the same reason it links to `/dishes/:id`.
+- **One place for an author's information: the panel above the recipe
+  library is gone.** Before the library, an author's links and 備註 were
+  drawn above `/recipes?author=<id>` (`AuthorIntro`), the filtered list
+  standing in for an author page. With a real page, keeping the panel too
+  would be two renderings of the same record that drift, so the recipe
+  library filtered by an author is only a filtered list again, a recipe
+  source's author links to the author's page, and the page links back to
+  the filter (「在食譜庫篩選」) for narrowing by the rest of the sidebar.
+- **One editor for links, 備註 and pictures: the author's form.** 設定's
+  作者 row used to open the links and 備註 inline under the names. A gallery
+  does not fit in a row, and two editors for the same fields is the drift
+  above again, so the row is a plain vocabulary row - 改名 for the names,
+  刪除, the add form - with 編輯 linking to `/edit/authors/:id`. Of the two
+  options (the row's 編輯 linking to the form, or the whole row linking to
+  the author's page), the link is the one that keeps the tab shaped like
+  every other tab: a row still renames in place, and only the extra action
+  is new. `VocabularyEditor`'s `details` prop, which existed only for the
+  inline editor, became `rowActions`.
+- **Still on the vocabulary factory, with a router beside it.** Listing,
+  creating, renaming and deleting an author is the factory's, so the name
+  rules, the name order and the in-use 409 stay shared with the other nine.
+  What the factory has no shape for - one author read whole, its delete
+  preview and its gallery PUT - is `app/routers/author.py`, under the same
+  prefix. A second create / update / delete was rejected: two writers for
+  one table is how their rules diverge. The factory's `Shape` gained
+  `extra(db)` for computed list fields, which only authors use, so the
+  author list carries `recipe_count` and `cover` and the other nine answer
+  exactly as before.
+- **`recipe_count` beside `usage_count`, not instead of it.** The library
+  shows recipes, and a recipe with two sources by one author is one recipe;
+  the delete refusal counts sources, because each is a reference that would
+  stop it. Both are true and answer different questions, so both are sent.
+- **The library searches in the browser.** The author list is small, read
+  whole and already cached by the recipe form and the recipe-library
+  filter, so the library filters that list rather than giving the factory a
+  `q` parameter only one of ten vocabularies would use. The search term
+  still lives in the URL, as every library's does.
+- **The delete preview only refuses.** An author's delete takes its links
+  and gallery rows, which nobody would miss (the pictures stay), so there is
+  nothing to count and echo; `cascade` exists to say *before* the button is
+  pressed that the sources naming the author refuse it, as a dish's dialog
+  says its recipes do.
+- **The gallery is the fifth gallery table, the other four's shape
+  exactly** (`author_image`), registered in `images.OWNER_TABLES` so the
+  image library's owner list and its "still attached" 409 name authors
+  without code of their own.
 
 ## The starting ingredient list
 

@@ -40,7 +40,7 @@ reference work.
 ## Status
 
 **Modules 1 and 2 are built, with dishes, kitchen notes, the weekly
-schedule, 加熱 and TBD.** The schema is at revision `m2captions` (the head).
+schedule, 加熱 and TBD.** The schema is at revision `a3uthor` (the head).
 
 - **Ingredients** - names and aliases, a category tree, varieties under a
   parent, rating, labels, storage as a state x method grid with day ranges, a
@@ -74,10 +74,14 @@ schedule, 加熱 and TBD.** The schema is at revision `m2captions` (the head).
   ingredients, and 常用 chips above the lines, under their 常用食材 groups'
   headings, that add an ungrouped line in a tap. A new
   recipe starts blank or as a copy of another recipe.
-- **Authors** - a 設定 vocabulary that also carries links (a name and a
-  url each, in the owner's order) and a 備註, edited on the author's row
-  and shown above the recipe library when it is filtered to that author;
-  a source's author on a recipe links to that filter.
+- **Authors** - a library of its own under 食譜 (`/authors`, searched by
+  name, covers or a table with 食譜數): each author's page shows a gallery,
+  the names, links (a name and a url each, in the owner's order), a 備註
+  and the recipes whose sources name them, with a link to the recipe
+  library filtered to them; one form edits all of it. Still a vocabulary
+  underneath - 設定's 作者 tab adds, renames and deletes, and links each
+  row to the form - and a delete is refused while a source names the
+  author. A source's author on a recipe links to the author's page.
 - **Kitchen notes** - bookmarks with a title, a kind, a link, a body, labels
   and a gallery.
 - **The weekly schedule (排程)** - per date, four meals (早, 中, 下午, 晚),
@@ -92,9 +96,9 @@ schedule, 加熱 and TBD.** The schema is at revision `m2captions` (the head).
 - **TBD** - a standalone page of entries, each an optional name and any
   number of links, in the owner's order; read at `/tbd`, edited in place at
   `/edit/tbd`.
-- **The notebook UI** - 料理 · 食譜 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定: the four libraries
-  (search and filters in the URL, a sidebar or a phone drawer, covers or a
-  table), their detail pages, their add and edit forms with the gallery
+- **The notebook UI** - 料理 · 食譜 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定: the five libraries,
+  authors filed under 食譜 (search and filters in the URL, a sidebar or a
+  phone drawer, covers or a table), their detail pages, their add and edit forms with the gallery
   picker, one delete dialog, ingredient merge, 設定 for the vocabularies
   the owner keeps growing (labels, regions, source platforms, authors,
   equipment) and 圖片, the image library; and 未來固定設定 for the system

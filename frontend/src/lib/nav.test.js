@@ -11,6 +11,11 @@ describe('activeSection', () => {
     ['/recipes', 'recipes'],
     ['/recipes/12', 'recipes'],
     ['/edit/recipes/new', 'recipes'],
+    // The author library and its pages are filed under 食譜.
+    ['/authors', 'recipes'],
+    ['/authors/6', 'recipes'],
+    ['/edit/authors/new', 'recipes'],
+    ['/edit/authors/6', 'recipes'],
     ['/ingredients', 'ingredients'],
     ['/ingredients/3', 'ingredients'],
     ['/edit/ingredients/3', 'ingredients'],
@@ -32,6 +37,7 @@ describe('activeSection', () => {
   it('matches whole segments, not string prefixes', () => {
     // /recipes-old must not light up 食譜.
     expect(activeSection('/recipes-old')).toBeNull()
+    expect(activeSection('/authorship')).toBeNull()
     expect(activeSection('/')).toBeNull()
   })
 

@@ -2,13 +2,14 @@
 // lives and what kind of thing it is, and how big the file is.
 //
 // The owner types are the backend's (app/services/images.py OWNER_TABLES):
-// `ingredient`, `dish`, `recipe`, `kitchen_note`.
+// `ingredient`, `dish`, `recipe`, `kitchen_note`, `author`.
 
 const OWNERS = {
   ingredient: { kind: '食材', path: '/ingredients' },
   dish: { kind: '料理', path: '/dishes' },
   recipe: { kind: '食譜', path: '/recipes' },
   kitchen_note: { kind: '筆記', path: '/notes' },
+  author: { kind: '作者', path: '/authors' },
 }
 
 /** The detail page of an image's owner. */
@@ -17,7 +18,7 @@ export function ownerHref({ type, id }) {
   return owner ? `${owner.path}/${id}` : null
 }
 
-/** 食材, 料理, 食譜 or 筆記 - or the raw type for one this file does not know. */
+/** 食材, 料理, 食譜, 筆記 or 作者 - or the raw type for one this file does not know. */
 export function ownerKind(type) {
   return OWNERS[type]?.kind ?? type
 }

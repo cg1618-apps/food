@@ -87,6 +87,20 @@ export const DELETE_TARGETS = {
       endpoints.images.list(),
     ],
   },
+  // The delete is the vocabulary factory's: refused while any recipe source
+  // names the author. Nothing is echoed - the links and the gallery go with
+  // it and the pictures stay - so the preview only says what refuses it.
+  author: {
+    noun: '作者',
+    group: endpoints.authors,
+    library: '/authors',
+    counts: [],
+    blockers: [
+      ['recipes', (n) => `有 ${n} 份食譜的來源寫著這位作者，要先在那些食譜換掉作者才能刪除。`],
+    ],
+    notices: [],
+    invalidate: [endpoints.authors.list(), endpoints.recipes.list(), endpoints.images.list()],
+  },
   note: {
     noun: '筆記',
     group: endpoints.notes,

@@ -8,6 +8,7 @@ describe('ownerHref and ownerKind', () => {
     ['dish', '/dishes/4', '料理'],
     ['recipe', '/recipes/4', '食譜'],
     ['kitchen_note', '/notes/4', '筆記'],
+    ['author', '/authors/4', '作者'],
   ])('%s', (type, href, kind) => {
     expect(ownerHref({ type, id: 4 })).toBe(href)
     expect(ownerKind(type)).toBe(kind)

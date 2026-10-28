@@ -129,8 +129,16 @@ export const endpoints = {
   platforms: vocabulary('source-platforms'),
   methods: vocabulary('cooking-methods'),
   equipment: vocabulary('equipment'),
-  // A source's author; listed by name, and grown by the recipe form too.
-  authors: vocabulary('authors'),
+  // A source's author; listed by name, and grown by the recipe form too. The
+  // list, create, update and delete are the factory's; the page, its delete
+  // preview and its gallery are app/routers/author.py's.
+  authors: {
+    ...vocabulary('authors'),
+    detail: (id) => `${API}/authors/${id}`,
+    cascade: (id) => `${API}/authors/${id}/cascade`,
+    // PUT [{image_id, focus, caption}] in order: replaces the gallery.
+    images: (id) => `${WRITE}/authors/${id}/images`,
+  },
   // The groups a recipe's ingredient lines (材料分組) and steps (步驟分組)
   // are picked from; a recipe may also name a group of its own.
   lineGroups: vocabulary('line-groups'),

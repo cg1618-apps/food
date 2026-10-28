@@ -1,4 +1,4 @@
-// The four detail pages through the real routes: what each shows, what it
+// The five detail pages through the real routes: what each shows, what it
 // leaves out when empty, the recipe's in-place status change, the dish's
 // recipes and "used in", and the ingredient merge including the
 // stale-preview 409.
@@ -387,7 +387,7 @@ describe('the recipe page', () => {
     expect(screen.queryByRole('heading', { name: '其他版本' })).toBeNull()
   })
 
-  it('names each source by its platform, and links its author to the library filter', async () => {
+  it("names each source by its platform, and links its author to the author's page", async () => {
     handler = ({ url, method }) =>
       method === 'GET' && url === '/api/recipes/5'
         ? json({
@@ -407,7 +407,7 @@ describe('the recipe page', () => {
     renderAt('/recipes/5')
     const sources = (await screen.findByRole('heading', { name: '來源' })).closest('section')
     expect(within(sources).getByText('書')).toBeTruthy()
-    expect(within(sources).getByRole('link', { name: '阿基師' }).getAttribute('href')).toBe('/recipes?author=6')
+    expect(within(sources).getByRole('link', { name: '阿基師' }).getAttribute('href')).toBe('/authors/6')
     expect(within(sources).getByText('家常菜')).toBeTruthy()
   })
 
@@ -725,5 +725,97 @@ describe('the note page', () => {
     expect(await screen.findByText('技巧')).toBeTruthy()
     expect(screen.getByRole('link', { name: /example\.com/ }).getAttribute('href')).toBe('https://www.example.com/a')
     expect(screen.getByText('先對半切')).toBeTruthy()
+  })
+})
+
+describe('the author page', () => {
+  const AUTHOR = {
+    id: 6,
+    display_name: '阿基師',
+    name_cn: '阿基師',
+    name_en: 'Chef Ah-Chi',
+    sort_order: 0,
+    usage_count: 3,
+    recipe_count: 2,
+    notes: '台菜。\n影片比較詳細。',
+    links: [
+      { label: 'YouTube', url: 'https://youtube.com/@a' },
+      { label: null, url: 'https://blog.example/a' },
+    ],
+    cover: { thumb_url: '/images/a-t.jpg', focus: null },
+    images: [
+      { image_id: 1, url: '/images/a.jpg', thumb_url: '/images/a-t.jpg', width: 64, height: 48, focus: null, caption: '頻道封面' },
+    ],
+    recipes: DISH.recipes,
+  }
+
+  it('shows the pictures, the names, the links in a new tab and the 備註 with its line breaks', async () => {
+    handler = ({ url, method }) => (method === 'GET' && url === '/api/authors/6' ? json(AUTHOR) : null)
+    renderAt('/authors/6')
+    expect(await screen.findByRole('heading', { level: 1, name: '阿基師' })).toBeTruthy()
+    expect(screen.getByText('Chef Ah-Chi')).toBeTruthy()
+    expect(screen.getByText('頻道封面')).toBeTruthy()
+    const links = within(screen.getByRole('list', { name: '連結' })).getAllByRole('link')
+    // The label when there is one, else the address as words.
+    expect(links.map((link) => link.textContent)).toEqual(['YouTube ↗', 'blog.example/a ↗'])
+    for (const link of links) {
+      expect(link.getAttribute('target')).toBe('_blank')
+      expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+    }
+    expect(screen.getByText(/台菜。/).textContent).toBe('台菜。\n影片比較詳細。')
+  })
+
+  it('lists its recipes as covers, links the filtered recipe library, and offers 編輯 and 刪除', async () => {
+    handler = ({ url, method }) => (method === 'GET' && url === '/api/authors/6' ? json(AUTHOR) : null)
+    renderAt('/authors/6')
+    const recipes = (await screen.findByRole('heading', { name: '食譜' })).closest('section')
+    expect(within(recipes).getByRole('link', { name: /麻婆豆腐（陳家）/ }).getAttribute('href')).toBe('/recipes/4')
+    expect(within(recipes).getByRole('link', { name: '在食譜庫篩選' }).getAttribute('href')).toBe('/recipes?author=6')
+    expect(screen.getByRole('link', { name: '編輯' }).getAttribute('href')).toBe('/edit/authors/6')
+    expect(screen.getByRole('button', { name: '刪除' })).toBeTruthy()
+  })
+
+  it('says it has no recipes rather than drawing an empty grid', async () => {
+    handler = ({ url, method }) =>
+      method === 'GET' && url === '/api/authors/6' ? json({ ...AUTHOR, recipes: [], recipe_count: 0, links: [], notes: null }) : null
+    renderAt('/authors/6')
+    expect(await screen.findByText('還沒有食譜的來源寫著這位作者。')).toBeTruthy()
+    expect(screen.queryByRole('link', { name: '在食譜庫篩選' })).toBeNull()
+    expect(screen.queryByRole('list', { name: '連結' })).toBeNull()
+  })
+
+  it('says up front that the sources naming it refuse the delete, and echoes no counts', async () => {
+    handler = ({ url, method }) => {
+      if (method === 'GET' && url === '/api/authors/6') return json(AUTHOR)
+      if (method === 'GET' && url === '/api/authors/6/cascade') return json({ sources: 3, recipes: 2 })
+      if (method === 'DELETE') {
+        return json({ detail: '阿基師 is still used in 3 place(s); change those first.', usage_count: 3 }, 409)
+      }
+      return null
+    }
+    renderAt('/authors/6')
+    fireEvent.click(await screen.findByRole('button', { name: '刪除' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText(/有 2 份食譜的來源寫著這位作者/)).toBeTruthy()
+    fireEvent.click(within(dialog).getByRole('button', { name: '刪除' }))
+    await waitFor(() => expect(calls.find((c) => c.method === 'DELETE').url).toBe('/api/edit/authors/6'))
+    expect(await within(dialog).findByText(/still used in 3 place/)).toBeTruthy()
+    expect(location()).toBe('/authors/6')
+  })
+
+  it('deletes an author no source names and goes to the author library', async () => {
+    handler = ({ url, method }) => {
+      if (method === 'GET' && url === '/api/authors/6') return json({ ...AUTHOR, recipes: [] })
+      if (method === 'GET' && url === '/api/authors/6/cascade') return json({ sources: 0, recipes: 0 })
+      if (method === 'DELETE') return new Response(null, { status: 204 })
+      return null
+    }
+    renderAt('/authors/6')
+    fireEvent.click(await screen.findByRole('button', { name: '刪除' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText(/刪除後就找不回來了/)).toBeTruthy()
+    expect(within(dialog).queryByText(/寫著這位作者/)).toBeNull()
+    fireEvent.click(within(dialog).getByRole('button', { name: '刪除' }))
+    await waitFor(() => expect(location()).toBe('/authors'))
   })
 })

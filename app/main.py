@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from app import errors, logging_config
 from app.request_context import RequestIdMiddleware
 from app.routers import (
+    author,
     common_ingredient,
     dish,
     edit_session,
@@ -72,6 +73,9 @@ def create_app(dist: Path = DIST) -> FastAPI:
     app.include_router(heating.edit)
     app.include_router(image.router)
     app.include_router(image.edit)
+    # An author's page and gallery; its list and writes are the factory's, below.
+    app.include_router(author.router)
+    app.include_router(author.edit)
     for vocabulary_router in vocabulary.ROUTERS:
         app.include_router(vocabulary_router)
 

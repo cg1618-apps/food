@@ -130,8 +130,11 @@ is load-bearing and says so. Some examples worth knowing about:
   test that a create with no status at all is a 422 empties the table first,
   on purpose. The 409 tests for a status, a platform and an author put a
   recipe or sources on the value; an unused value beside it deletes, as the
-  mirror. Authors are not seeded and have no fixture: each test that needs
-  one makes it, and the `new_author` reuse test's existing author is what
+  mirror. Authors are not seeded and have no shared fixture: each test that
+  needs one makes it (`sourced` in `tests/api/test_author_library.py` is
+  that module's own - an author two recipes' sources name, one of them
+  twice, beside an author none names; it is what makes the delete refusal
+  and the cascade counts able to fail, and the unused author is the mirror), and the `new_author` reuse test's existing author is what
   makes "reuses, does not create" able to fail. A recipe also needs a dish:
   the API tests send `new_dish` (which the save finds or makes by name) or
   create the dish first, and the model tests' `make` makes one per recipe
@@ -294,8 +297,9 @@ the entire failure.
 | `tests/test_label_scope_migration.py` | `l1abels` on a scratch database: used labels scoped by their one library, unused ones deleted, uniqueness per scope, the refusal on a label two libraries carry (changing nothing), and the downgrade with its own refusal |
 | `tests/api/test_ingredient_storage.py` | storage state and range, heating, links, rating, the new list filters (the category filter over a subtree, its sibling mirror, and the list agreeing with the tree's subtree totals), the delete counts and the 409 that names the moved one, `/api/vocabularies/fixed` |
 | `tests/api/test_vocabularies.py` | the ten vocabularies, parametrised over one factory, the in-use 409 for each (a course or region a dish is filed in; a difficulty a recipe is rated with, beside an unrated recipe and an unused value as the mirror), and authors in name order |
+| `tests/api/test_author_library.py` | an author's page: the detail (names, 備註, links, an empty gallery), a 404, each recipe its sources name listed once with what a cover card needs, the list's `recipe_count` (distinct recipes) beside `usage_count` (sources) and `cover`, the other nine answering with neither, the gallery round trip in order with focus and caption, a repeated PUT and a clear, an unknown image or author refused, the delete keeping the pictures, the cascade's `{sources, recipes}` with the unused author's zeros as the mirror, the delete refused while sources name the author and the unused one deleting, and an image an author attaches naming the author as its owner, refusing its delete, and deleting once the author lets go |
 | `tests/api/test_author_details.py` | an author's links and 備註: the blank-url CHECK and CASCADE to links (with two links really present), the round trip in order, a blank 備註 as null, `https://` given to a link without a scheme, the 422 for a blank, `javascript:` or other non-web url with nothing written and the mirror that saves, a refused `PATCH` keeping the stored links, links replaced wholesale, left alone, cleared by `[]` and the null refused, the delete taking the links, and the other nine vocabularies refusing `notes` and `links` with the author accepting the same body |
-| `tests/api/test_images.py` | upload, re-encode, deduplication, ingredient, dish and recipe galleries (kitchen-note galleries are in `test_kitchen_notes.py`), a dish's cover falling back to its first recipe's, captions (trimmed with their line breaks, blank as null, a non-string refused, one picture captioned separately in all four galleries), an image's owners, deletion, serving |
+| `tests/api/test_images.py` | upload, re-encode, deduplication, ingredient, dish and recipe galleries (kitchen-note galleries are in `test_kitchen_notes.py`), a dish's cover falling back to its first recipe's, captions (trimmed with their line breaks, blank as null, a non-string refused, one picture captioned separately in all four galleries; an author's caption is in `test_author_library.py`), an image's owners, deletion, serving |
 | `tests/api/test_recipe_model.py` | every named dish and recipe constraint, each refusal with its mirror; a recipe's display name falling back to its dish's; CASCADE and RESTRICT on delete, and a recipe's delete leaving its dish |
 | `tests/api/test_dish_crud.py` | the dish round trip, kind, names, unknown ids, its recipes and "used in", the two delete refusals with their mirrors, the stale alias count, 404s |
 | `tests/api/test_dish_library.py` | the dish list's summary, search and "any of" filters, and the recipe list's filters that read through the dish (dish, kind, course, region, label) and its search over the dish's names |
@@ -449,15 +453,28 @@ one unheaded row with no groups, 未分組 then each group under its heading
 with an empty group not drawn, one group alone under its own heading, and a
 grouped chip adding an ungrouped line).
 
-Authors' links and 備註 are covered in: `pages/edit/settings.test.jsx`
-(the row's 編輯 opening the stored links and 備註, a link added and the
-remark changed sent as one `PATCH` in order, a link removed and a blank
-remark sent as `[]` and null), `pages/library/libraries.test.jsx` (the
-panel above the recipe library filtered to one author - its heading,
-links by label or by address, each `target="_blank"` with
-`rel="noopener noreferrer"`, the 備註 with its line break - and its
-mirror: no panel for an author with neither, nor for two authors, once the
-authors have loaded) and `lib/authors.test.js` (the draft and the body).
+The author library is covered in: `pages/library/libraries.test.jsx` (the
+covers to each author's page with their recipe count and cover image, the
+add button, no sidebar or 篩選; a `?q=` search over either name narrowing
+the list without a second request; the no-match empty clearing back to
+everyone; the 食譜數 column; and the recipe library's header 作者 link with
+no author panel drawn, once the author filter has loaded),
+`pages/detail/details.test.jsx` (the author page's gallery caption, names,
+links by label or by address each `target="_blank"` with
+`rel="noopener noreferrer"`, the 備註 with its line break; its recipes as
+covers, 「在食譜庫篩選」, 編輯 and 刪除; the empty 食譜 with no filter link
+or link list; the delete dialog saying up front that sources refuse it,
+sending no counts and showing the 409, and its mirror deleting an unused
+author and going to `/authors`; and a recipe source's author linking to
+`/authors/:id`), `components/forms/forms.test.jsx` (a new author's POST
+body - names, links, 備註 - with no gallery PUT and the page it goes to; an
+edit's single `PATCH` with a link removed and a blank 備註 sent as `[]` and
+null, an unchanged gallery left alone; 刪除 only on a stored author),
+`pages/edit/settings.test.jsx` (the 作者 tab's row linking 編輯 to the form,
+and its 改名 sending the names alone, with no links or 備註 box),
+`routes.test.jsx` and `lib/nav.test.js` (the routes, and the author pages
+marking 食譜), `lib/imageOwners.test.js` (an author owner's page and kind)
+and `lib/authors.test.js` (the draft, the body and the name search).
 
 The category clash is covered in: `components/forms/forms.test.jsx` (the
 ingredient form's 409 opening 「轉成食材」 with each outcome in words, 轉成食材

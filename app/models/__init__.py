@@ -13,7 +13,14 @@ imports; a model missing from this file is a table missing from the diff.
 from app.models.common_ingredient import CommonIngredient, CommonIngredientGroup
 from app.models.dish import Dish, DishAlias, DishLabel, DishServesAs
 from app.models.heating import HeatingNote
-from app.models.image import DishImage, Image, IngredientImage, KitchenNoteImage, RecipeImage
+from app.models.image import (
+    AuthorImage,
+    DishImage,
+    Image,
+    IngredientImage,
+    KitchenNoteImage,
+    RecipeImage,
+)
 from app.models.ingredient import (
     Ingredient,
     IngredientAlias,
@@ -53,6 +60,7 @@ from app.models.vocabulary import (
 
 __all__ = [
     "Author",
+    "AuthorImage",
     "AuthorLink",
     "CommonIngredient",
     "CommonIngredientGroup",

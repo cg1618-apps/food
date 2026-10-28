@@ -1,5 +1,5 @@
-// Frontend: the scaffold every library page shares - recipes, ingredients,
-// kitchen notes.
+// Frontend: the scaffold every library page shares - dishes, recipes,
+// ingredients, kitchen notes, authors.
 //
 // media's LibraryLayout is the reference for the shape (title bar, search,
 // filters, a grid/table toggle, a result count, then the list). Three
@@ -20,8 +20,13 @@
 //   title         - the page heading, e.g. 食譜
 //   library       - the key the view choice is remembered under
 //   add           - { to, label } for the add button
+//   actions       - optional: more links beside the add button (the recipe
+//                   library's 作者)
 //   filters       - the useUrlFilters(spec) result
-//   sidebar       - the filter controls (components/layout/FilterPanel)
+//   sidebar       - the filter controls (components/layout/FilterPanel), or
+//                   absent for a library with nothing to filter by but the
+//                   search (authors): then there is no sidebar, no drawer
+//                   and no 篩選 button
 //   query         - the list's useApiQuery result
 //   card(item, place) - { cover, title, subtitle?, meta?, badges?, listBadges? }
 //   columns       - the table's columns after the name (LibraryTable)
@@ -29,8 +34,7 @@
 //                   CoverGrid); without it the list is drawn flat
 //   itemTo(item)  - the item's detail path
 //   intro         - optional: drawn above the list, under the search - the
-//                   chosen ingredient category's own notes, or the one
-//                   chosen author's links and 備註 on the recipe library
+//                   chosen ingredient category's own notes
 //   searchPlaceholder, emptyText, noMatchText
 import { useState } from 'react'
 
@@ -59,6 +63,7 @@ export default function LibraryLayout({
   title,
   library,
   add,
+  actions,
   filters,
   sidebar,
   query,
@@ -97,18 +102,23 @@ export default function LibraryLayout({
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-3xl font-bold">{title}</h1>
-        {addButton}
+        <div className="flex flex-wrap items-center gap-2">
+          {actions}
+          {addButton}
+        </div>
       </div>
 
-      <div className="lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-8">
-        <aside aria-label="篩選" className="hidden space-y-5 lg:block">
-          {sidebar}
-          {filters.activeCount ? (
-            <Button size="sm" kind="ghost" onClick={filters.clear}>
-              清除篩選
-            </Button>
-          ) : null}
-        </aside>
+      <div className={sidebar ? 'lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-8' : undefined}>
+        {sidebar ? (
+          <aside aria-label="篩選" className="hidden space-y-5 lg:block">
+            {sidebar}
+            {filters.activeCount ? (
+              <Button size="sm" kind="ghost" onClick={filters.clear}>
+                清除篩選
+              </Button>
+            ) : null}
+          </aside>
+        ) : null}
 
         <div className="min-w-0 space-y-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -120,15 +130,17 @@ export default function LibraryLayout({
               placeholder={searchPlaceholder}
               className="min-w-0 flex-1 basis-48"
             />
-            <Button
-              className="lg:hidden"
-              aria-haspopup="dialog"
-              aria-expanded={drawerOpen}
-              onClick={() => setDrawerOpen(true)}
-            >
-              篩選
-              <FilterCount count={filters.activeCount} />
-            </Button>
+            {sidebar ? (
+              <Button
+                className="lg:hidden"
+                aria-haspopup="dialog"
+                aria-expanded={drawerOpen}
+                onClick={() => setDrawerOpen(true)}
+              >
+                篩選
+                <FilterCount count={filters.activeCount} />
+              </Button>
+            ) : null}
             <Toggle label="顯示方式" options={VIEW_OPTIONS} value={view} onChange={setView} />
           </div>
 
