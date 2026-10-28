@@ -475,7 +475,7 @@ The author library is covered in: `pages/library/libraries.test.jsx` (the
 covers to each author's page with their recipe count and cover image, the
 add button, no sidebar or 篩選; a `?q=` search over either name narrowing
 the list without a second request; the no-match empty clearing back to
-everyone; the 食譜數 column; and the recipe library's header 作者 link with
+everyone; the 食譜數 column; and the recipe library with
 no author panel drawn, once the author filter has loaded),
 `pages/detail/details.test.jsx` (the author page's gallery caption, names,
 links by label or by address each `target="_blank"` with
