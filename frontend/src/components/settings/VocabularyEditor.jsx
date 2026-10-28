@@ -1,5 +1,5 @@
-// Frontend: one flat vocabulary on 設定 - courses, regions, recipe statuses,
-// source platforms, authors, 材料分組 / 步驟分組, cooking methods, equipment.
+// Frontend: one flat vocabulary on 設定 or 未來固定設定 - courses, regions,
+// recipe statuses, source platforms, authors, 材料分組 / 步驟分組, cooking methods, equipment.
 // Add, rename, reorder and delete, each in place. Labels are not one of
 // these: they are grouped by library, in LabelEditor.jsx.
 //

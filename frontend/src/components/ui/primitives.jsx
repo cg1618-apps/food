@@ -244,10 +244,10 @@ export function Toggle({ label, options, value, onChange, className }) {
   )
 }
 
-// A row of tabs over one panel - 設定's vocabularies. The WAI-ARIA tabs
-// pattern: a tablist of tabs, each naming the panel it controls; only the
-// selected tab is in the Tab order, and the arrow keys, Home and End move
-// between tabs, selecting as they go. `children` is the selected tab's panel
+// A row of tabs over one panel - the vocabularies on 設定 and 未來固定設定.
+// The WAI-ARIA tabs pattern: a tablist of tabs, each naming the panel it
+// controls; only the selected tab is in the Tab order, and the arrow keys,
+// Home and End move between tabs, selecting as they go. `children` is the selected tab's panel
 // and nothing else, so a tab's content is mounted only while it is chosen.
 //
 // Drawn as media's AdminTabBar is - labels underlined in the brand hue on a

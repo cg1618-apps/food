@@ -21,7 +21,7 @@
 // The status is the one thing changed in place: 想試 -> 可煮 -> 常煮 is what
 // happens after cooking, standing at the stove with the page open, and a
 // round trip through the form for it would be the form's whole job. The
-// choices are the statuses 設定 manages, in their order. It is a PATCH of
+// choices are the statuses 未來固定設定 manages, in their order. It is a PATCH of
 // `status_id` alone; the control shows the chosen value while the
 // request runs, then the recipe the PATCH answers with (put straight into the
 // detail read's cache), and goes back, with the server's sentence, if it

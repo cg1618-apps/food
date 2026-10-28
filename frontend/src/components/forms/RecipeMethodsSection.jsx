@@ -1,5 +1,6 @@
 // Frontend: 做法、器材 - the cooking methods and equipment a recipe uses, as
-// the recipe form picks them: chips from 設定's lists, in their order.
+// the recipe form picks them: chips from the lists 未來固定設定 (做法) and
+// 設定 (器材) keep, in their order.
 //
 //   methodIds, equipmentIds   the chosen ids
 //   onChange                  (field, ids) => void, field being 'method_ids'
@@ -21,7 +22,7 @@ export default function RecipeMethodsSection({ methodIds, equipmentIds, onChange
           options={methods.data}
           value={methodIds}
           onChange={(value) => onChange('method_ids', value)}
-          empty="還沒有做法，可以在設定裡新增。"
+          empty="還沒有做法，可以在未來固定設定裡新增。"
         />
       </div>
       <div className="space-y-1">

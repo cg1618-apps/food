@@ -51,6 +51,7 @@ describe('every page has a route', () => {
     ['/edit/notes/new', '新增筆記'],
     ['/edit/notes/1', '編輯筆記'],
     ['/edit/settings', '設定'],
+    ['/edit/fixed-settings', '未來固定設定'],
     ['/edit/images', '圖片'],
     ['/schedule', '排程'],
     ['/edit/schedule', '編輯排程'],
@@ -90,6 +91,40 @@ describe('redirects', () => {
   ])('%s goes to %s', (from, to) => {
     expect(renderAt(from)).toBe(to)
   })
+
+  // The vocabularies that moved to 未來固定設定 keep their tab ids, so a link
+  // into 設定 written before the split lands on the page that holds the tab.
+  it.each([
+    'categories',
+    'common-ingredients',
+    'courses',
+    'statuses',
+    'difficulties',
+    'line-groups',
+    'step-groups',
+    'methods',
+  ])('/edit/settings?tab=%s goes to 未來固定設定', (tab) => {
+    expect(renderAt(`/edit/settings?tab=${tab}`)).toBe(`/edit/fixed-settings?tab=${tab}`)
+    expect(screen.getByRole('heading', { level: 1, name: '未來固定設定' })).toBeTruthy()
+  })
+
+  // The mirror: a tab 設定 still holds stays put, so the redirect above is
+  // the tab's id doing it and not every ?tab= being sent away.
+  it.each(['labels', 'regions', 'platforms', 'authors', 'equipment'])(
+    '/edit/settings?tab=%s stays on 設定',
+    (tab) => {
+      expect(renderAt(`/edit/settings?tab=${tab}`)).toBe(`/edit/settings?tab=${tab}`)
+      expect(screen.getByRole('heading', { level: 1, name: '設定' })).toBeTruthy()
+    },
+  )
+
+  it('sends a 設定 tab asked of 未來固定設定 back to 設定', () => {
+    expect(renderAt('/edit/fixed-settings?tab=labels')).toBe('/edit/settings?tab=labels')
+  })
+
+  it('carries an old /edit/vocabularies link to the page holding its tab', () => {
+    expect(renderAt('/edit/vocabularies?tab=courses')).toBe('/edit/fixed-settings?tab=courses')
+  })
 })
 
 describe('navigation', () => {
@@ -100,6 +135,12 @@ describe('navigation', () => {
       .map((link) => link.textContent)
     // Two navs - the desktop bar and the phone bar - both say 食譜.
     expect(current).toEqual(['食譜', '食譜'])
+  })
+
+  it('marks 設定 on 未來固定設定 too', () => {
+    renderAt('/edit/fixed-settings')
+    const current = screen.getAllByRole('link', { current: 'page' }).map((link) => link.textContent)
+    expect(current).toEqual(['設定', '設定'])
   })
 
   it('marks TBD on its edit page too', () => {
@@ -169,6 +210,14 @@ describe('signing in on entering the edit pages', () => {
     )
     await settle()
     expect(assign).not.toHaveBeenCalled()
+  })
+
+  it('sends a signed-out browser on 未來固定設定 through the login too', async () => {
+    const { assign } = stubAccess({ signedIn: false })
+    renderAt('/edit/fixed-settings?tab=methods')
+    await vi.waitFor(() =>
+      expect(assign).toHaveBeenCalledWith(`${SESSION}?next=%2Fedit%2Ffixed-settings%3Ftab%3Dmethods`),
+    )
   })
 
   it('never asks on the public pages', async () => {

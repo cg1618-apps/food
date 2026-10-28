@@ -1,4 +1,4 @@
-// Frontend: 常用食材 on 設定 - the ingredients the recipe form offers as
+// Frontend: 常用食材 on 未來固定設定 - the ingredients the recipe form offers as
 // one-tap chips above its 材料, 未分組 first and then in the owner's named
 // groups (肉, 調味料 …), in the order they are offered.
 //

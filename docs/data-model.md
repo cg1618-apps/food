@@ -475,8 +475,8 @@ own — an empty one is kept — has its own place, and is renamed in one place.
 | --- | --- |
 | `recipe_id` | the owner, `CASCADE` |
 | `position` | the group's place among the recipe's groups, unique per recipe (`uq_recipe_line_group_position`, `uq_recipe_step_group_position`) |
-| `line_group_id` / `step_group_id` | → `line_group` / `step_group`, `RESTRICT`, indexed — the 設定 value the group is |
-| `name` | a one-off name, for a group that is no 設定 value |
+| `line_group_id` / `step_group_id` | → `line_group` / `step_group`, `RESTRICT`, indexed — the 未來固定設定 value the group is |
+| `name` | a one-off name, for a group that is no 未來固定設定 value |
 
 **Exactly one of the value and `name` is set** (`ck_recipe_line_group_one_name`,
 `ck_recipe_step_group_one_name`); the write path stores a name matching a

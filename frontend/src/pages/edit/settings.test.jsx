@@ -1,7 +1,8 @@
-// 設定 and 圖片 through the real routes: 設定's tabs and the URL that picks
-// one, what each vocabulary sends for add, rename, reorder and delete, the
-// refusals explained inline with their counts, the error state, and the image
-// library's owners, filter, paging and delete.
+// 設定, 未來固定設定 and 圖片 through the real routes: each settings page's
+// tabs, the URL that picks one and the redirect between the two, what each
+// vocabulary sends for add, rename, reorder and delete, the refusals explained
+// inline with their counts, the error state, and the image library's owners,
+// filter, paging and delete.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
@@ -206,84 +207,103 @@ describe('設定', () => {
     handler = settingsData
   })
 
-  it('opens on the first tab, and shows only its panel', async () => {
+  it('opens on 標籤, and shows only its panel', async () => {
     renderAt('/edit/settings')
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((tab) => tab.textContent)).toEqual([
-      '食材分類',
-      '常用食材',
-      '標籤',
-      '類別',
-      '地區',
-      '狀態',
-      '難易度',
-      '來源',
-      '作者',
-      '材料分組',
-      '步驟分組',
-      '做法',
-      '器材',
-    ])
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['標籤', '地區', '來源', '作者', '器材'])
     expect(tabs[0].getAttribute('aria-selected')).toBe('true')
     const panel = screen.getByRole('tabpanel')
     expect(panel.getAttribute('aria-labelledby')).toBe(tabs[0].id)
     expect(tabs[0].getAttribute('aria-controls')).toBe(panel.id)
-    expect(await within(panel).findByRole('list', { name: '食材分類' })).toBeTruthy()
+    expect(await within(panel).findByRole('list', { name: '食材標籤' })).toBeTruthy()
     // Only the selected tab's editor is mounted, so only its query runs.
-    expect(screen.queryByRole('list', { name: '類別' })).toBeNull()
-    expect(calls.some(({ url }) => url === '/api/recipe-courses')).toBe(false)
+    expect(screen.queryByRole('list', { name: '地區' })).toBeNull()
+    expect(calls.some(({ url }) => url === '/api/regions')).toBe(false)
     expect(screen.getByRole('link', { name: '圖片庫' }).getAttribute('href')).toBe('/edit/images')
+    expect(screen.getByRole('link', { name: '未來固定設定' }).getAttribute('href')).toBe('/edit/fixed-settings')
   })
 
   it('selects the panel the URL names', async () => {
-    renderAt('/edit/settings?tab=courses')
-    expect(screen.getByRole('tab', { name: '類別' }).getAttribute('aria-selected')).toBe('true')
-    expect(await within(screen.getByRole('tabpanel')).findByRole('list', { name: '類別' })).toBeTruthy()
-    expect(screen.queryByRole('list', { name: '食材分類' })).toBeNull()
+    renderAt('/edit/settings?tab=regions')
+    expect(screen.getByRole('tab', { name: '地區' }).getAttribute('aria-selected')).toBe('true')
+    expect(await within(screen.getByRole('tabpanel')).findByRole('list', { name: '地區' })).toBeTruthy()
+    expect(screen.queryByRole('list', { name: '食材標籤' })).toBeNull()
   })
 
   it('falls back to the first tab for an unknown one', async () => {
     renderAt('/edit/settings?tab=nonsense')
-    expect(screen.getByRole('tab', { name: '食材分類' }).getAttribute('aria-selected')).toBe('true')
-    expect(await screen.findByRole('list', { name: '食材分類' })).toBeTruthy()
+    expect(location()).toBe('/edit/settings?tab=nonsense')
+    expect(screen.getByRole('tab', { name: '標籤' }).getAttribute('aria-selected')).toBe('true')
+    expect(await screen.findByRole('list', { name: '食材標籤' })).toBeTruthy()
   })
 
   it('puts a clicked tab in the URL and shows its panel', async () => {
     renderAt('/edit/settings')
-    fireEvent.click(screen.getByRole('tab', { name: '標籤' }))
-    expect(location()).toBe('/edit/settings?tab=labels')
-    expect(screen.getByRole('tab', { name: '標籤' }).getAttribute('aria-selected')).toBe('true')
-    expect(screen.getByRole('tab', { name: '食材分類' }).getAttribute('aria-selected')).toBe('false')
-    expect(await screen.findByRole('list', { name: '食材標籤' })).toBeTruthy()
-    expect(screen.queryByRole('list', { name: '食材分類' })).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: '地區' }))
+    expect(location()).toBe('/edit/settings?tab=regions')
+    expect(screen.getByRole('tab', { name: '地區' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: '標籤' }).getAttribute('aria-selected')).toBe('false')
+    expect(await screen.findByRole('list', { name: '地區' })).toBeTruthy()
+    expect(screen.queryByRole('list', { name: '食材標籤' })).toBeNull()
   })
 
   it('moves between tabs with the arrow keys, Home and End, wrapping at the ends', () => {
     renderAt('/edit/settings')
     const tab = (name) => screen.getByRole('tab', { name })
     // Only the selected tab is in the Tab order; the arrows move within the bar.
-    expect(tab('食材分類').tabIndex).toBe(0)
-    expect(tab('常用食材').tabIndex).toBe(-1)
+    expect(tab('標籤').tabIndex).toBe(0)
+    expect(tab('地區').tabIndex).toBe(-1)
 
-    fireEvent.keyDown(tab('食材分類'), { key: 'ArrowRight' })
-    expect(location()).toBe('/edit/settings?tab=common-ingredients')
-    expect(document.activeElement).toBe(tab('常用食材'))
+    fireEvent.keyDown(tab('標籤'), { key: 'ArrowRight' })
+    expect(location()).toBe('/edit/settings?tab=regions')
+    expect(document.activeElement).toBe(tab('地區'))
 
-    fireEvent.keyDown(tab('常用食材'), { key: 'ArrowLeft' })
-    fireEvent.keyDown(tab('食材分類'), { key: 'ArrowLeft' })
+    fireEvent.keyDown(tab('地區'), { key: 'ArrowLeft' })
+    fireEvent.keyDown(tab('標籤'), { key: 'ArrowLeft' })
     expect(location()).toBe('/edit/settings?tab=equipment')
     expect(document.activeElement).toBe(tab('器材'))
 
     fireEvent.keyDown(tab('器材'), { key: 'ArrowRight' })
-    expect(location()).toBe('/edit/settings?tab=categories')
-    fireEvent.keyDown(tab('食材分類'), { key: 'End' })
+    expect(location()).toBe('/edit/settings?tab=labels')
+    fireEvent.keyDown(tab('標籤'), { key: 'End' })
     expect(location()).toBe('/edit/settings?tab=equipment')
     fireEvent.keyDown(tab('器材'), { key: 'Home' })
-    expect(location()).toBe('/edit/settings?tab=categories')
-    expect(document.activeElement).toBe(tab('食材分類'))
+    expect(location()).toBe('/edit/settings?tab=labels')
+    expect(document.activeElement).toBe(tab('標籤'))
   })
 
-  it('lists 地區 after 類別, in order, with how many dishes each files', async () => {
+  it('sends an old link to a moved tab on to 未來固定設定, replacing the entry', async () => {
+    renderAt('/edit/settings?tab=courses')
+    expect(location()).toBe('/edit/fixed-settings?tab=courses')
+    expect(screen.getByRole('heading', { level: 1, name: '未來固定設定' })).toBeTruthy()
+    expect(await screen.findByRole('list', { name: '類別' })).toBeTruthy()
+  })
+
+  it('opens 未來固定設定 on 食材分類, with its tabs in order, what they are, and the way back', async () => {
+    renderAt('/edit/fixed-settings')
+    expect(screen.getByRole('heading', { level: 1, name: '未來固定設定' })).toBeTruthy()
+    expect(screen.getByText(/之後會固定下來/)).toBeTruthy()
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      '食材分類',
+      '常用食材',
+      '類別',
+      '狀態',
+      '難易度',
+      '材料分組',
+      '步驟分組',
+      '做法',
+    ])
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true')
+    expect(await within(screen.getByRole('tabpanel')).findByRole('list', { name: '食材分類' })).toBeTruthy()
+    expect(calls.some(({ url }) => url === '/api/recipe-courses')).toBe(false)
+    expect(screen.getByRole('link', { name: '回到設定' }).getAttribute('href')).toBe('/edit/settings')
+    fireEvent.click(screen.getByRole('tab', { name: '類別' }))
+    expect(location()).toBe('/edit/fixed-settings?tab=courses')
+    expect(await screen.findByRole('list', { name: '類別' })).toBeTruthy()
+  })
+
+  it('lists 地區 in order, with how many dishes each files', async () => {
     renderAt('/edit/settings?tab=regions')
     expect(screen.getByRole('tab', { name: '地區' }).getAttribute('aria-selected')).toBe('true')
     const regions = await screen.findByRole('list', { name: '地區' })
@@ -296,9 +316,9 @@ describe('設定', () => {
   })
 
   it('shows each vocabulary with its counts, and labels grouped by library', async () => {
-    renderAt('/edit/settings?tab=courses')
-    const courses = await screen.findByRole('list', { name: '類別' })
-    expect(within(courses).getByRole('listitem', { name: '主菜' }).textContent).toContain('用在 3 個地方')
+    renderAt('/edit/settings?tab=regions')
+    const regions = await screen.findByRole('list', { name: '地區' })
+    expect(within(regions).getByRole('listitem', { name: '台式' }).textContent).toContain('用在 2 個地方')
     fireEvent.click(screen.getByRole('tab', { name: '標籤' }))
 
     const ingredient = await screen.findByRole('list', { name: '食材標籤' })
@@ -365,7 +385,7 @@ describe('設定', () => {
   it('renames in place', async () => {
     handler = (call) =>
       call.method === 'PATCH' ? json({ ...COURSES[1], name_en: 'soup' }) : settingsData(call)
-    renderAt('/edit/settings?tab=courses')
+    renderAt('/edit/fixed-settings?tab=courses')
     fireEvent.click(await screen.findByRole('button', { name: '改名「湯」' }))
     fireEvent.change(screen.getByRole('textbox', { name: '湯 的英文名' }), { target: { value: 'soup' } })
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
@@ -378,7 +398,7 @@ describe('設定', () => {
 
   it('moves a value by swapping sort_order with its neighbour', async () => {
     handler = (call) => (call.method === 'PATCH' ? json({}) : settingsData(call))
-    renderAt('/edit/settings?tab=courses')
+    renderAt('/edit/fixed-settings?tab=courses')
     // The first row has nowhere to go up to: nothing is sent.
     fireEvent.keyDown(await screen.findByRole('button', { name: '排序 「主菜」' }), { key: 'ArrowUp' })
     expect(writes()).toEqual([])
@@ -404,7 +424,7 @@ describe('設定', () => {
   it('puts the stored order back and says why when a move is refused', async () => {
     handler = (call) =>
       call.method === 'PATCH' ? json({ detail: '資料庫連不上' }, 503) : settingsData(call)
-    renderAt('/edit/settings?tab=courses')
+    renderAt('/edit/fixed-settings?tab=courses')
     fireEvent.keyDown(await screen.findByRole('button', { name: '排序 「甜點」' }), { key: 'ArrowUp' })
     await waitFor(() =>
       expect(within(section('類別').parentElement).getByRole('alert').textContent).toBe('資料庫連不上'),
@@ -418,7 +438,7 @@ describe('設定', () => {
 
   it('moves a category among its own siblings, carrying its children', async () => {
     handler = (call) => (call.method === 'PATCH' ? json({}) : settingsData(call))
-    renderAt('/edit/settings')
+    renderAt('/edit/fixed-settings')
     await screen.findByRole('list', { name: '食材分類' })
     // 葉菜 is an only child: neither key has anywhere to take it.
     fireEvent.keyDown(screen.getByRole('button', { name: '排序 「葉菜」' }), { key: 'ArrowUp' })
@@ -524,7 +544,7 @@ describe('設定', () => {
 
   it('keeps 步驟分組 in hand order on a tab of its own, with its usage', async () => {
     handler = settingsData
-    renderAt('/edit/settings?tab=step-groups')
+    renderAt('/edit/fixed-settings?tab=step-groups')
     expect(screen.getByRole('tab', { name: '步驟分組' }).getAttribute('aria-selected')).toBe('true')
     const groups = await screen.findByRole('list', { name: '步驟分組' })
     expect(within(groups).getAllByRole('listitem').map((row) => row.getAttribute('aria-label'))).toEqual([
@@ -537,7 +557,7 @@ describe('設定', () => {
 
   it('adds a value after the last one', async () => {
     handler = (call) => (call.method === 'POST' ? json({}, 201) : settingsData(call))
-    renderAt('/edit/settings?tab=courses')
+    renderAt('/edit/fixed-settings?tab=courses')
     const add = await screen.findByRole('form', { name: '新增類別' })
     fireEvent.change(within(add).getByRole('textbox', { name: '新增類別：中文名' }), {
       target: { value: '前菜' },
@@ -560,7 +580,7 @@ describe('設定', () => {
       call.method === 'DELETE'
         ? json({ detail: 'still used', usage_count: 5 }, 409)
         : settingsData(call)
-    renderAt('/edit/settings?tab=courses')
+    renderAt('/edit/fixed-settings?tab=courses')
     fireEvent.click(await screen.findByRole('button', { name: '刪除「主菜」' }))
     const dialog = screen.getByRole('dialog')
     expect(dialog.textContent).toContain('還用在 3 個地方')
@@ -574,7 +594,7 @@ describe('設定', () => {
   it('draws the category tree, offers no delete for the fallback, and explains a refusal', async () => {
     handler = (call) =>
       call.method === 'DELETE' ? json({ detail: 'referenced' }, 409) : settingsData(call)
-    renderAt('/edit/settings')
+    renderAt('/edit/fixed-settings')
     await screen.findByRole('list', { name: '食材分類' })
     expect(screen.queryByRole('button', { name: '刪除「未分類」' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '刪除「蔬菜」' }))
@@ -586,7 +606,7 @@ describe('設定', () => {
 
   it("edits a category's notes with its names, line breaks kept and an emptied box sent as null", async () => {
     handler = (call) => (call.method === 'PATCH' ? json({}) : settingsData(call))
-    renderAt('/edit/settings')
+    renderAt('/edit/fixed-settings')
     fireEvent.click(await screen.findByRole('button', { name: '改名「蔬菜」' }))
     const notes = screen.getByRole('textbox', { name: '蔬菜 的說明' })
     expect(notes.value).toBe('')
@@ -610,7 +630,7 @@ describe('設定', () => {
         return json([{ ...TREE[0], description: '還沒分好的先放這裡' }, TREE[1]])
       return settingsData(call)
     }
-    renderAt('/edit/settings')
+    renderAt('/edit/fixed-settings')
     fireEvent.click(await screen.findByRole('button', { name: '改名「未分類」' }))
     const notes = screen.getByRole('textbox', { name: '未分類 的說明' })
     expect(notes.value).toBe('還沒分好的先放這裡')
@@ -634,7 +654,7 @@ describe('設定', () => {
       call.method === 'PATCH'
         ? json({ detail: '「醬油」已是食材，分類不能同名。', ingredient: { id: 4, display_name: '醬油' } }, 409)
         : settingsData(call)
-    renderAt('/edit/settings')
+    renderAt('/edit/fixed-settings')
     fireEvent.click(await screen.findByRole('button', { name: '改名「蔬菜」' }))
     fireEvent.change(screen.getByRole('textbox', { name: '蔬菜 的中文名' }), { target: { value: '醬油' } })
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
@@ -646,7 +666,7 @@ describe('設定', () => {
 
   it('adds a child under the node it was asked for, after its siblings', async () => {
     handler = (call) => (call.method === 'POST' ? json({}, 201) : settingsData(call))
-    renderAt('/edit/settings')
+    renderAt('/edit/fixed-settings')
     fireEvent.click(await screen.findByRole('button', { name: '在「蔬菜」下新增子分類' }))
     const add = screen.getByRole('form', { name: '蔬菜的子分類' })
     fireEvent.change(within(add).getByRole('textbox', { name: '蔬菜的子分類：中文名' }), {
@@ -671,7 +691,7 @@ describe('設定', () => {
     render(
       <ThemeProvider>
         <QueryClientProvider client={client}>
-          <MemoryRouter initialEntries={['/edit/settings?tab=statuses']}>
+          <MemoryRouter initialEntries={['/edit/fixed-settings?tab=statuses']}>
             <AppRoutes />
           </MemoryRouter>
         </QueryClientProvider>
@@ -706,7 +726,7 @@ describe('設定', () => {
         : call.method === 'POST'
           ? json({}, 201)
           : settingsData(call)
-    renderAt('/edit/settings?tab=difficulties')
+    renderAt('/edit/fixed-settings?tab=difficulties')
     const list = await screen.findByRole('list', { name: '難易度' })
     const rows = within(list).getAllByRole('listitem')
     expect(rows.map((row) => row.getAttribute('aria-label'))).toEqual(['簡單', '困難'])
@@ -755,7 +775,7 @@ describe('設定', () => {
       call.url === '/api/common-ingredients' || call.method === 'PUT' ? json(data) : settingsData(call)
 
     it('lists the chips in order, each with its stub badge, with no 未分組 heading', async () => {
-      renderAt('/edit/settings?tab=common-ingredients')
+      renderAt('/edit/fixed-settings?tab=common-ingredients')
       await screen.findByRole('list', { name: '常用食材' })
       expect(listed()).toEqual(['蒜', '薑', '蔥'])
       expect(within(section('常用食材')).getByRole('listitem', { name: '薑' }).textContent).toContain('待補')
@@ -770,7 +790,7 @@ describe('設定', () => {
               release = () => resolve(json(COMMON))
             })
           : settingsData(call)
-      renderAt('/edit/settings?tab=common-ingredients')
+      renderAt('/edit/fixed-settings?tab=common-ingredients')
       // The first has nowhere to go up to: nothing is sent.
       fireEvent.keyDown(await screen.findByRole('button', { name: '排序 「蒜」' }), { key: 'ArrowUp' })
       expect(puts()).toEqual([])
@@ -796,7 +816,7 @@ describe('設定', () => {
               release = () => resolve(json(COMMON))
             })
           : settingsData(call)
-      renderAt('/edit/settings?tab=common-ingredients')
+      renderAt('/edit/fixed-settings?tab=common-ingredients')
       const box = await screen.findByRole('combobox', { name: '加常用食材' })
       expect(box.disabled).toBe(false)
       fireEvent.click(screen.getByRole('button', { name: '從常用食材移除「薑」' }))
@@ -808,7 +828,7 @@ describe('設定', () => {
 
     it('removes one with its ✕, sending the rest', async () => {
       handler = (call) => (call.method === 'PUT' ? json(COMMON) : settingsData(call))
-      renderAt('/edit/settings?tab=common-ingredients')
+      renderAt('/edit/fixed-settings?tab=common-ingredients')
       fireEvent.click(await screen.findByRole('button', { name: '從常用食材移除「薑」' }))
       await waitFor(() => expect(puts()).toHaveLength(1))
       expect(puts()[0].body).toEqual({ ungrouped: [1, 3], groups: [] })
@@ -816,7 +836,7 @@ describe('設定', () => {
 
     it('adds a picked ingredient at the end of 未分組, never offering one listed in any group or 新增', async () => {
       handler = grouped(GROUPED)
-      renderAt('/edit/settings?tab=common-ingredients')
+      renderAt('/edit/fixed-settings?tab=common-ingredients')
       const box = await screen.findByRole('combobox', { name: '加常用食材' })
       fireEvent.change(box, { target: { value: '蔥' } })
       const option = await screen.findByRole('option', { name: /洋蔥/ })
@@ -836,7 +856,7 @@ describe('設定', () => {
 
     it('adds a group by name, sent without an id, and refuses a name already used', async () => {
       handler = grouped(GROUPED)
-      renderAt('/edit/settings?tab=common-ingredients')
+      renderAt('/edit/fixed-settings?tab=common-ingredients')
       fireEvent.click(await screen.findByRole('button', { name: '＋ 新增分組' }))
       const name = screen.getByRole('textbox', { name: '新分組名稱' })
       fireEvent.change(name, { target: { value: ' 肉 ' } })
@@ -855,7 +875,7 @@ describe('設定', () => {
 
     it('shows the groups under 未分組, each with its chips', async () => {
       handler = grouped(GROUPED)
-      renderAt('/edit/settings?tab=common-ingredients')
+      renderAt('/edit/fixed-settings?tab=common-ingredients')
       expect(await screen.findByRole('heading', { name: '未分組' })).toBeTruthy()
       expect(names(screen.getByRole('list', { name: '未分組' }))).toEqual(['蒜'])
       expect(names(screen.getByRole('list', { name: '「肉」的食材' }))).toEqual(['雞腿', '豬肉'])
@@ -864,7 +884,7 @@ describe('設定', () => {
 
     it('renames a group in place when the box is left, keeping its id; a blank name goes back', async () => {
       handler = grouped(GROUPED)
-      renderAt('/edit/settings?tab=common-ingredients')
+      renderAt('/edit/fixed-settings?tab=common-ingredients')
       const box = await screen.findByRole('textbox', { name: '分組「調味料」名稱' })
       fireEvent.change(box, { target: { value: '   ' } })
       fireEvent.blur(box)
@@ -879,7 +899,7 @@ describe('設定', () => {
 
     it('reorders the groups by their handle', async () => {
       handler = grouped(GROUPED)
-      renderAt('/edit/settings?tab=common-ingredients')
+      renderAt('/edit/fixed-settings?tab=common-ingredients')
       fireEvent.keyDown(await screen.findByRole('button', { name: '排序 分組「調味料」' }), { key: 'ArrowUp' })
       await waitFor(() => expect(puts()).toHaveLength(1))
       expect(puts()[0].body.groups.map((group) => group.id)).toEqual([22, 21])
@@ -887,7 +907,7 @@ describe('設定', () => {
 
     it('moves a chip into the next group: Down from the last of 未分組 lands first in 肉', async () => {
       handler = grouped(GROUPED)
-      renderAt('/edit/settings?tab=common-ingredients')
+      renderAt('/edit/fixed-settings?tab=common-ingredients')
       fireEvent.keyDown(await screen.findByRole('button', { name: '排序 「蒜」' }), { key: 'ArrowDown' })
       await waitFor(() => expect(puts()).toHaveLength(1))
       expect(puts()[0].body).toEqual({
@@ -901,7 +921,7 @@ describe('設定', () => {
 
     it('moves a chip up out of a group into the one above, at its end', async () => {
       handler = grouped(GROUPED)
-      renderAt('/edit/settings?tab=common-ingredients')
+      renderAt('/edit/fixed-settings?tab=common-ingredients')
       fireEvent.keyDown(await screen.findByRole('button', { name: '排序 「薑」' }), { key: 'ArrowUp' })
       await waitFor(() => expect(puts()).toHaveLength(1))
       expect(puts()[0].body.groups).toEqual([
@@ -912,7 +932,7 @@ describe('設定', () => {
 
     it('deletes a group after asking, moving its chips to the end of 未分組', async () => {
       handler = grouped(GROUPED)
-      renderAt('/edit/settings?tab=common-ingredients')
+      renderAt('/edit/fixed-settings?tab=common-ingredients')
       fireEvent.click(await screen.findByRole('button', { name: '刪除分組「肉」' }))
       const dialog = screen.getByRole('dialog')
       expect(dialog.textContent).toContain('裡面的 2 個食材會移到「未分組」的最後，不會刪掉。')
@@ -935,7 +955,7 @@ describe('設定', () => {
           : call.url === '/api/common-ingredients'
             ? json(GROUPED)
             : settingsData(call)
-      renderAt('/edit/settings?tab=common-ingredients')
+      renderAt('/edit/fixed-settings?tab=common-ingredients')
       fireEvent.keyDown(await screen.findByRole('button', { name: '排序 「蒜」' }), { key: 'ArrowDown' })
       expect(await screen.findByText('資料庫連不上')).toBeTruthy()
       expect(names(screen.getByRole('list', { name: '未分組' }))).toEqual(['蒜'])
@@ -945,7 +965,7 @@ describe('設定', () => {
     it('says what the list is for while it is empty', async () => {
       handler = (call) =>
         call.url === '/api/common-ingredients' ? json({ ungrouped: [], groups: [] }) : settingsData(call)
-      renderAt('/edit/settings?tab=common-ingredients')
+      renderAt('/edit/fixed-settings?tab=common-ingredients')
       expect(await screen.findByText(/還沒有常用食材/)).toBeTruthy()
       expect(screen.getByRole('combobox', { name: '加常用食材' })).toBeTruthy()
     })
@@ -956,8 +976,8 @@ describe('設定', () => {
       call.url === '/api/equipment' ? json({ detail: '資料庫連不上' }, 503) : settingsData(call)
     renderAt('/edit/settings?tab=equipment')
     expect((await screen.findByRole('alert')).textContent).toBe('資料庫連不上')
-    fireEvent.click(screen.getByRole('tab', { name: '類別' }))
-    expect(await screen.findByRole('list', { name: '類別' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: '地區' }))
+    expect(await screen.findByRole('list', { name: '地區' })).toBeTruthy()
     expect(screen.queryByRole('alert')).toBeNull()
   })
 })

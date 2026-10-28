@@ -502,7 +502,7 @@ makes), `notes`, `created_at`, `updated_at`, and:
   `{id, position, ingredient, sub_dish, amount, note}` with exactly one target
   set as a line's; a null `amount` is "the same as the line";
 - `line_groups` - the recipe's 材料分組, in order, each `{id, position, group,
-  name, display_name, lines}`: `group` is the 設定 value (`{id,
+  name, display_name, lines}`: `group` is the 未來固定設定 value (`{id,
   display_name}`) or null, `name` the one-off name or null - exactly one is
   set - `display_name` is whichever it is, and `lines` the group's lines, as
   above. An empty group is listed with `lines: []`;
@@ -568,7 +568,7 @@ name on two sources is one author. A step is `{body, kind}` with a non-blank
 when left out - any other value, null included, is a 422.
 
 A group is `{line_group_id, name, lines}` (or `{step_group_id, name, steps}`):
-exactly one of the 設定 value's id and a one-off `name`, and its rows, which
+exactly one of the 未來固定設定 value's id and a one-off `name`, and its rows, which
 may be none - an empty group is kept. A `name` equal to a value's `name_cn`
 or `name_en`, trimmed and ignoring case, is stored as that value. A recipe may
 not hold the same group twice: the same value, a value and its name, or one
@@ -840,7 +840,7 @@ and the structure becomes exactly that: 未分組's chips, each group's chips an
 the groups themselves numbered 0, 1, 2 … in the order sent. A group sent
 with an `id` is that group, renamed and moved; one without is created; a
 stored group not sent is deleted, and its chips are wherever the body puts
-them (設定 sends them at the end of 未分組). Adding, removing and moving a
+them (未來固定設定 sends them at the end of 未分組). Adding, removing and moving a
 chip, and adding, renaming, reordering and deleting a group, are each this
 one call. A name is stored trimmed. The answer is the structure, as the
 `GET` gives it.
