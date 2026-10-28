@@ -17,6 +17,7 @@ describe('activeSection', () => {
     ['/notes/4', 'notes'],
     ['/edit/notes/new', 'notes'],
     ['/edit/settings', 'settings'],
+    ['/edit/fixed-settings', 'settings'],
     ['/edit/images', 'settings'],
     ['/schedule', 'schedule'],
     ['/edit/schedule', 'schedule'],

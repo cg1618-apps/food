@@ -188,7 +188,7 @@ export default function DishForm() {
                 options={otherCourses}
                 value={form.serves_as_ids}
                 onChange={(value) => setField('serves_as_ids', value)}
-                empty="還沒有類別，可以在設定裡新增。"
+                empty="還沒有類別，可以在未來固定設定裡新增。"
               />
             </div>
             <div className="space-y-1">

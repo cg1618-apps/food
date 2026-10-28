@@ -138,7 +138,7 @@ is load-bearing and says so. Some examples worth knowing about:
   unless given `dish_id`.
 - `line_groups` and `step_groups` (`tests/api/conftest.py`) are the
   材料分組 and 步驟分組 values `g1roups` seeds. They are what let a one-off
-  group name be "stored as the 設定 value": with no value to match, every
+  group name be "stored as the 未來固定設定 value": with no value to match, every
   name stays one-off and that test would pass for the wrong reason. The 409
   test for a group value puts a recipe group on 主料 / 備料, and the unused
   配料 / 烹飪 beside them delete, as the mirror.
@@ -304,7 +304,7 @@ the entire failure.
 | `tests/api/test_recipe_line_alternatives.py` | a line's alternatives: the round trip in order with amount and note, in a group, new names resolved with the lines' (one stub for a name typed on both), the unknown-id 422 writing nothing, exactly one target, redundant alternatives dropped, a re-save replacing them; the own-dish rule, the cycle guard and a dish move through an alternative; "used in" for an ingredient (a variety's included) and a dish with `alternative_only`, the recipe filter; both delete refusals with mirrors, the RESTRICT itself, the CASCADE with the recipe; the ingredient merge moving and dropping them with the preview's counts and the fingerprint |
 | `tests/test_line_alternatives_migration.py` | `a2lternatives` on a scratch database: the downgrade drops the table with an alternative in it and keeps the line, and the chain upgrades again |
 | `tests/api/test_recipe_step_kinds.py` | a step's kind: the `step` default, the round trip through create, read and `PATCH` in and out of groups, the 422 for an unknown or null kind, the `step_kinds` fixed list |
-| `tests/api/test_recipe_groups.py` | lines and steps in groups: order and positions, a name stored as its 設定 value, the empty group, duplicate and malformed groups, the `PATCH` pair rule, stubs, cycles and a dish's "used in" through grouped lines, the delete counts, the in-use 409, SET NULL from a group to its rows |
+| `tests/api/test_recipe_groups.py` | lines and steps in groups: order and positions, a name stored as its 未來固定設定 value, the empty group, duplicate and malformed groups, the `PATCH` pair rule, stubs, cycles and a dish's "used in" through grouped lines, the delete counts, the in-use 409, SET NULL from a group to its rows |
 | `tests/api/test_recipe_library.py` | the list's summary (its dish), search over the dish's names and aliases (wildcards literal) and the recipe's own filters (`author_id` among them), and the query count |
 | `tests/api/test_kitchen_notes.py` | every named kitchen-note constraint with its mirror, CASCADE on delete, the round trip, title, kind, link and label refusals, newest-first order, `q` over title and body (wildcards literal), the "any of" filters, the query count, the gallery and the image 409 naming a note |
 | `tests/api/test_ingredient_used_in.py` | "used in" over descendants, the list filter agreeing with it, the delete refusal, the query count |
@@ -373,10 +373,19 @@ its read-only dish fields and 其他版本), `components/forms/forms.test.jsx`
 (the recipe form's dish picker - an existing dish, a new one as 料理 or
 醬料, the `?dish=` preset, the refusal with none - a line's 新增料理 sent as
 a sauce `new_dish`, and the dish form's payload), `pages/edit/settings.test.jsx`
-(the 地區 tab after 類別), `routes.test.jsx` (the dish
+(the 地區 tab), `routes.test.jsx` (the dish
 routes and the `/edit/dishes/:id/edit` redirect), `lib/nav.test.js` (料理
 first), `lib/typeahead.test.js`, `lib/recipeLines.test.js` and
 `lib/imageOwners.test.js`.
+
+The split between 設定 and 未來固定設定 is covered in:
+`pages/edit/settings.test.jsx` (each page's tabs in order and its default,
+the buttons between them, a moved tab's old link landing on 未來固定設定),
+`routes.test.jsx` (both routes, every moved tab id redirected and every
+remaining one not - the mirror that makes the redirect test bite - the
+reverse redirect, `/edit/vocabularies?tab=courses` reaching its tab, 設定
+marked in the navigation and the sign-in probe on the new page) and
+`lib/nav.test.js` (`/edit/fixed-settings` in 設定's section).
 
 Labels' libraries are covered in: `pages/edit/settings.test.jsx` (the three
 sections in order, an add sending its section's scope, 移到 off for a label in

@@ -8,7 +8,7 @@
 // accessible names (「步驟 3」) keep a running index, so every row has a
 // unique one whatever its kind.
 //
-// The steps sit in groups (GroupedRowEditor), picked from 設定's 步驟分組 or
+// The steps sit in groups (GroupedRowEditor), picked from 未來固定設定's 步驟分組 or
 // named here only. 「貼上多行」 takes a pasted block too: it is split into one
 // step per line, the numbering stripped (lib/steps.js), and the steps added
 // to the group chosen in the dialog, or to the ungrouped steps, each an

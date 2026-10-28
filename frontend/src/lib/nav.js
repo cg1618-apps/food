@@ -27,13 +27,14 @@ export const SECTIONS = [
   { key: 'schedule', label: '排程', to: '/schedule', prefixes: ['/schedule', '/edit/schedule'] },
   // A standalone page of loose names and links; see pages/library/Tbd.jsx.
   { key: 'tbd', label: 'TBD', to: '/tbd', prefixes: ['/tbd', '/edit/tbd'] },
-  // 設定 is a write page and lives under the gated prefix; the image library
-  // is filed under it because it is maintenance, not reading.
+  // 設定 is a write page and lives under the gated prefix; 未來固定設定 and
+  // the image library are filed under it because they are maintenance, not
+  // reading.
   {
     key: 'settings',
     label: '設定',
     to: '/edit/settings',
-    prefixes: ['/edit/settings', '/edit/images'],
+    prefixes: ['/edit/settings', '/edit/fixed-settings', '/edit/images'],
   },
 ]
 

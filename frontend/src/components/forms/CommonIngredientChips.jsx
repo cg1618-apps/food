@@ -1,5 +1,5 @@
 // Frontend: 常用 - the recipe form's one-tap chips above 材料, one per
-// 常用食材 (設定), in that structure's order: 未分組 first, then each group
+// 常用食材 (未來固定設定), in that structure's order: 未分組 first, then each group
 // under its own heading.
 //
 // Headings appear only when they tell chips apart: while the chips are all

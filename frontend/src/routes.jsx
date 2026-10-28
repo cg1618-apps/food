@@ -20,6 +20,7 @@ import IngredientDetail from './pages/detail/Ingredient'
 import NoteDetail from './pages/detail/Note'
 import RecipeDetail from './pages/detail/Recipe'
 import DishForm from './pages/edit/DishForm'
+import FixedSettings from './pages/edit/FixedSettings'
 import HeatingForm from './pages/edit/HeatingForm'
 import ImageLibrary from './pages/edit/ImageLibrary'
 import IngredientForm from './pages/edit/IngredientForm'
@@ -67,6 +68,7 @@ export default function AppRoutes() {
           <Route path="/edit/notes/new" element={<NoteForm />} />
           <Route path="/edit/notes/:id" element={<NoteForm />} />
           <Route path="/edit/settings" element={<Settings />} />
+          <Route path="/edit/fixed-settings" element={<FixedSettings />} />
           <Route path="/edit/images" element={<ImageLibrary />} />
           <Route path="/edit/heating" element={<HeatingForm />} />
           <Route path="/edit/schedule" element={<ScheduleForm />} />

@@ -359,6 +359,22 @@ so a later reader can tell a decision from an accident. These are food's.
   keys is the standard pattern for a tab bar, which `aria-current` (a link in
   a set of links) is not. The look and the wrapping row are media's
   `AdminTabBar`'s.
+- **The vocabularies are split between 設定 and 未來固定設定.** Some of them
+  are system options rather than the owner's data - 食材分類, 常用食材, 類別,
+  狀態, 難易度, 材料分組, 步驟分組, 做法 - and are expected to become fixed,
+  hard-coded, eventually; they stay editable only because the app is still
+  changing a lot. The owner wanted them on a page of their own, named for
+  that, so 設定 holds only what stays theirs to grow: 標籤, 地區, 來源, 作者
+  and 器材, beside the way into 圖片. Both pages are one component over one
+  set of tab definitions (`components/settings/SettingsPage.jsx`,
+  `settingsTabs.jsx`) rather than two copies, so moving a vocabulary - or
+  fixing one, later - is a line moved between two lists. **The tab ids did
+  not change**, and a `?tab=` naming the other page's tab is redirected there
+  with `replace`, so every link written before the split - a bookmark,
+  `/edit/vocabularies?tab=courses` - still lands on its tab and Back does not
+  bounce through the redirect. Rejected: a second section in the navigation,
+  which would spend a phone column on pages visited rarely and by one person;
+  the new page belongs to 設定's section, reached by a button from 設定.
 - **The theme toggle is in a slim top bar on a phone**, where media puts it
   in the header strip on a desktop and as a row in its menu drawer below `lg`.
   food has no drawer: its phone navigation is the bottom bar, one column per
@@ -597,7 +613,7 @@ What the branch after module 1 chose, and what it turned down.
 - **A recipe created without a status gets the first in sort order**, the
   oldest among equals, and with no status at all the create is a 422 saying
   so. There is no server default because the first status is the owner's
-  data: a column default would name an id that 設定 can reorder or delete.
+  data: a column default would name an id that 未來固定設定 can reorder or delete.
   Rejected: making the status optional, which would leave every list and the
   status toggle a "none" case for a recipe that has simply not been touched;
   and a fixed "first status" flag, a second ordering beside `sort_order` for
@@ -701,7 +717,7 @@ What the branch after module 1 chose, and what it turned down.
   trailing space were two groups. `recipe_line_group` and
   `recipe_step_group` make the group the thing the rows point at - it has a
   position, may be empty, and is renamed once.
-- **A group is a 設定 value or a one-off name, exactly one.** Most recipes
+- **A group is a 未來固定設定 value or a one-off name, exactly one.** Most recipes
   reuse the same few groups (主料, 調味料 / 備料, 烹飪), which should be one
   tap and one spelling; a few need their own (漢堡醬, 醃料), which should not
   have to be added to 設定 first. One column each, a CHECK that exactly one is
@@ -793,7 +809,7 @@ What the branch after module 1 chose, and what it turned down.
   surviving row and keeps its place; when the target is already listed the
   source's chip is simply dropped. The move is outside the merge plan and its
   fingerprint: it moves no content the preview would need to warn about.
-- **Groups of its own, not 設定's 材料分組.** The owner chose this. A
+- **Groups of its own, not 未來固定設定's 材料分組.** The owner chose this. A
   材料分組 (主料, 醬汁) says where a line sits in one recipe; a 常用食材 group
   (肉, 調味料) only arranges shortcuts so a long row of chips can be scanned.
   Reusing 材料分組 would tie the two lists together - renaming 醬汁 would
@@ -808,7 +824,7 @@ What the branch after module 1 chose, and what it turned down.
 - **SET NULL from a group to its chips.** Deleting a group must never delete
   a chip: the chip is an ingredient the owner picked, and the group only a
   heading. RESTRICT would make a group with chips undeletable for no gain.
-  The `PUT` writes each chip's group and place explicitly, so 設定's delete
+  The `PUT` writes each chip's group and place explicitly, so 未來固定設定's delete
   puts a deleted group's chips at the end of 未分組 itself; SET NULL is the
   schema saying the same thing for any other path, where the chips keep
   their old positions among 未分組's.
@@ -819,7 +835,7 @@ What the branch after module 1 chose, and what it turned down.
   index on `lower(name)` is checked row by row and two groups swapping names
   would otherwise collide with themselves. A duplicate ingredient is refused
   across the whole structure, as the list's duplicate always was.
-- **Deleting a group asks first**, as every delete on 設定 does, though
+- **Deleting a group asks first**, as every delete on the settings pages does, though
   nothing is lost - the question says how many chips move to 未分組.
 - **A tapped chip adds to the ungrouped lines and focuses the amount.** The
   chip cannot know which group the owner means, and the ungrouped area is the
@@ -1095,7 +1111,7 @@ files them into sub-categories (肉類 › 雞肉 / 豬肉 / 牛肉, 海鮮 › 
 query over the category tree, as `group_id` is over `parent_id`, and the
 sidebar's count is the subtree total, summed from the same tree, so the
 number and the list cannot disagree. Each sub-category keeps its own section
-under its path. `ingredient_count` on the tree stays the node's own: 設定
+under its path. `ingredient_count` on the tree stays the node's own: 未來固定設定
 refuses deleting a category with ingredients filed directly in it, and that
 is the number the refusal is about. Every caller of the filter wants the
 subtree - the library, and the ingredient page's category link - so there

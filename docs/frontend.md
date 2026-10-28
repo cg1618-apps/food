@@ -12,7 +12,8 @@ fixed to the bottom of the screen on a phone (`components/layout/Layout.jsx`).
 On a phone the top bar stays, slim and scrolling away with the page, holding
 only 食 (home) and the theme toggle.
 The section a page belongs to - its edit pages included - is marked with
-`aria-current="page"`; `lib/nav.js` holds that match.
+`aria-current="page"`; `lib/nav.js` holds that match. 設定's section also
+owns 未來固定設定 and the image library, which are reached from 設定.
 
 **A section is one entry in `SECTIONS` (`lib/nav.js`)** - its label, its
 link and the path prefixes it owns, edit pages included. Both bars draw from
@@ -40,6 +41,7 @@ them readable at 360px with room for more.
 | Add / edit an ingredient | `/edit/ingredients/new`, `/edit/ingredients/:id` | Access |
 | Add / edit a note | `/edit/notes/new`, `/edit/notes/:id` | Access |
 | 設定 (`/settings` redirects here) | `/edit/settings` | Access |
+| 未來固定設定 | `/edit/fixed-settings` | Access |
 | Image library | `/edit/images` | Access |
 | Edit the schedule (`?week=` as `/schedule`) | `/edit/schedule` | Access |
 | Edit 加熱 | `/edit/heating` | Access |
@@ -50,7 +52,10 @@ Any other path is a "page not found" page, not a redirect.
 **The first release's paths redirect**, query string included, so bookmarks
 survive: `/library/ingredient` → `/ingredients`, `/ingredient/:id` →
 `/ingredients/:id`, `/edit/ingredient/...` → `/edit/ingredients/...`,
-`/edit/vocabularies` → `/edit/settings`. `/edit/dishes/:id/edit` - the dish
+`/edit/vocabularies` → `/edit/settings`. `/edit/settings?tab=<id>` for a tab
+未來固定設定 holds → `/edit/fixed-settings?tab=<id>`, and the mirror, so a
+link written before the two pages were split lands on the tab it named.
+`/edit/dishes/:id/edit` - the dish
 form's path as its design named it - redirects to `/edit/dishes/:id`, the
 shape every other edit page has. `routes.test.jsx` pins every route and every
 redirect.
@@ -63,9 +68,15 @@ second id went with the integer-primary-key decision, so ours is
 phone in a shop, signed out: selection notes, the preservation methods with
 their durations, where to get the thing. Everything else is a list or a form.
 
-**Every vocabulary shares one page**, 設定, a tab each. They are the
-same kind of work — maintaining a short list — and a page each would be ten
-screens with a handful of rows on them.
+**Every vocabulary is a tab on one of two pages**, 設定 and 未來固定設定.
+They are the same kind of work — maintaining a short list — and a page each
+would be a dozen screens with a handful of rows on them. They are two pages
+rather than one because they are not equally the owner's: 未來固定設定 holds
+the system options the app is built around (食材分類, 常用食材, 類別, 狀態,
+難易度, 材料分組, 步驟分組, 做法), expected to become fixed and stay
+editable only while the app is still changing a lot; 設定 holds what the
+owner keeps growing (標籤, 地區, 來源, 作者, 器材). Both draw on one set of
+tab definitions, so the split is a matter of which list a tab is in.
 
 **There is no route guard, and there must not be one.** The gate is Cloudflare
 Access on the path prefix, in front of the box. A guard in the browser would
@@ -297,7 +308,7 @@ empties.
   to what it measures, and a line without alternatives keeps its amount at
   the row's end.
 - **The status change** is `PATCH /api/edit/recipes/{id}` with `{status_id}`
-  alone. The toggle offers the statuses 設定 manages, in their order
+  alone. The toggle offers the statuses 未來固定設定 manages, in their order
   (`GET /api/recipe-statuses`); it shows the chosen value while the
   request runs and the stored one again, with the server's sentence, if it
   fails. On success the recipe the PATCH answers with goes straight into the
@@ -548,7 +559,7 @@ running index RowEditor gives every row, so each stays unique whatever its
 kind. The save sends each step as `{body, kind}`.
 
 **常用 chips** sit above 材料 (`components/forms/CommonIngredientChips.jsx`),
-one per 設定 常用食材, in its order: 未分組 first, then each group on a row
+one per 未來固定設定 常用食材, in its order: 未分組 first, then each group on a row
 of its own headed by its name. While every chip is in 未分組 - which is how it
 reads with no group at all - they are the single row headed 常用, with no
 未分組 heading; a group with no chips is not drawn. A 常用食材 group is not a
@@ -566,9 +577,11 @@ state and operations in `lib/groupedRows.js`). The ungrouped rows come first,
 with their own add button; then each group is a box: a header with its drag
 handle, its name and 移除分組, its rows, and its own add button
 (「＋ 加一行材料到「醬汁」」), so a row added there belongs to it. 「＋ 加分組」
-under the boxes offers the 設定 values (材料分組 or 步驟分組) this recipe does
-not use yet as one-tap chips, in 設定's order, and a box for a one-off name.
-A typed name that is a 設定 value, trimmed and in any case, is that value -
+under the boxes offers the 未來固定設定 values (材料分組 or 步驟分組) this
+recipe does not use yet as one-tap chips, in their order there, and a box for
+a one-off name; a group's header marks which it is - 未來固定設定裡的分組 or
+只用在這道. A typed name that is such a value, trimmed and in any case, is
+that value -
 in the add box and in a header's name box alike, which is how a group is
 renamed or repicked; one the recipe already has cannot be added again.
 **Removing a group keeps its rows**: they move to the end of the ungrouped
@@ -626,11 +639,19 @@ cover and a thumbnail) and 移除, and under them a 說明 box - the caption,
 growing with its text - sent as typed: the API trims it and stores a blank
 one as null.
 
-## 設定 and 圖片
+## 設定, 未來固定設定 and 圖片
 
-`/edit/settings` is `pages/edit/Settings.jsx`: a tab each for 食材分類,
-常用食材, 標籤, 類別, 地區, 狀態, 難易度, 來源, 作者, 材料分組, 步驟分組, 做法 and 器材, with 圖片庫 - the way
-into `/edit/images` - beside the heading. 類別 and 地區 file a dish (地區 is
+`/edit/settings` is `pages/edit/Settings.jsx`: a tab each for 標籤, 地區,
+來源, 作者 and 器材, with 未來固定設定 and 圖片庫 - the ways into
+`/edit/fixed-settings` and `/edit/images` - beside the heading.
+`/edit/fixed-settings` is `pages/edit/FixedSettings.jsx`: a tab each for
+食材分類, 常用食材, 類別, 狀態, 難易度, 材料分組, 步驟分組 and 做法, a line
+under the heading saying these are system options that will become fixed
+and stay editable for now while the app is still changing, and 回到設定
+beside the heading. Both are `components/settings/SettingsPage.jsx` - the
+heading, its buttons, the optional intro and the tab bar - over tabs defined
+once in `components/settings/settingsTabs.jsx`; a factory vocabulary's
+panel is `components/settings/FactoryEditor.jsx`. 類別 and 地區 file a dish (地區 is
 台式, 中式, 日式 …, hand-ordered, the order the dish form and filters offer);
 renaming either marks the dish and recipe reads stale. 狀態 is the recipe statuses (想試,
 可煮, 常煮 …; the first is what a new recipe starts on), 難易度 the recipe
@@ -651,17 +672,20 @@ dragged to reorder, ✕ to remove, ＋ 新增連結 to add - and a multi-line
 order shown (`lib/authors.js`): a link row left wholly empty is dropped, a
 blank 備註 is sent as null, and a refusal (a `javascript:` or blank url) is
 said in the row. `VocabularyEditor` takes this as its `details` prop
-(built in `Settings.jsx` around `components/settings/AuthorDetails.jsx`);
+(built in `settingsTabs.jsx` around `components/settings/AuthorDetails.jsx`);
 the other vocabularies pass none and are unchanged.
 
-- **The tab is in the URL**, `?tab=` with `categories`, `common-ingredients`,
-  `labels`, `courses`, `regions`,
-  `statuses`, `difficulties`, `platforms`, `authors`, `line-groups`, `step-groups`, `methods` or
-  `equipment` (`hooks/useUrlTab.js`), so a tab can be linked to
-  and survives a reload. A missing or unknown tab is the first, 食材分類, and
-  the URL is left as it is. Choosing a tab **replaces** the history entry
-  rather than pushing one: Back leaves 設定 instead of walking back through
-  the tabs looked at on the way.
+- **The tab is in the URL**, `?tab=` - on 設定 `labels`, `regions`,
+  `platforms`, `authors` or `equipment`; on 未來固定設定 `categories`,
+  `common-ingredients`, `courses`, `statuses`, `difficulties`,
+  `line-groups`, `step-groups` or `methods` (`hooks/useUrlTab.js`) - so a
+  tab can be linked to and survives a reload. A missing or unknown tab is
+  the page's first, 標籤 or 食材分類, and the URL is left as it is. A tab
+  the other page holds is sent there, query kept, **replacing** the history
+  entry: the ids did not change when the vocabularies were split, so every
+  older link into `/edit/settings` still lands on its tab. Choosing a tab
+  replaces the history entry too rather than pushing one: Back leaves the
+  page instead of walking back through the tabs looked at on the way.
 - **The bar is the `Tabs` primitive** (`components/ui/primitives.jsx`), the
   WAI-ARIA tabs pattern: a `tablist` of `tab`s, each `aria-controls` its
   `tabpanel`; only the selected tab is in the Tab order, and ←/→ (wrapping at
@@ -672,8 +696,11 @@ the other vocabularies pass none and are unchanged.
   has its own loading, error and empty state, and one vocabulary failing to
   load leaves every other tab usable. Switching tabs drops an editor's local
   state - an open rename, a half-typed add.
-- **A new vocabulary is one entry in `TABS`** in `Settings.jsx`: its id, its
-  label and what its panel renders.
+- **A new vocabulary is one entry** in `settingsTabs.jsx` - its id, its
+  label and what its panel renders - and its id in `SETTINGS_TABS` or
+  `FIXED_SETTINGS_TABS`, whichever page it belongs on. Moving a vocabulary
+  between the pages is moving its id between those two lists; the redirect
+  follows.
 
 Each value is a `components/settings/NameRow.jsx`:
 
@@ -730,7 +757,7 @@ offered - and 「＋ 新增分組」 opens a name box and 加入, adding an empt
 last. A group's name is renamed in place and saved when the box is left or on
 Enter; Escape, a blank name or one another group has (any case, said under
 the box) puts the stored name back, and the add box refuses a taken name the
-same way. 刪除分組 asks in a ConfirmModal, as every 設定 delete does, saying
+same way. 刪除分組 asks in a ConfirmModal, as every delete on the settings pages does, saying
 how many chips move; confirmed, its chips go to the end of 未分組.
 
 Every change `PUT`s the whole structure (`{ungrouped, groups}`, a group
@@ -800,7 +827,7 @@ an optional 顯示文字 per row) - with its own 儲存 and 刪除:
   at once with `PUT /api/edit/tbd/order`: the new order shows immediately,
   the list is frozen until the save has landed and the list has been read
   again, and a refusal puts the stored order back with the server's
-  sentence - the rule `hooks/useSortOrderMove.js` applies on 設定.
+  sentence - the rule `hooks/useSortOrderMove.js` applies on the settings pages.
 
 完成 goes back to `/tbd`.
 

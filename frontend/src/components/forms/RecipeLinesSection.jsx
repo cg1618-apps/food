@@ -1,7 +1,7 @@
 // Frontend: 材料 - a recipe's ingredient lines in their groups, as the recipe
 // form edits them.
 //
-// Above the lines sit the 常用 chips, one per 設定's 常用食材, in its order
+// Above the lines sit the 常用 chips, one per 未來固定設定's 常用食材, in its order
 // and under its groups' headings (CommonIngredientChips). A tap appends a
 // line naming that ingredient to the ungrouped lines - a 常用食材 group is
 // no 材料分組 - and puts the cursor in its 份量, so the amount is typed next;
@@ -9,7 +9,7 @@
 // adds. No chips, no row.
 //
 // The lines sit in groups (GroupedRowEditor): the ungrouped ones first, then
-// a box per group, picked from 設定's 材料分組 or named here only. A line's
+// a box per group, picked from 未來固定設定's 材料分組 or named here only. A line's
 // ingredient or dish is picked with the Typeahead, searching both libraries.
 // 「新增」 makes the line name an ingredient that does not exist yet, shown
 // with 待補 until the save creates it as a stub, and 「新增料理」 a dish, a
