@@ -41,6 +41,11 @@ describe('activeSection', () => {
     expect(activeSection('/')).toBeNull()
   })
 
+  it('puts the search results page in no section', () => {
+    // A search reaches every section, so it belongs to none of them.
+    expect(activeSection('/search')).toBeNull()
+  })
+
   it('has the eight sections, in navigation order, 料理 first', () => {
     expect(SECTIONS.map((s) => s.label)).toEqual(['料理', '食譜', '食材', '筆記', '加熱', '排程', 'TBD', '設定'])
   })

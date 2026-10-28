@@ -22,6 +22,7 @@ from app.routers import (
     label,
     recipe,
     schedule,
+    search,
     tbd,
     vocabulary,
 )
@@ -76,6 +77,8 @@ def create_app(dist: Path = DIST) -> FastAPI:
     # An author's page and gallery; its list and writes are the factory's, below.
     app.include_router(author.router)
     app.include_router(author.edit)
+    # The universal search: a read across every library, with no writes.
+    app.include_router(search.router)
     for vocabulary_router in vocabulary.ROUTERS:
         app.include_router(vocabulary_router)
 

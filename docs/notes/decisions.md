@@ -381,9 +381,11 @@ so a later reader can tell a decision from an accident. These are food's.
   section, which at 360px has no room for a ninth column that is a control
   rather than a destination - and a choice made once per device does not earn
   a place under the thumb. So the desktop's top bar is kept on a phone, shown
-  with only 食 and the toggle, not sticky, so it scrolls away and costs the
-  page no height while reading. Rejected: a floating button, which would sit
-  over each page's own top-right actions; and putting it on 設定, which is
+  with only 食, the search icon and the toggle, not sticky, so it scrolls
+  away and costs the page no height while reading. The search box went
+  there for the same reason (see "Search instead of modify hubs").
+  Rejected: a floating button, which would sit over each page's own
+  top-right actions; and putting it on 設定, which is
   behind Access and so out of reach of a reader who is not the owner. The
   storage key is `cg1618:food:theme` rather than media's `cg1618:theme`:
   every app is its own origin on its own hostname, so a shared name would
@@ -1341,8 +1343,8 @@ migration's to decide.
   pages are food's per-entity shape (`/authors`, `/authors/:id`,
   `/edit/authors/new|:id`), not media's add / modify / delete hubs: every
   other library here is per entity, and someone moving between them should
-  not meet a second shape. The universal search to come links to
-  `/authors/:id` for the same reason it links to `/dishes/:id`.
+  not meet a second shape. The universal search links to `/authors/:id`
+  for the same reason it links to `/dishes/:id`.
 - **One place for an author's information: the panel above the recipe
   library is gone.** Before the library, an author's links and 備註 were
   drawn above `/recipes?author=<id>` (`AuthorIntro`), the filtered list
@@ -1389,6 +1391,73 @@ migration's to decide.
   exactly** (`author_image`), registered in `images.OWNER_TABLES` so the
   image library's owner list and its "still attached" 409 name authors
   without code of their own.
+
+## Search instead of modify hubs
+
+- **One search box finds anything, and it is how an entry is edited from
+  anywhere.** media has "modify" hubs - a page per type that lists every
+  entry for editing. The owner decided food does not get them: every
+  library here already has a page per entry with an 編輯 button, so what a
+  hub adds is only the finding. The universal search does the finding
+  across all seven kinds at once, and every row on `/search` carries an 編輯
+  link straight to the entry's edit page - so "find it and change it" is two
+  taps from any page, with no second shape of page to maintain per kind.
+- **media's NavSearch and `/api/search` are the reference; food keeps the
+  shape and drops the rest.** Kept: one debounced request answering a bucket
+  per kind, a dropdown in the top bar, Enter for the full page, Escape and a
+  click outside to close, the phone's search as a row opened from an icon.
+  Dropped: the scope menu and the gated types, since food has no auth and
+  every kind is everyone's; and the quota-and-round-robin merge, because
+  food's seven kinds are few enough to show grouped under their labels,
+  three rows each - grouped rows say what each row is without a badge per
+  row, and a phone scrolls the list rather than losing a kind to a quota.
+  The response is one uniform row shape (`id`, `display_name`, `detail`,
+  `cover`) rather than media's full entity per bucket: a result row needs
+  four things, and seven response shapes would be seven chances for the
+  dropdown and the page to read a field the other does not.
+- **A bucket matches by its library's own clauses.** `dishes.matches`,
+  `ingredients.matches`, `recipes.matches` and `kitchen_notes.matches` are
+  the functions the libraries' `q` filters with, and the search filters with
+  the same calls (`app/services/universal_search.py`), so the top bar can
+  never find a row that the library's own box would not. Authors, 加熱 and
+  TBD have no server-side `q`, so their rules are written beside the search:
+  authors as the author library's browser filter, 加熱 by name and then
+  body ("微波" finds every microwave note), TBD by name and link label. Not a
+  TBD link's url: every one contains "https", and a term matching the whole
+  page is not a search.
+- **Ranking is tiers, in SQL.** `app/services/search.py` gives each library
+  matcher a `how` - `contains` (the library's), `prefix` or `exact` - and
+  `rank` orders by the first tier a row satisfies, then by the display name,
+  then by id. Asking the same matcher three times keeps one definition of
+  "matches a dish" for the filter and every tier, aliases included, rather
+  than a ranking that knows the name columns but forgets the alias table.
+  It is in SQL because the `limit` is: a bucket of ten ranked in Python
+  would have to load every match first, and an exact match ranked
+  eleventh by name would be cut before it could be floated (media's reason
+  for doing the same). The display name in SQL is `display_order`, a
+  `coalesce` of the name slots compared by code point, which is the order
+  the libraries' Python `casefold()` sort gives. Rejected: PostgreSQL
+  trigram similarity, which would rank better on typos but needs an
+  extension and a migration, for catalogues small enough that substring
+  tiers already put the right row first.
+- **A blank term answers empty buckets.** The libraries treat a blank `q` as
+  no filter and list everything, which is right for a library and wrong
+  here: an empty box is not a request for every row in the app. 200 with
+  empty buckets rather than a 422, as media's search answers, so a client
+  clearing its box needs no error path.
+- **加熱 and TBD rows open the list at the entry.** Neither has a page per
+  entry, so a row links to `/heating#heating-<id>` or `/tbd#tbd-<id>`, and
+  the page marks and scrolls to it (`hooks/useHashTarget.js`) once the list
+  has loaded - the browser cannot, because the list arrives after the page
+  and a client-side navigation does not update `:target`. 編輯 opens the
+  list's edit page at the top: the cards there each hold their own form
+  state, and reaching into one from a URL was more than the case is worth.
+- **Below `lg` the box is an icon that opens a row, not a field in the
+  bar.** At 360px the bar holds 食 and two icons; a field would squeeze to
+  nothing. On a tablet the eight sections already fill the bar. So the
+  field shows only from `lg`, and below it the icon opens a full-width row
+  in the flow under the bar - an overlay was rejected because it covers
+  the page's own top-right actions, as a floating button would.
 
 ## The starting ingredient list
 

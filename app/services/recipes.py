@@ -59,7 +59,7 @@ from app.schemas.recipe import LIST_FIELDS
 from app.services import category_clash, dishes
 from app.services.hierarchy import MAX_DEPTH
 from app.services.lookup import fetch_all
-from app.services.search import ESCAPE, contains
+from app.services.search import CONTAINS, term_match
 
 # The id lists a recipe carries, the relationship each fills, the model it
 # names, and the word a 422 uses for it.
@@ -275,6 +275,12 @@ def _dishes_where(*clauses):
     return Recipe.dish_id.in_(select(Dish.id).where(*clauses).scalar_subquery())
 
 
+def matches(q: str, how: str = CONTAINS):
+    """The clause a search term matches a recipe by: its own name, or any of
+    its dish's names and aliases. `how` as `dishes.matches` takes it."""
+    return or_(term_match(Recipe.name, q, how), _dishes_where(dishes.matches(q, how)))
+
+
 def search(
     db: Session,
     q: str | None = None,
@@ -303,9 +309,7 @@ def search(
     query = _summary_loaded(db.query(Recipe))
 
     if q:
-        query = query.filter(
-            or_(Recipe.name.ilike(contains(q), escape=ESCAPE), _dishes_where(dishes.matches(q)))
-        )
+        query = query.filter(matches(q))
     if dish_id:
         query = query.filter(Recipe.dish_id.in_(dish_id))
     if kind:

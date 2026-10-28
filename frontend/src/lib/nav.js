@@ -7,6 +7,9 @@
 // edit pages live under /edit/... for the Access gate. So the match is written
 // out here, once, and tested.
 //
+// /search, the universal search's results, is in no section on purpose: a
+// search reaches every one of them, so marking any would mislead.
+//
 // Adding a section is one entry here: both navigation bars draw from this
 // list, and the phone bar gives each entry a column of its own
 // (components/layout/Layout.jsx), so nothing else counts them.

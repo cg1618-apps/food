@@ -96,9 +96,16 @@ schedule, 加熱 and TBD.** The schema is at revision `a3uthor` (the head).
 - **TBD** - a standalone page of entries, each an optional name and any
   number of links, in the owner's order; read at `/tbd`, edited in place at
   `/edit/tbd`.
+- **搜尋, the universal search** - one box in the top bar (an icon that
+  opens a full-width row on a phone) finding dishes, recipes, ingredients,
+  notes, authors, 加熱 and TBD by their libraries' own matching, ranked
+  exact, prefix, contains; a dropdown grouped by kind, and `/search` with
+  every row's 編輯 link - which is how any entry is edited quickly, in place
+  of media-style modify hubs.
 - **The notebook UI** - 料理 · 食譜 · 食材 · 筆記 · 加熱 · 排程 · TBD · 設定: the five libraries,
   authors filed under 食譜 (search and filters in the URL, a sidebar or a
-  phone drawer, covers or a table), their detail pages, their add and edit forms with the gallery
+  phone drawer, covers or a table), the 搜尋 box in the top bar and its
+  `/search` page, their detail pages, their add and edit forms with the gallery
   picker, one delete dialog, ingredient merge, 設定 for the vocabularies
   the owner keeps growing (labels, regions, source platforms, authors,
   equipment) and 圖片, the image library; and 未來固定設定 for the system

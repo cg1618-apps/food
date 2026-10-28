@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -6,16 +7,19 @@ import { THEME_STORAGE_KEY } from '../../contexts/theme'
 import { ThemeProvider } from '../../contexts/ThemeContext'
 import Layout from './Layout'
 
+// The top bar holds the search box, which reads through TanStack Query.
 function renderLayout() {
   render(
     <ThemeProvider>
-      <MemoryRouter initialEntries={['/dishes']}>
-        <Routes>
-          <Route element={<Layout />}>
-            <Route path="/dishes" element={<p>page</p>} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter initialEntries={['/dishes']}>
+          <Routes>
+            <Route element={<Layout />}>
+              <Route path="/dishes" element={<p>page</p>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
     </ThemeProvider>,
   )
 }

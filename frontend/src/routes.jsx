@@ -40,6 +40,7 @@ import RecipeLibrary from './pages/library/RecipeLibrary'
 import Schedule from './pages/library/Schedule'
 import Tbd from './pages/library/Tbd'
 import NotFound from './pages/NotFound'
+import Search from './pages/Search'
 
 export default function AppRoutes() {
   return (
@@ -61,6 +62,8 @@ export default function AppRoutes() {
         <Route path="/heating" element={<Heating />} />
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/tbd" element={<Tbd />} />
+        {/* The universal search's results; not a section of its own. */}
+        <Route path="/search" element={<Search />} />
 
         {/* Behind Cloudflare Access, by path. */}
         <Route element={<EditSignIn />}>
