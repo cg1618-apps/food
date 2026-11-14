@@ -39,6 +39,31 @@ jobs:
       APP_ENV: development
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The whole history, so the base of the pull request is present for
+          # the diff below. A shallow clone holds only the merge commit.
+          fetch-depth: 0
+
+      # A pull request that changes only documentation skips everything below
+      # and still reports `test` as passed. Not a workflow-level paths-ignore:
+      # that leaves the required check unreported, and an unreported required
+      # check blocks the merge for ever. Documentation is `docs/**` and any
+      # `*.md`; one other file anywhere runs the whole job. An empty diff runs
+      # it too, so the fast path is only taken on positive evidence.
+      - name: Decide whether anything but documentation changed
+        id: changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          changed=$(git diff --name-only "$BASE...$HEAD")
+          printf '%s\n' "$changed"
+          if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qvE '^docs/|\.md$'; then
+            echo "Documentation only: every other step is skipped."
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          fi
 
       # `git ls-files` reads the index and has twice reported 100755 while the
       # COMMIT held 100644. core.fileMode is false on both development
@@ -46,6 +71,7 @@ jobs:
       # without it fails on the box with `Permission denied` and nowhere else.
       # This reads the commit, which is the only thing that answers.
       - name: The migration hook must be executable in the commit
+        if: steps.changes.outputs.code == 'true'
         run: |
           mode=$(git ls-tree HEAD -- deploy/migrations | awk '{print $1}')
           echo "deploy/migrations is $mode"
@@ -57,6 +83,7 @@ jobs:
       # it, so none of the executable-bit machinery applies. A copy-paste that
       # gave it 100755 would look consistent with its neighbour and be wrong.
       - name: The gated-paths file must be committed as data
+        if: steps.changes.outputs.code == 'true'
         run: |
           mode=$(git ls-tree HEAD -- deploy/gated-paths | awk '{print $1}')
           echo "deploy/gated-paths is $mode"
@@ -64,43 +91,53 @@ jobs:
           ! grep -qP '\r' deploy/gated-paths
 
       - uses: actions/setup-python@v7
+        if: steps.changes.outputs.code == 'true'
         with:
           # Same interpreter as the runtime image (dockerfile: python:3.13-slim).
           python-version: "3.13"
           cache: pip
 
       - name: Install backend dependencies
+        if: steps.changes.outputs.code == 'true'
         run: pip install -r requirements-dev.txt
 
       - name: Lint backend
+        if: steps.changes.outputs.code == 'true'
         run: ruff check .
 
       - name: Lint shell scripts
+        if: steps.changes.outputs.code == 'true'
         run: shellcheck deploy/migrations entrypoint.sh
 
       - name: Run the tests
+        if: steps.changes.outputs.code == 'true'
         run: python -m pytest tests/ -q
 
       - uses: actions/setup-node@v7
+        if: steps.changes.outputs.code == 'true'
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend dependencies
+        if: steps.changes.outputs.code == 'true'
         run: npm ci
         working-directory: frontend
 
       - name: Lint frontend
+        if: steps.changes.outputs.code == 'true'
         run: npm run lint
         working-directory: frontend
 
       - name: Run the frontend tests
+        if: steps.changes.outputs.code == 'true'
         run: npm test
         working-directory: frontend
 
       # dockerfile builds the frontend, so without this a bundle that does not
       # compile is found by the deploy rather than by the pull request.
       - name: Build the frontend
+        if: steps.changes.outputs.code == 'true'
         run: npm run build
         working-directory: frontend
