@@ -542,6 +542,10 @@ step is skipped, and `test` reports passed within seconds. One changed file of
 any other kind runs the whole job, and so does an empty diff: the fast path is
 taken only on positive evidence that nothing but documentation moved.
 
+The run's log says which way it went: the deciding step prints every changed
+path, and on the fast path its last line is `Documentation only: every other
+step is skipped.`, with each later step marked skipped.
+
 **It is a step condition, not a workflow-level `paths-ignore`.** A workflow
 that does not run reports nothing, and a required check that is never reported
 leaves the pull request blocked for ever. Skipping the steps inside a job that
