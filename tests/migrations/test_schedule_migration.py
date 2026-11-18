@@ -7,44 +7,9 @@ does to the data. A non-blank mark, a NULL one and a meal with nothing but
 text are each there so the opposite outcome would show.
 """
 
-import os
-import subprocess
-import sys
-from pathlib import Path
+from sqlalchemy import text
 
-import pytest
-from sqlalchemy import create_engine, text
-
-from app.config import settings
-
-ROOT = Path(__file__).resolve().parents[1]
-SCRATCH = "food_schedule_migration_test"
-
-
-def _url(database: str) -> str:
-    return settings.sqlalchemy_database_url.rsplit("/", 1)[0] + f"/{database}"
-
-
-def _alembic(*args: str) -> None:
-    env = dict(os.environ, DATABASE_URL=_url(SCRATCH))
-    result = subprocess.run(
-        [sys.executable, "-m", "alembic", *args], cwd=ROOT, env=env, capture_output=True, text=True
-    )
-    assert result.returncode == 0, result.stderr
-
-
-@pytest.fixture
-def scratch():
-    admin = create_engine(_url("postgres"), isolation_level="AUTOCOMMIT")
-    with admin.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS {SCRATCH} WITH (FORCE)"))
-        conn.execute(text(f"CREATE DATABASE {SCRATCH}"))
-    engine = create_engine(_url(SCRATCH))
-    yield engine
-    engine.dispose()
-    with admin.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS {SCRATCH} WITH (FORCE)"))
-    admin.dispose()
+from tests.migrations.conftest import previous_revision
 
 
 def _seed_at_s3chedule(conn) -> dict:
@@ -76,10 +41,10 @@ def _seed_at_s3chedule(conn) -> dict:
 
 
 def test_upgrade_turns_marks_into_booleans_and_meals_into_items(scratch):
-    _alembic("upgrade", "s3chedule")
+    scratch.alembic("upgrade", previous_revision("s4chedule"))
     with scratch.begin() as conn:
         ids = _seed_at_s3chedule(conn)
-    _alembic("upgrade", "s4chedule")
+    scratch.alembic("upgrade", "s4chedule")
 
     with scratch.connect() as conn:
         days = conn.execute(
@@ -113,7 +78,7 @@ def test_upgrade_turns_marks_into_booleans_and_meals_into_items(scratch):
 
 
 def test_downgrade_writes_true_as_a_tick_and_keeps_the_first_item(scratch):
-    _alembic("upgrade", "s4chedule")
+    scratch.alembic("upgrade", "s4chedule")
     with scratch.begin() as conn:
         dish = conn.execute(text("INSERT INTO dish (name_cn) VALUES ('咖哩') RETURNING id")).scalar()
         other = conn.execute(text("INSERT INTO dish (name_cn) VALUES ('拉麵') RETURNING id")).scalar()
@@ -137,7 +102,7 @@ def test_downgrade_writes_true_as_a_tick_and_keeps_the_first_item(scratch):
             ),
             {"meal": meal, "dish": dish, "other": other},
         )
-    _alembic("downgrade", "s3chedule")
+    scratch.alembic("downgrade", previous_revision("s4chedule"))
 
     with scratch.connect() as conn:
         day = conn.execute(

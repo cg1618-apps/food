@@ -3,48 +3,13 @@ where the owner already typed one of them by hand. The pre-existing row is the
 fixture that makes this bite: on an empty database every INSERT succeeds and
 the ON CONFLICT clause is never consulted."""
 
-import os
-import subprocess
-import sys
-from pathlib import Path
+from sqlalchemy import text
 
-import pytest
-from sqlalchemy import create_engine, text
-
-from app.config import settings
-
-ROOT = Path(__file__).resolve().parents[1]
-SCRATCH = "food_seed_test"
-
-
-def _url(database: str) -> str:
-    return settings.sqlalchemy_database_url.rsplit("/", 1)[0] + f"/{database}"
-
-
-def _alembic(*args: str) -> None:
-    env = dict(os.environ, DATABASE_URL=_url(SCRATCH))
-    result = subprocess.run(
-        [sys.executable, "-m", "alembic", *args], cwd=ROOT, env=env, capture_output=True, text=True
-    )
-    assert result.returncode == 0, result.stderr
-
-
-@pytest.fixture
-def scratch():
-    admin = create_engine(_url("postgres"), isolation_level="AUTOCOMMIT")
-    with admin.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS {SCRATCH} WITH (FORCE)"))
-        conn.execute(text(f"CREATE DATABASE {SCRATCH}"))
-    engine = create_engine(_url(SCRATCH))
-    yield engine
-    engine.dispose()
-    with admin.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS {SCRATCH} WITH (FORCE)"))
-    admin.dispose()
+from tests.migrations.conftest import previous_revision
 
 
 def test_the_seeds_land_on_an_empty_database(scratch):
-    _alembic("upgrade", "v1ocabulary")
+    scratch.alembic("upgrade", "v1ocabulary")
     with scratch.connect() as conn:
         courses = conn.execute(text("SELECT name_cn FROM recipe_course")).scalars().all()
         methods = conn.execute(text("SELECT count(*) FROM cooking_method")).scalar()
@@ -59,13 +24,13 @@ def test_the_seeds_land_on_an_empty_database(scratch):
 
 
 def test_seeding_skips_a_value_the_owner_already_created(scratch):
-    _alembic("upgrade", "i1ngredients")
+    scratch.alembic("upgrade", previous_revision("v1ocabulary"))
     with scratch.begin() as conn:
         conn.execute(text("INSERT INTO label (name_cn) VALUES ('飯')"))
         conn.execute(
             text("INSERT INTO ingredient_category (name_cn, sort_order) VALUES ('肉類', 3)")
         )
-    _alembic("upgrade", "v1ocabulary")
+    scratch.alembic("upgrade", "v1ocabulary")
     with scratch.connect() as conn:
         assert conn.execute(text("SELECT count(*) FROM label WHERE name_cn = '飯'")).scalar() == 1
         assert (
@@ -77,7 +42,7 @@ def test_seeding_skips_a_value_the_owner_already_created(scratch):
 
 
 def test_downgrade_keeps_a_seeded_category_that_is_in_use(scratch):
-    _alembic("upgrade", "v1ocabulary")
+    scratch.alembic("upgrade", "v1ocabulary")
     with scratch.begin() as conn:
         meat = conn.execute(
             text("SELECT id FROM ingredient_category WHERE name_cn = '肉類'")
@@ -85,7 +50,7 @@ def test_downgrade_keeps_a_seeded_category_that_is_in_use(scratch):
         conn.execute(
             text("INSERT INTO ingredient (name_cn, category_id) VALUES ('雞腿', :c)"), {"c": meat}
         )
-    _alembic("downgrade", "i1ngredients")
+    scratch.alembic("downgrade", previous_revision("v1ocabulary"))
     with scratch.connect() as conn:
         names = conn.execute(text("SELECT name_cn FROM ingredient_category")).scalars().all()
     assert "肉類" in names
@@ -104,7 +69,7 @@ def _preservation(conn):
 def test_the_storage_migration_copies_the_old_duration_and_downgrades_lossily(scratch):
     """Pre-existing rows are the fixture: on an empty table the copy and the
     delete in the downgrade touch nothing."""
-    _alembic("upgrade", "v1ocabulary")
+    scratch.alembic("upgrade", previous_revision("i2storage"))
     with scratch.begin() as conn:
         category = conn.execute(
             text("SELECT id FROM ingredient_category WHERE name_cn = '肉類'")
@@ -121,7 +86,7 @@ def test_the_storage_migration_copies_the_old_duration_and_downgrades_lossily(sc
             {"i": ingredient},
         )
 
-    _alembic("upgrade", "i2storage")
+    scratch.alembic("upgrade", "i2storage")
     with scratch.begin() as conn:
         assert _preservation(conn) == [("unused", "冷藏", 5, 5)]
         conn.execute(
@@ -134,7 +99,7 @@ def test_the_storage_migration_copies_the_old_duration_and_downgrades_lossily(sc
             {"i": ingredient},
         )
 
-    _alembic("downgrade", "v1ocabulary")
+    scratch.alembic("downgrade", previous_revision("i2storage"))
     with scratch.connect() as conn:
         rows = conn.execute(
             text("SELECT method, duration_days FROM ingredient_preservation ORDER BY id")
@@ -152,7 +117,7 @@ def test_the_status_and_platform_migration_maps_every_string_to_a_row_and_back(s
 
     The owner's own status and platform - created after the upgrade, so with
     no old key to return to - downgrade to the old defaults."""
-    _alembic("upgrade", "i3import")
+    scratch.alembic("upgrade", previous_revision("v2ocabulary"))
     with scratch.begin() as conn:
         recipes = {
             status: conn.execute(
@@ -170,7 +135,7 @@ def test_the_status_and_platform_migration_maps_every_string_to_a_row_and_back(s
                 {"r": recipes["can_cook"], "p": platform, "t": f"來源-{platform}", "i": i},
             )
 
-    _alembic("upgrade", "v2ocabulary")
+    scratch.alembic("upgrade", "v2ocabulary")
     with scratch.begin() as conn:
         statuses = conn.execute(
             text("SELECT name_cn FROM recipe_status ORDER BY sort_order")
@@ -232,7 +197,7 @@ def test_the_status_and_platform_migration_maps_every_string_to_a_row_and_back(s
     assert ("recipe_source", "platform") not in columns
     assert ("recipe_source", "platform_id") in columns
 
-    _alembic("downgrade", "i3import")
+    scratch.alembic("downgrade", previous_revision("v2ocabulary"))
     with scratch.connect() as conn:
         restored = dict(conn.execute(text("SELECT name_cn, status FROM recipe")).all())
         sources = dict(conn.execute(text("SELECT title, platform FROM recipe_source")).all())
@@ -265,7 +230,7 @@ def test_the_author_migration_makes_one_author_per_distinct_creator_and_back(scr
     and the null-skip each bite.
 
     The first spelling wins, by source id - the one saved first."""
-    _alembic("upgrade", "v2ocabulary")
+    scratch.alembic("upgrade", previous_revision("a1uthors"))
     with scratch.begin() as conn:
         status = conn.execute(text("SELECT id FROM recipe_status ORDER BY sort_order")).scalar()
         platform = conn.execute(
@@ -294,7 +259,7 @@ def test_the_author_migration_makes_one_author_per_distinct_creator_and_back(scr
                 {"r": recipe, "p": platform, "c": creator, "t": title, "i": i},
             )
 
-    _alembic("upgrade", "a1uthors")
+    scratch.alembic("upgrade", "a1uthors")
     with scratch.begin() as conn:
         authors = sorted(
             conn.execute(text("SELECT name_cn, name_en, sort_order FROM author")).all(),
@@ -343,7 +308,7 @@ def test_the_author_migration_makes_one_author_per_distinct_creator_and_back(scr
     }
     assert "creator" not in columns and "author_id" in columns
 
-    _alembic("downgrade", "v2ocabulary")
+    scratch.alembic("downgrade", previous_revision("a1uthors"))
     with scratch.connect() as conn:
         restored = dict(
             conn.execute(
@@ -393,7 +358,7 @@ def test_the_group_migration_turns_sections_into_groups_and_back(scratch):
     blank one and rows with none are what make the first-use order, the
     vocabulary match, the trim and the ungrouped-first re-numbering each bite.
     """
-    _alembic("upgrade", "a1uthors")
+    scratch.alembic("upgrade", previous_revision("g1roups"))
     with scratch.begin() as conn:
         status = conn.execute(text("SELECT id FROM recipe_status ORDER BY sort_order")).scalar()
         category = conn.execute(
@@ -443,7 +408,7 @@ def test_the_group_migration_turns_sections_into_groups_and_back(scratch):
             {"r": other},
         )
 
-    _alembic("upgrade", "g1roups")
+    scratch.alembic("upgrade", "g1roups")
     with scratch.begin() as conn:
         line_values = conn.execute(
             text("SELECT name_cn FROM line_group ORDER BY sort_order")
@@ -502,7 +467,7 @@ def test_the_group_migration_turns_sections_into_groups_and_back(scratch):
     assert "recipe_line.section" not in columns and "recipe_line.group_id" in columns
     assert "recipe_step.section" not in columns and "recipe_step.group_id" in columns
 
-    _alembic("downgrade", "a1uthors")
+    scratch.alembic("downgrade", previous_revision("g1roups"))
     with scratch.connect() as conn:
         restored_lines = conn.execute(
             text("SELECT section, note, position FROM recipe_line ORDER BY position")
@@ -537,7 +502,7 @@ def test_the_step_kind_migration_makes_existing_steps_ordinary_and_drops_on_down
     """An existing step is the fixture: on an empty table the column would be
     added with nothing to default, and a NOT NULL without a server default
     would pass."""
-    _alembic("upgrade", "g1roups")
+    scratch.alembic("upgrade", previous_revision("s1tepkinds"))
     with scratch.begin() as conn:
         status = conn.execute(text("SELECT id FROM recipe_status ORDER BY sort_order")).scalar()
         recipe = conn.execute(
@@ -549,12 +514,12 @@ def test_the_step_kind_migration_makes_existing_steps_ordinary_and_drops_on_down
             {"r": recipe},
         )
 
-    _alembic("upgrade", "s1tepkinds")
+    scratch.alembic("upgrade", "s1tepkinds")
     with scratch.connect() as conn:
         kinds = conn.execute(text("SELECT kind FROM recipe_step")).scalars().all()
     assert kinds == ["step"]
 
-    _alembic("downgrade", "g1roups")
+    scratch.alembic("downgrade", previous_revision("s1tepkinds"))
     with scratch.connect() as conn:
         columns = set(
             conn.execute(
@@ -589,7 +554,7 @@ def test_the_dish_migration_groups_versions_into_dishes_and_back(scratch):
     rule bite: one dish per family, the original's names, the labels' union,
     base -> sauce, a version's own name kept and an identical one dropped, a
     differing description appended to the notes, and the line repointed."""
-    _alembic("upgrade", "t1bd")
+    scratch.alembic("upgrade", previous_revision("d1ishes"))
     with scratch.begin() as conn:
         status = conn.execute(text("SELECT id FROM recipe_status ORDER BY sort_order")).scalar()
         course = conn.execute(text("SELECT id FROM recipe_course WHERE name_cn = '主食'")).scalar()
@@ -629,7 +594,7 @@ def test_the_dish_migration_groups_versions_into_dishes_and_back(scratch):
             {"r": named, "s": sauce},
         )
 
-    _alembic("upgrade", "d1ishes")
+    scratch.alembic("upgrade", "d1ishes")
     with scratch.begin() as conn:
         dishes = conn.execute(
             text(
@@ -686,7 +651,7 @@ def test_the_dish_migration_groups_versions_into_dishes_and_back(scratch):
                  "recipe.description", "recipe_line.sub_recipe_id"):
         assert gone not in columns, gone
 
-    _alembic("downgrade", "t1bd")
+    scratch.alembic("downgrade", previous_revision("d1ishes"))
     with scratch.connect() as conn:
         restored = {
             row.id: row

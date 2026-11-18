@@ -1,28 +1,86 @@
 # Testing
 
 ```bash
-venv/Scripts/python.exe -m pytest -q      # backend
+venv/Scripts/python.exe -m pytest -q      # backend, every tier
+venv/Scripts/python.exe -m pytest -q tests/unit   # the tier that needs no PostgreSQL
 venv/Scripts/ruff.exe check .             # backend lint
 cd frontend && npm test                   # vitest, colocated with the source
 ```
 
-**One pytest at a time across the whole machine.** All four apps share one
-PostgreSQL, and concurrent runs produce spurious "relation does not exist" and
-unique-constraint failures that look like real breakage. The lock is in the
-platform's `CLAUDE.md`; take it around every run.
+**One pytest at a time across the whole machine - still.** food's own runs no
+longer collide (see "One database per run" below), but the lock in the
+platform's `CLAUDE.md` stays until every app on the box meets the same rule,
+and a session cannot tell from outside which ones have. Take it around every
+run.
+
+## The three tiers
+
+The directory says what a test needs, so a run can ask for exactly the tier it
+wants:
+
+| Directory | Needs | What is there |
+| --- | --- | --- |
+| `tests/unit/` | nothing but Python - no PostgreSQL | configuration, the health probe with its readers stubbed, logging, request ids, SPA routing, the production compose file, the deploy hook against a stub `docker`, the test-database names |
+| `tests/api/` | PostgreSQL: the run's own database, built by `create_all` | every route, model and constraint, through the `db` and `client` fixtures |
+| `tests/migrations/` | PostgreSQL: a scratch database per test | the real `alembic` chain - from zero, the release round trip, and each revision's own data test |
+
+A test goes in `tests/unit/` only if it opens no connection; anything that
+does goes in one of the other two, by which schema it needs. The split is by
+directory rather than by marker because a directory cannot be forgotten - a
+new database test with no marker would land in the fast tier and fail there,
+on every pull request, for a reason that has nothing to do with the pull
+request.
+
+## One database per run
+
+**No database a test uses has a fixed name.** What makes two test runs
+collide is not the shared server but a shared database NAME - a run that
+dropped and recreated `food_test` wiped every other run using it (the
+platform's `docs/registry.md`, "How an app's tests use the shared server").
+`tests/databases.py` mints every name:
+
+- **The run's database**, `food_test_<epoch>_<hex>`, is created by
+  `tests/api/conftest.py`'s `test_engine` when the first database test asks for
+  it, built with `create_all`, and dropped `WITH (FORCE)` when the session
+  ends. Its name is never read from `.env`.
+- **Every scratch database** gets a name of the same shape:
+  `tests/migrations/conftest.py`'s `scratch` fixture creates one per test and
+  drops it after, whatever the test did.
+- **Leftovers are cleared at the start of a run**: every `food_test_*`
+  database with no connections and older than two hours. A database with a
+  connection belongs to a run in progress, and a young one may be a run that
+  has created its scratch database and not yet connected to it, so both are
+  left alone. A run killed outright leaves its database for at most that long.
+  Names that `tests/databases.py` did not mint - `food`, or the fixed names
+  the suite used before - are never touched.
+- **Tests reach the server on `127.0.0.1`, never `localhost`.**
+  `tests/databases.py` rewrites the host: Windows resolves `localhost` to `::1`
+  first, the dev database listens on 127.0.0.1 only, and each new connection
+  waited about 21 seconds before falling back - minutes per migration test,
+  which opens a connection per Alembic step.
+
+`tests/unit/test_databases.py` pins the names and the leftover rule without a
+server, and `tests/api/test_run_database.py` against one, with a young and a
+connected database beside the abandoned one so a cleanup that dropped nothing
+or everything fails.
+
+**No test writes outside `tmp_path`, and none creates a cluster-wide object**
+(a role, a tablespace, a database with a fixed name). A fixed file path is a
+fixed database name by another route. The image tests redirect `image_dir` to
+`tmp_path`; the deploy-hook tests put their stub `docker` there.
 
 ## How the database is set up
 
 Two mechanisms, deliberately, because each is blind to what the other catches.
 
 **`tests/api/conftest.py` builds the schema with `Base.metadata.create_all`**
-against a scratch `food_test` database, and isolates each test in an outer
+in the run's own database, and isolates each test in an outer
 transaction rolled back at teardown. The session joins that transaction with
 `join_transaction_mode="create_savepoint"`, which is load-bearing: without it a
 `rollback()` inside the code under test unwinds the outer transaction too, and
 the fixture rows vanish mid-test with nothing to explain why.
 
-**`tests/test_migrations_build_the_schema.py` runs the real
+**`tests/migrations/test_migrations_build_the_schema.py` runs the real
 `alembic upgrade head`** against a scratch database created for the test. This
 is what `create_all` cannot tell you. Media ran for 145 revisions with a chain
 that could not build from nothing, invisible because its fixtures never ran
@@ -32,6 +90,14 @@ And because those two could still describe different databases, a third test
 compares them with `compare_metadata` and asserts no differences. The migration
 is hand-written and may not import from `app/models`, so nothing else makes the
 two agree.
+
+**A revision's own test finds the revision before it through Alembic's script
+directory** - `previous_revision("s4chedule")` in `tests/migrations/conftest.py`
+- never by writing the parent's id down. Reparenting a revision to fix two heads
+changes its parent, and a test with the old id in it would then exercise the
+wrong step without failing. The from-zero build's expected head (`a3uthor`) is
+the one revision id written out on purpose: reading it from `alembic heads`
+would compare the run with the files it came from and assert nothing.
 
 ## What a test is called
 
@@ -89,7 +155,7 @@ is load-bearing and says so. Some examples worth knowing about:
   subtree test bite - an exact filter answers 肉類 with nothing - and the
   sibling is what makes the mirror bite: a filter ignoring the category would
   return 蝦 too.
-- `tests/test_seed_migration.py` inserts a label 飯 and a category 肉類 *before*
+- `tests/migrations/test_seed_migration.py` inserts a label 飯 and a category 肉類 *before*
   the vocabulary migration runs. On an empty database every seed `INSERT`
   succeeds and `ON CONFLICT DO NOTHING` is never consulted, so a seed written
   without it passes. The pre-existing rows are the only thing that proves the
@@ -191,7 +257,7 @@ is load-bearing and says so. Some examples worth knowing about:
   duplicate-item refusal sends the same dish twice, and the same recipe once
   with its dish and once alone; its mirrors are the same dish with two
   different recipes and the same dish in two meals.
-- **`tests/test_schedule_migration.py` seeds rows at `s3chedule` before
+- **`tests/migrations/test_schedule_migration.py` seeds rows at `s3chedule` before
   running `s4chedule`** - a non-blank mark, a whitespace one, a NULL one, a
   meal with a dish and recipe, one with text alone - because on an empty
   schedule every conversion succeeds whatever it does. The downgrade test
@@ -258,7 +324,7 @@ is load-bearing and says so. Some examples worth knowing about:
   through the same route; without the other scopes' labels a check that
   refused nothing would pass. The move refusal puts the label on a dish
   first - an unused label moves - and its mirror renames the same in-use
-  label and sends its own scope back. `tests/test_label_scope_migration.py`
+  label and sends its own scope back. `tests/migrations/test_label_scope_migration.py`
   seeds labels at `h1eating` before running `l1abels`: one per library, one
   carried by nothing (and the eight seeded ones), and separately one carried
   by two libraries. On an empty `label` table the backfill, the deletion and
@@ -294,7 +360,7 @@ the entire failure.
 | `tests/api/test_ingredient_crud.py` | create, read, update, delete and search over HTTP; re-sending existing aliases and storage rows on `PATCH` |
 | `tests/api/test_category_crud.py`, `test_label_crud.py` | the same round trip for categories and labels; a category's `description` through create, the tree (a child's too), `PATCH` and clearing, blank stored as null |
 | `tests/api/test_label_scope.py` | every label in one library: `scope` required and known, names unique per scope, `?scope=`, a move allowed while unused and the in-use 409, and each owner (ingredient create, update and attach; dish; note) refusing another library's label, each with its mirror |
-| `tests/test_label_scope_migration.py` | `l1abels` on a scratch database: used labels scoped by their one library, unused ones deleted, uniqueness per scope, the refusal on a label two libraries carry (changing nothing), and the downgrade with its own refusal |
+| `tests/migrations/test_label_scope_migration.py` | `l1abels` on a scratch database: used labels scoped by their one library, unused ones deleted, uniqueness per scope, the refusal on a label two libraries carry (changing nothing), and the downgrade with its own refusal |
 | `tests/api/test_ingredient_storage.py` | storage state and range, heating, links, rating, the new list filters (the category filter over a subtree, its sibling mirror, and the list agreeing with the tree's subtree totals), the delete counts and the 409 that names the moved one, `/api/vocabularies/fixed` |
 | `tests/api/test_vocabularies.py` | the ten vocabularies, parametrised over one factory, the in-use 409 for each (a course or region a dish is filed in; a difficulty a recipe is rated with, beside an unrated recipe and an unused value as the mirror), and authors in name order |
 | `tests/api/test_author_library.py` | an author's page: the detail (names, 備註, links, an empty gallery), a 404, each recipe its sources name listed once with what a cover card needs, the list's `recipe_count` (distinct recipes) beside `usage_count` (sources) and `cover`, the other nine answering with neither, the gallery round trip in order with focus and caption, a repeated PUT and a clear, an unknown image or author refused, the delete keeping the pictures, the cascade's `{sources, recipes}` with the unused author's zeros as the mirror, the delete refused while sources name the author and the unused one deleting, and an image an author attaches naming the author as its owner, refusing its delete, and deleting once the author lets go |
@@ -306,7 +372,7 @@ the entire failure.
 | `tests/api/test_recipe_crud.py` | the recipe round trip, its dish (`dish_id`, `new_dish`, reuse by name, moving), 其他版本, `PATCH` list semantics, status, the default status and the 422 with none, a difficulty set, changed, cleared by null and left alone when not sent, none by default, an unknown one refused, the moved fields refused, sources and their platforms, `reheating_notes` (加熱) round-tripping and cleared as `storage_notes` is, delete leaving the dish, stale counts |
 | `tests/api/test_recipe_lines.py` | line targets (ingredient, dish, new ingredient, new dish), the claimed-type refusal, the own-dish rule and the cycle guard through dishes, stub and dish creation and reuse |
 | `tests/api/test_recipe_line_alternatives.py` | a line's alternatives: the round trip in order with amount and note, in a group, new names resolved with the lines' (one stub for a name typed on both), the unknown-id 422 writing nothing, exactly one target, redundant alternatives dropped, a re-save replacing them; the own-dish rule, the cycle guard and a dish move through an alternative; "used in" for an ingredient (a variety's included) and a dish with `alternative_only`, the recipe filter; both delete refusals with mirrors, the RESTRICT itself, the CASCADE with the recipe; the ingredient merge moving and dropping them with the preview's counts and the fingerprint |
-| `tests/test_line_alternatives_migration.py` | `a2lternatives` on a scratch database: the downgrade drops the table with an alternative in it and keeps the line, and the chain upgrades again |
+| `tests/migrations/test_line_alternatives_migration.py` | `a2lternatives` on a scratch database: the downgrade drops the table with an alternative in it and keeps the line, and the chain upgrades again |
 | `tests/api/test_recipe_step_kinds.py` | a step's kind: the `step` default, the round trip through create, read and `PATCH` in and out of groups, the 422 for an unknown or null kind, the `step_kinds` fixed list |
 | `tests/api/test_recipe_groups.py` | lines and steps in groups: order and positions, a name stored as its 未來固定設定 value, the empty group, duplicate and malformed groups, the `PATCH` pair rule, stubs, cycles and a dish's "used in" through grouped lines, the delete counts, the in-use 409, SET NULL from a group to its rows |
 | `tests/api/test_recipe_library.py` | the list's summary (its dish), search over the dish's names and aliases (wildcards literal) and the recipe's own filters (`author_id` among them), and the query count |
@@ -316,15 +382,18 @@ the entire failure.
 | `tests/api/test_category_clash.py` | a name is a category or an ingredient, never both: the 409 and its `category_clash` preview (English name and case included; aliases and `name_alt` not), the conversion's every outcome, the ingredient keeping its own category and description, the ancestor kept top-level, conversion on update and no check on an update leaving the names, a top-level category's target and its 422s, a parent's other target refused, the sibling-name block (422, nothing changed), a child sharing the category's name moving up, the stale fingerprint (409, nothing changed), the fallback's 422, two clashing categories' 409, a category created or renamed under an ingredient's name refused (409) and a drag not, the recipe stub's 422 |
 | `tests/api/test_ingredient_merge.py` | merge preview against merge outcome, conflict rules, ordering after the target's rows, the fingerprint and its 409, refusals |
 | `tests/api/test_common_ingredients.py` | 常用食材: the whole-structure `PUT` and its order - 未分組, the groups, each group's chips, an empty group; a rename keeping the id, two groups swapping names in one `PUT`, a group not sent deleted with its chips where the body puts them, SET NULL when a group goes underneath its chips; each 422 changing nothing against a stored structure - an ingredient in two groups and in a group and 未分組 (each with the mirror that succeeds), an unknown ingredient or group id, a group id twice, a blank name, a duplicate name in any case (with its mirror), extra fields, the old flat body; the write only under the gated prefix, CASCADE on an ingredient's delete, and a merge moving the source's entry with its group and place or dropping it |
-| `tests/test_common_ingredient_groups_migration.py` | `c3ommon` on a scratch database: the upgrade leaving every chip ungrouped in its order, and the downgrade flattening two groups and 未分組 into one list numbered 0 … n - 未分組 first, groups in their order rather than their ids' - with every chip kept, and the chain upgrading again |
+| `tests/migrations/test_common_ingredient_groups_migration.py` | `c3ommon` on a scratch database: the upgrade leaving every chip ungrouped in its order, and the downgrade flattening two groups and 未分組 into one list numbered 0 … n - 未分組 first, groups in their order rather than their ids' - with every chip kept, and the chain upgrading again |
 | `tests/api/test_heating.py` | 加熱: the blank-name CHECK, the round trip with line breaks kept, a blank body stored as null, the no-name 422 on create and the blank-name `PATCH` 422 with the mirror that renames, a `PATCH` applying only what it sends, a new note last, the delete, the order `PUT` and each of its 422s against three real notes, the writes only under the gated prefix |
 | `tests/api/test_tbd.py` | TBD: the blank-url CHECK and CASCADE to links, the round trip, the name-or-link 422 on create and on a `PATCH` that would leave neither (with the mirror that keeps a name), a new entry last, `https://` given to a link without a scheme and the 422 for a blank or non-web one, links replaced wholesale or left alone, the delete, the order `PUT` and each of its 422s against three real entries, the writes only under the gated prefix |
 | `tests/api/test_schedule.py` | the schedule: the Saturday a week starts on, the default range from a pinned today, every date answered stored or not, the `days` bounds, the day round trip with its meals, marks defaulting to false and refusing text, `PUT` replacing the whole day, blanks as null and empty meals and days not stored, unknown slots and fields, a meal of text only, of items only and of both, several items kept in order, a recipe implying its dish, a recipe of another dish, an item naming nothing and a duplicate item refused, unknown ids, a refused `PUT` changing nothing, a dish delete refused while meal items name it (with the dates) and its mirrors, a recipe delete leaving the item its dish, `meal_slots` in the fixed vocabularies |
-| `tests/test_schedule_migration.py` | `s4chedule` on a scratch database: marks turned into booleans from the stored text, each meal's dish and recipe moved into one item, and the downgrade writing ✓ and keeping the first item |
-| `tests/test_seed_migration.py` | the seeds, the storage migration's copy and lossy downgrade, `v2ocabulary`'s string-to-row mapping, `a1uthors`'s creator-to-author mapping, `g1roups`' sections-to-groups move, `s1tepkinds`' default for existing steps and `d1ishes`' grouping of recipes into dishes, each with its downgrade, on a scratch database |
-| `tests/test_ingredient_import.py` | `i3import`: the committed CSV passes validation, each validation refusal with a good mirror, and the load on a scratch database — stubs, aliases, parents, categories, the skip rule, the cycle guard, a second run, the no-op downgrade |
+| `tests/migrations/test_schedule_migration.py` | `s4chedule` on a scratch database: marks turned into booleans from the stored text, each meal's dish and recipe moved into one item, and the downgrade writing ✓ and keeping the first item |
+| `tests/migrations/test_seed_migration.py` | the seeds, the storage migration's copy and lossy downgrade, `v2ocabulary`'s string-to-row mapping, `a1uthors`'s creator-to-author mapping, `g1roups`' sections-to-groups move, `s1tepkinds`' default for existing steps and `d1ishes`' grouping of recipes into dishes, each with its downgrade, on a scratch database |
+| `tests/migrations/test_ingredient_import.py` | `i3import`: the committed CSV passes validation, each validation refusal with a good mirror, and the load on a scratch database — stubs, aliases, parents, categories, the skip rule, the cycle guard, a second run, the no-op downgrade |
 | `tests/api/test_search.py` | the universal search: every bucket present and empty for no match, a blank or absent `q` answering empty buckets (with rows present, and the mirror finding them), wildcards literal, read-only; each bucket by name and alias, CN and EN - dishes, recipes (own name, dish names and aliases), ingredients, notes (title, body ranked after), authors (either name), 加熱 (name, then body), TBD (name and link labels, not the url) - with each row's `detail` and a dish's `cover`; ordering exact, prefix, contains, then name, an alias ranking as a name; `limit` per bucket after ranking, the default of 10, the 422 outside 1..50; and the query count equal at two sizes |
 | `tests/unit/test_prod_compose.py` | the production compose file, including the image bind mount |
+| `tests/unit/test_databases.py` | the test-database names: new every time, recognised as minted, a fixed name (`food`, `food_test`, the old scratch names) never one; only an old minted name is a leftover |
+| `tests/api/test_run_database.py` | the run's database is its own minted name, and a cleanup drops an abandoned database while keeping a young one, a connected one and the run's own |
+| `tests/migrations/test_migration_round_trip.py` | the release round trip: head down to `origin/main`'s revision and up again with the schema unchanged, and the walk that finds that revision on a pure chain |
 
 **The image tests never touch the real `data/images`.** `image_dir` redirects
 the setting to a temporary directory for every test in the file. The upload code
@@ -332,12 +401,11 @@ reads `IMAGE_DIR` at call time, so the redirect works; a file turning up in the
 real directory would mean that rule had broken.
 
 **The `i2storage` downgrade is tested against a scratch database**
-(`food_seed_test`, created and dropped by the test), because it is the one
+(the `scratch` fixture's, created and dropped around the test), because it is the one
 migration here that loses data on purpose. The test asserts what survives: rows
 in a state other than `unused` are gone, and the range collapses to its maximum.
 
-**The `i3import` load is tested against its own scratch database**
-(`food_import_test`). Its skip rule is only exercised by **pre-existing
+**The `i3import` load is tested against its own scratch database.** Its skip rule is only exercised by **pre-existing
 ingredients whose names match CSV rows** — 醬油 typed by hand, and an
 ingredient answering to `garlic` only through an alias. On an empty database
 every row inserts and the rule has nothing to skip, so those rows are the

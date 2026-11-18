@@ -126,7 +126,7 @@ the client-route fallback to Starlette, and with it the `/api` and `/health`
 **The `.resolve()` + `is_relative_to()` + `is_file()` guard is load-bearing
 security, not tidiness.** `full_path` is user-controlled, and without the
 confinement `/..%2F.env` reads the app's own credentials from beside the bundle.
-`tests/test_spa_routing.py` asserts both halves — that a real file in the bundle
+`tests/unit/test_spa_routing.py` asserts both halves — that a real file in the bundle
 is served as itself, and that a traversal attempt is not — and the `.env` file
 its traversal test writes is load-bearing: `is_file()` is False for a path that
 does not exist, so without a real secret to leak the test would pass against an
@@ -1521,6 +1521,32 @@ it is about — which is exactly when nobody will remember it.
   "used in" reads the tree). An alternative is a way of meeting the line, not
   a requirement of its own, so it never makes a line uncovered, and a recipe
   whose only gap is a line with an available alternative is cookable.
+
+## Test tiers by directory, and a database per run
+
+**The tests are split into three directories by what they need** -
+`tests/unit` (no PostgreSQL), `tests/api` (the run's own `create_all`
+database) and `tests/migrations` (a scratch database per test, the real
+`alembic` chain), so a run can name the tier it wants.
+
+- **A directory, not a pytest marker.** A database test someone forgot to mark
+  would land in the fast tier and fail there on every pull request; a file put
+  in the wrong directory is visible in review.
+- **`tests/migrations` is its own directory, where `media` keeps its migration
+  tests in `tests/api`.** A deliberate divergence from the reference: food's
+  migration tests share nothing with the API fixtures (no `db`, no `client`),
+  and a directory of their own puts every test of a revision in one place. Before this
+  they sat loose at the top of `tests/`, beside tests that needed no database.
+- **Names follow `media`'s `food_test_<epoch>_<hex>`**, not a bare uuid. The
+  epoch is what lets a run's start-up cleanup tell an abandoned database from
+  one a neighbouring run has just created and not yet connected to; a bare
+  uuid carries no age, and "no connections" alone would drop a scratch
+  database in the gap between `CREATE DATABASE` and the Alembic subprocess
+  opening it.
+- **The run's database is created by a session fixture**, not when the root
+  conftest is imported as `media` does it. `media` checks its schema at import
+  time and has to; food's app opens no connection until a request, so the
+  fixture is enough and the unit tier never touches the server.
 
 ## What module 1 hands module 2
 

@@ -8,7 +8,7 @@ container, and there is not one yet.
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 # A filled-in value on any variable whose name says it holds a secret...
 SECRET_ASSIGNMENT = re.compile(r"^([A-Z0-9_]*(?:PASSWORD|SECRET|TOKEN|KEY))=(.*)$")
