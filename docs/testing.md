@@ -20,7 +20,7 @@ wants:
 
 | Directory | Needs | What is there |
 | --- | --- | --- |
-| `tests/unit/` | nothing but Python - no PostgreSQL | configuration, the health probe with its readers stubbed, logging, request ids, SPA routing, the production compose file, the deploy hook against a stub `docker`, the test-database names |
+| `tests/unit/` | nothing but Python - no PostgreSQL | configuration, the health probe with its readers stubbed, logging, request ids, SPA routing, the production compose file, the deploy hook against a stub `docker`, the CI selection (`scripts/pr_tests.py`), the test-database names |
 | `tests/api/` | PostgreSQL: the run's own database, built by `create_all` | every route, model and constraint, through the `db` and `client` fixtures |
 | `tests/migrations/` | PostgreSQL: a scratch database per test | the real `alembic` chain - from zero, the release round trip, and each revision's own data test |
 
@@ -392,6 +392,7 @@ the entire failure.
 | `tests/api/test_search.py` | the universal search: every bucket present and empty for no match, a blank or absent `q` answering empty buckets (with rows present, and the mirror finding them), wildcards literal, read-only; each bucket by name and alias, CN and EN - dishes, recipes (own name, dish names and aliases), ingredients, notes (title, body ranked after), authors (either name), 加熱 (name, then body), TBD (name and link labels, not the url) - with each row's `detail` and a dish's `cover`; ordering exact, prefix, contains, then name, an alias ranking as a name; `limit` per bucket after ranking, the default of 10, the 422 outside 1..50; and the query count equal at two sizes |
 | `tests/unit/test_prod_compose.py` | the production compose file, including the image bind mount |
 | `tests/unit/test_databases.py` | the test-database names: new every time, recognised as minted, a fixed name (`food`, `food_test`, the old scratch names) never one; only an old minted name is a leftover |
+| `tests/unit/test_pr_tests.py` | what a pull request into `dev` runs in CI: the unit tier and the test files it touches, the migration guards for a change under `alembic/` or `app/models/`, a revision's own tests and not another revision's, and everything for a change to the harness, the dependencies or the workflow |
 | `tests/api/test_run_database.py` | the run's database is its own minted name, and a cleanup drops an abandoned database while keeping a young one, a connected one and the run's own |
 | `tests/migrations/test_migration_round_trip.py` | the release round trip: head down to `origin/main`'s revision and up again with the schema unchanged, and the walk that finds that revision on a pure chain |
 
@@ -593,12 +594,49 @@ turn the exception into a response.
 ## What CI runs
 
 `.github/workflows/ci.yml` (workflow name `Tests`) runs on every pull request
-and on nothing else, on `ubuntu-latest`. Its one job is `test`, the check the
-repository ruleset requires on `main` and `dev`. It checks out the whole
-history, decides whether the pull request changes anything but documentation,
-and only if it does goes on to assert the commit modes of `deploy/migrations` (executable) and `deploy/gated-paths` (data), `ruff check .`, shellcheck, the pytest
-suite against a `postgres:17` service, then `npm ci`, the frontend lint, the
-frontend tests and the frontend build.
+and on the merge queue's `merge_group` runs, and on nothing else, on
+`ubuntu-latest`. Its one job is `test`, the check the repository ruleset
+requires on `main` and `dev`, whatever the event. It checks out the whole
+history (which carries `origin/main` for the round trip), decides whether the
+change touches anything but documentation, and only if it does goes on to
+assert the commit modes of `deploy/migrations` (executable) and
+`deploy/gated-paths` (data), one Alembic head, `ruff check .`, shellcheck, the
+backend tests against a `postgres:17` service, then `npm ci`, the frontend
+lint, the frontend tests and the frontend build.
+
+How much of the backend suite runs depends on the event - the platform's
+`docs/registry.md`, "What runs when":
+
+| Trigger | Backend tests |
+| --- | --- |
+| pull request into `dev` | `tests/unit`, plus every test file the pull request adds or edits |
+| ...that touches `alembic/` or `app/models/` | as above, plus the from-zero build, the release round trip, and every `tests/migrations/` file naming a revision the pull request adds or edits |
+| ...that touches the harness (`tests/conftest.py`, `tests/databases.py`, either tier's `conftest.py`), the requirements, the workflow or `scripts/pr_tests.py` | the full suite |
+| `merge_group` (the merge queue into `dev`) | the full suite |
+| pull request into `main` (the release) | the full suite |
+
+`scripts/pr_tests.py <base> <head>` makes the pull-request selection and
+prints it, one pytest argument per line or `FULL`, and the step's log echoes
+it. Everything else in the job - the mode checks, the linters, the frontend -
+runs on every event.
+
+**The fast tier is only safe because `dev` merges through the merge queue**:
+the queue's run tests `dev` plus everything queued ahead, in full, before
+anything lands. Without the queue a pull request into `dev` would land having
+run only its selection.
+
+**A test of one revision names that revision's id as a string**
+(`previous_revision("s4chedule")`, `scratch.alembic("upgrade", "s4chedule")`),
+which is how the selection finds it. A revision test that named its revision
+some other way would run only in the merge queue.
+
+**The round trip downgrades to the revision `origin/main` is at**, then
+upgrades to head and compares every column, constraint, index and enum with
+what it started from. That is what a rollback of the release does, and a
+release often carries several revisions, so one step back would leave the
+earlier ones unexercised. When `dev` holds no revision beyond `main`, or a
+clone has no `origin/main`, it falls back to one step - the second with a
+warning, since CI always has it.
 
 ### A documentation-only pull request skips the job
 

@@ -1527,7 +1527,9 @@ it is about — which is exactly when nobody will remember it.
 **The tests are split into three directories by what they need** -
 `tests/unit` (no PostgreSQL), `tests/api` (the run's own `create_all`
 database) and `tests/migrations` (a scratch database per test, the real
-`alembic` chain), so a run can name the tier it wants.
+`alembic` chain). The pull request's own CI run executes `tests/unit` and a
+selection, and the merge queue the rest (`docs/testing.md`, "What CI runs"),
+so the tier has to be something a run can name.
 
 - **A directory, not a pytest marker.** A database test someone forgot to mark
   would land in the fast tier and fail there on every pull request; a file put
@@ -1535,7 +1537,8 @@ database) and `tests/migrations` (a scratch database per test, the real
 - **`tests/migrations` is its own directory, where `media` keeps its migration
   tests in `tests/api`.** A deliberate divergence from the reference: food's
   migration tests share nothing with the API fixtures (no `db`, no `client`),
-  and a directory of their own puts every test of a revision in one place. Before this
+  and a directory of their own lets `scripts/pr_tests.py` find "the tests for
+  the revisions this pull request adds" by looking in one place. Before this
   they sat loose at the top of `tests/`, beside tests that needed no database.
 - **Names follow `media`'s `food_test_<epoch>_<hex>`**, not a bare uuid. The
   epoch is what lets a run's start-up cleanup tell an abandoned database from
