@@ -10,55 +10,11 @@ outcome would show; the shared label is its own case, because it stops the
 upgrade and the others could then prove nothing.
 """
 
-import os
-import subprocess
-import sys
-from pathlib import Path
-
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from app.config import settings
-
-ROOT = Path(__file__).resolve().parents[1]
-SCRATCH = "food_label_scope_migration_test"
-
-
-def _url(database: str) -> str:
-    return settings.sqlalchemy_database_url.rsplit("/", 1)[0] + f"/{database}"
-
-
-def _alembic(*args: str) -> subprocess.CompletedProcess:
-    # UTF-8 both ways, because the refusals name labels in Chinese and a
-    # Windows console encoding would turn them into escapes.
-    env = dict(os.environ, DATABASE_URL=_url(SCRATCH), PYTHONUTF8="1")
-    return subprocess.run(
-        [sys.executable, "-m", "alembic", *args],
-        cwd=ROOT,
-        env=env,
-        capture_output=True,
-        encoding="utf-8",
-    )
-
-
-def _ok(*args: str) -> None:
-    result = _alembic(*args)
-    assert result.returncode == 0, result.stderr
-
-
-@pytest.fixture
-def scratch():
-    admin = create_engine(_url("postgres"), isolation_level="AUTOCOMMIT")
-    with admin.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS {SCRATCH} WITH (FORCE)"))
-        conn.execute(text(f"CREATE DATABASE {SCRATCH}"))
-    engine = create_engine(_url(SCRATCH))
-    yield engine
-    engine.dispose()
-    with admin.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS {SCRATCH} WITH (FORCE)"))
-    admin.dispose()
+from tests.migrations.conftest import previous_revision
 
 
 def _insert(conn, sql: str, **params) -> int:
@@ -94,7 +50,7 @@ def _label(conn, name: str) -> int:
 
 
 def test_upgrade_scopes_used_labels_and_deletes_unused_ones(scratch):
-    _ok("upgrade", "h1eating")
+    scratch.alembic("upgrade", previous_revision("l1abels"))
     with scratch.begin() as conn:
         # The seeded 飯 麵 肉 ... are unused, so they are part of the fixture
         # too: the upgrade must delete them.
@@ -108,7 +64,7 @@ def test_upgrade_scopes_used_labels_and_deletes_unused_ones(scratch):
         _link(conn, owners, "ingredient", hot)
         _link(conn, owners, "dish", side)
         _link(conn, owners, "note", video)
-    _ok("upgrade", "l1abels")
+    scratch.alembic("upgrade", "l1abels")
 
     with scratch.connect() as conn:
         rows = dict(conn.execute(text("SELECT id, scope FROM label")).all())
@@ -125,21 +81,21 @@ def test_upgrade_scopes_used_labels_and_deletes_unused_ones(scratch):
 
 
 def test_upgrade_refuses_a_label_two_libraries_use(scratch):
-    _ok("upgrade", "h1eating")
+    scratch.alembic("upgrade", previous_revision("l1abels"))
     with scratch.begin() as conn:
         owners = _owners(conn)
         shared = _label(conn, "常備")
         _link(conn, owners, "ingredient", shared)
         _link(conn, owners, "note", shared)
 
-    result = _alembic("upgrade", "l1abels")
+    result = scratch.run_alembic("upgrade", "l1abels")
     assert result.returncode != 0
     assert "常備" in result.stderr
 
     # Nothing was changed: the revision is still h1eating and the label and
     # both links survive for the owner to sort out.
     with scratch.connect() as conn:
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "h1eating"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == previous_revision("l1abels")
         assert conn.execute(text("SELECT count(*) FROM label WHERE id = :l"), {"l": shared}).scalar()
         links = conn.execute(
             text(
@@ -152,10 +108,10 @@ def test_upgrade_refuses_a_label_two_libraries_use(scratch):
 
 
 def test_downgrade_drops_the_scope_and_restores_global_uniqueness(scratch):
-    _ok("upgrade", "l1abels")
+    scratch.alembic("upgrade", "l1abels")
     with scratch.begin() as conn:
         conn.execute(text("INSERT INTO label (name_cn, scope) VALUES ('辣', 'ingredient')"))
-    _ok("downgrade", "h1eating")
+    scratch.alembic("downgrade", previous_revision("l1abels"))
 
     with scratch.connect() as conn:
         assert conn.execute(text("SELECT name_cn FROM label")).scalars().all() == ["辣"]
@@ -173,11 +129,11 @@ def test_downgrade_refuses_two_labels_sharing_a_name(scratch):
     """Two scopes may share 辣; the global index the downgrade restores
     cannot hold both, so the downgrade stops naming it rather than picking
     one to delete."""
-    _ok("upgrade", "l1abels")
+    scratch.alembic("upgrade", "l1abels")
     with scratch.begin() as conn:
         conn.execute(
             text("INSERT INTO label (name_cn, scope) VALUES ('辣', 'ingredient'), ('辣', 'dish')")
         )
-    result = _alembic("downgrade", "h1eating")
+    result = scratch.run_alembic("downgrade", previous_revision("l1abels"))
     assert result.returncode != 0
     assert "辣" in result.stderr

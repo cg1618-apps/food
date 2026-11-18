@@ -3,56 +3,44 @@
 The schema is built with `Base.metadata.create_all`, NOT by running Alembic.
 That is deliberate and it has a known blind spot, which media paid for over 145
 revisions: a migration chain that cannot build from nothing stays invisible to
-a suite whose fixtures never run it. `tests/test_migrations_build_the_schema.py`
+a suite whose fixtures never run it. `tests/migrations/test_migrations_build_the_schema.py`
 is what covers that, by running the real `alembic upgrade head` against a
 scratch database. The two are complementary and neither is optional - anything
 a migration creates but the models do not declare is invisible to both.
 
-Isolation is an outer transaction rolled back at teardown, with the session
-joined to it via savepoints so that code under test may call `commit()` without
-destroying the fixture rows around it.
+The database is the run's own (`test_engine`, below), so two runs never share
+one. Isolation within the run is an outer transaction rolled back at teardown,
+with the session joined to it via savepoints so that code under test may call
+`commit()` without destroying the fixture rows around it.
 """
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 # `models` is imported for the side effect of registering every model on
 # Base.metadata before create_all runs; without it the test schema is empty.
 from app import models  # noqa: F401
-from app.config import settings
 from app.database import Base
-
-TEST_DATABASE = "food_test"
-
-
-def _url(database: str) -> str:
-    """The app's own connection settings with the database name swapped.
-
-    Derived rather than hardcoded: the password is per-machine and is not
-    something a test may carry. A test that can reach the app's database can
-    reach this one.
-    """
-    return settings.sqlalchemy_database_url.rsplit("/", 1)[0] + f"/{database}"
+from tests import databases
 
 
 @pytest.fixture(scope="session")
-def test_engine():
-    admin = create_engine(_url("postgres"), isolation_level="AUTOCOMMIT")
-    with admin.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS {TEST_DATABASE} WITH (FORCE)"))
-        conn.execute(text(f"CREATE DATABASE {TEST_DATABASE}"))
-    admin.dispose()
+def test_engine(test_database_server):
+    """The run's own database, `food_test_<epoch>_<hex>`, built by create_all.
 
-    engine = create_engine(_url(TEST_DATABASE))
-    Base.metadata.create_all(engine)
-    yield engine
-    engine.dispose()
-
-    admin = create_engine(_url("postgres"), isolation_level="AUTOCOMMIT")
-    with admin.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS {TEST_DATABASE} WITH (FORCE)"))
-    admin.dispose()
+    Never a fixed name, and never one read from `.env`: a run that dropped and
+    recreated a shared `food_test` wiped every other run using it, which is
+    the collision the machine-wide pytest lock exists to prevent. The name is
+    minted here, the database dropped WITH (FORCE) when the session ends.
+    """
+    with databases.scratch() as name:
+        engine = create_engine(databases.server_url(name))
+        Base.metadata.create_all(engine)
+        try:
+            yield engine
+        finally:
+            engine.dispose()
 
 
 @pytest.fixture

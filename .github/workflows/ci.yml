@@ -1,20 +1,30 @@
 name: Tests
 
-# Pull requests only, and ubuntu-latest only. The self-hosted runner is a
-# machine in a house and every repository in this organisation is public; a
-# fork's pull request running on it is the standard catastrophe. No
+# Pull requests and the merge queue, and ubuntu-latest only. The self-hosted
+# runner is a machine in a house and every repository in this organisation is
+# public; a fork's pull request running on it is the standard catastrophe. No
 # pull_request-triggered job may ever name it.
+#
+# How much of the backend suite runs depends on the event (the platform's
+# docs/registry.md, "What runs when"). `dev` merges through a merge queue, so
+# the `merge_group` run - `dev` plus everything queued ahead - is what tests
+# the tree that lands, and it runs the full suite; so does a release pull
+# request into `main`. A pull request into `dev` runs the fast tier its own
+# changes call for (scripts/pr_tests.py). It stays ONE job named `test`, so
+# `test` remains the single required check whatever the event.
 on:
   pull_request:
+  merge_group:
 
 jobs:
   test:
     runs-on: ubuntu-latest
     services:
-      # tests/test_migrations_build_the_schema.py opens an administrative
-      # connection and builds a scratch database from zero. ubuntu-latest
+      # Every test run creates and drops its own databases on this server
+      # (tests/databases.py), here exactly as on a laptop. ubuntu-latest
       # ships PostgreSQL but does not run it, so without this service the
-      # test errors rather than skipping.
+      # database tests error rather than skipping. It is declared on every
+      # run; only the steps below decide whether anything uses it.
       postgres:
         image: postgres:17
         env:
@@ -40,8 +50,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # The whole history, so the base of the pull request is present for
-          # the diff below. A shallow clone holds only the merge commit.
+          # The whole history and every branch: the base of the pull request
+          # for the diff below, and `origin/main`, which the release round
+          # trip (tests/migrations/test_migration_round_trip.py) downgrades
+          # to. A shallow clone holds only the merge commit.
           fetch-depth: 0
 
       # A pull request that changes only documentation skips everything below
@@ -53,8 +65,11 @@ jobs:
       - name: Decide whether anything but documentation changed
         id: changes
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
+          # A merge-queue run has no pull_request payload; its base and head
+          # are the merge group's. Without the fallback the diff would be
+          # empty, which runs the whole job - safe, but never the fast path.
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
         run: |
           changed=$(git diff --name-only "$BASE...$HEAD")
           printf '%s\n' "$changed"
@@ -101,6 +116,20 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: pip install -r requirements-dev.txt
 
+      # Two migrations parented on the same revision merge cleanly in git and
+      # only collide in Alembic's revision graph. In a merge-queue run that is
+      # the combination being tested, and this says so in seconds. Needs no
+      # database: `heads` reads the revision files.
+      - name: One Alembic head
+        if: steps.changes.outputs.code == 'true'
+        run: |
+          heads=$(alembic heads)
+          echo "$heads"
+          if [ "$(echo "$heads" | grep -c .)" -ne 1 ]; then
+            echo "::error::More than one Alembic head. Reparent the newer revision's down_revision onto the other head."
+            exit 1
+          fi
+
       - name: Lint backend
         if: steps.changes.outputs.code == 'true'
         run: ruff check .
@@ -109,9 +138,31 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: shellcheck deploy/migrations entrypoint.sh
 
+      # The full suite in the merge queue and on a release into main; on a
+      # pull request into dev, the selection scripts/pr_tests.py prints - the
+      # unit tier, the test files it touches, and the migration guards and its
+      # own revisions' tests when it touches alembic/ or app/models/ (or FULL,
+      # when it changes the harness, the dependencies or this workflow).
       - name: Run the tests
         if: steps.changes.outputs.code == 'true'
-        run: python -m pytest tests/ -q
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT" = "pull_request" ] && [ "$BASE_REF" = "dev" ]; then
+            selection=$(python scripts/pr_tests.py "$BASE" "$HEAD")
+          else
+            selection=FULL
+          fi
+          echo "$selection"
+          if [ "$selection" = "FULL" ]; then
+            python -m pytest tests/ -q -p no:cacheprovider
+          else
+            # shellcheck disable=SC2086 # one path per line, none with spaces
+            python -m pytest -q -p no:cacheprovider $selection
+          fi
 
       - uses: actions/setup-node@v7
         if: steps.changes.outputs.code == 'true'

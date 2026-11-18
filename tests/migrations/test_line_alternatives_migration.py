@@ -7,48 +7,13 @@ line and an alternative in the database: the line must survive, the table
 must go, and the chain must build again afterwards.
 """
 
-import os
-import subprocess
-import sys
-from pathlib import Path
+from sqlalchemy import inspect, text
 
-import pytest
-from sqlalchemy import create_engine, inspect, text
-
-from app.config import settings
-
-ROOT = Path(__file__).resolve().parents[1]
-SCRATCH = "food_line_alternatives_migration_test"
-
-
-def _url(database: str) -> str:
-    return settings.sqlalchemy_database_url.rsplit("/", 1)[0] + f"/{database}"
-
-
-def _alembic(*args: str) -> None:
-    env = dict(os.environ, DATABASE_URL=_url(SCRATCH))
-    result = subprocess.run(
-        [sys.executable, "-m", "alembic", *args], cwd=ROOT, env=env, capture_output=True, text=True
-    )
-    assert result.returncode == 0, result.stderr
-
-
-@pytest.fixture
-def scratch():
-    admin = create_engine(_url("postgres"), isolation_level="AUTOCOMMIT")
-    with admin.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS {SCRATCH} WITH (FORCE)"))
-        conn.execute(text(f"CREATE DATABASE {SCRATCH}"))
-    engine = create_engine(_url(SCRATCH))
-    yield engine
-    engine.dispose()
-    with admin.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS {SCRATCH} WITH (FORCE)"))
-    admin.dispose()
+from tests.migrations.conftest import previous_revision
 
 
 def test_the_downgrade_drops_the_alternatives_and_keeps_the_lines(scratch):
-    _alembic("upgrade", "a2lternatives")
+    scratch.alembic("upgrade", "a2lternatives")
     with scratch.begin() as conn:
         dish = conn.execute(text("INSERT INTO dish (name_cn) VALUES ('照燒雞') RETURNING id")).scalar()
         recipe = conn.execute(
@@ -84,11 +49,11 @@ def test_the_downgrade_drops_the_alternatives_and_keeps_the_lines(scratch):
             {"line": line, "breast": breast},
         )
 
-    _alembic("downgrade", "a2uthor")
+    scratch.alembic("downgrade", previous_revision("a2lternatives"))
     with scratch.connect() as conn:
         assert "recipe_line_alternative" not in inspect(conn).get_table_names()
         assert conn.execute(text("SELECT count(*) FROM recipe_line")).scalar() == 1
 
-    _alembic("upgrade", "head")
+    scratch.alembic("upgrade", "head")
     with scratch.connect() as conn:
         assert "recipe_line_alternative" in inspect(conn).get_table_names()

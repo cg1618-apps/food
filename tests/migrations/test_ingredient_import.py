@@ -8,18 +8,14 @@ its idempotency bite is a PRE-EXISTING ingredient whose name matches a CSV row
 """
 
 import importlib.util
-import os
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
-from app.config import settings
+from tests.migrations.conftest import previous_revision
 
-ROOT = Path(__file__).resolve().parents[1]
-SCRATCH = "food_import_test"
+ROOT = Path(__file__).resolve().parents[2]
 MIGRATION = ROOT / "alembic" / "versions" / "i3import_ingredient_names.py"
 HEADER = "name_cn,name_en,aliases,parent,category\n"
 
@@ -32,32 +28,6 @@ def _load_migration():
 
 
 migration = _load_migration()
-
-
-def _url(database: str) -> str:
-    return settings.sqlalchemy_database_url.rsplit("/", 1)[0] + f"/{database}"
-
-
-def _alembic(*args: str) -> None:
-    env = dict(os.environ, DATABASE_URL=_url(SCRATCH))
-    result = subprocess.run(
-        [sys.executable, "-m", "alembic", *args], cwd=ROOT, env=env, capture_output=True, text=True
-    )
-    assert result.returncode == 0, result.stderr
-
-
-@pytest.fixture
-def scratch():
-    admin = create_engine(_url("postgres"), isolation_level="AUTOCOMMIT")
-    with admin.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS {SCRATCH} WITH (FORCE)"))
-        conn.execute(text(f"CREATE DATABASE {SCRATCH}"))
-    engine = create_engine(_url(SCRATCH))
-    yield engine
-    engine.dispose()
-    with admin.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS {SCRATCH} WITH (FORCE)"))
-    admin.dispose()
 
 
 def _csv(tmp_path, body: str) -> Path:
@@ -124,7 +94,7 @@ def _ingredient(conn, name_cn):
 
 
 def test_upgrade_loads_every_row_with_aliases_and_parents(scratch):
-    _alembic("upgrade", "i3import")
+    scratch.alembic("upgrade", "i3import")
     with scratch.connect() as conn:
         count = conn.execute(text("SELECT count(*) FROM ingredient")).scalar()
         stubs = conn.execute(
@@ -147,7 +117,7 @@ def test_upgrade_loads_every_row_with_aliases_and_parents(scratch):
 
 
 def test_an_empty_category_files_in_the_fallback(scratch):
-    _alembic("upgrade", "i3import")
+    scratch.alembic("upgrade", "i3import")
     with scratch.connect() as conn:
         water = _ingredient(conn, "水")
         kelp = _ingredient(conn, "海帶")
@@ -159,7 +129,7 @@ def test_a_row_the_owner_already_typed_is_skipped_and_left_alone(scratch):
     """The load-bearing fixture: 醬油 typed by hand, with notes and a category
     of the owner's own, and 蒜 as an alias of an ingredient named otherwise.
     Without them, the skip rule has nothing to skip."""
-    _alembic("upgrade", "k1notes")
+    scratch.alembic("upgrade", previous_revision("i3import"))
     with scratch.begin() as conn:
         fallback = conn.execute(
             text("SELECT id FROM ingredient_category WHERE is_fallback")
@@ -183,7 +153,7 @@ def test_a_row_the_owner_already_typed_is_skipped_and_left_alone(scratch):
             {"i": garlic},
         )
 
-    _alembic("upgrade", "i3import")
+    scratch.alembic("upgrade", "i3import")
     with scratch.connect() as conn:
         count = conn.execute(text("SELECT count(*) FROM ingredient")).scalar()
         mine = conn.execute(
@@ -210,13 +180,13 @@ def test_a_row_the_owner_already_typed_is_skipped_and_left_alone(scratch):
 
 
 def test_running_the_load_twice_inserts_nothing_and_downgrade_keeps_the_rows(scratch):
-    _alembic("upgrade", "i3import")
-    _alembic("downgrade", "k1notes")
+    scratch.alembic("upgrade", "i3import")
+    scratch.alembic("downgrade", previous_revision("i3import"))
     with scratch.connect() as conn:
         after_downgrade = conn.execute(text("SELECT count(*) FROM ingredient")).scalar()
     assert after_downgrade == 194
 
-    _alembic("upgrade", "i3import")
+    scratch.alembic("upgrade", "i3import")
     with scratch.connect() as conn:
         ingredients = conn.execute(text("SELECT count(*) FROM ingredient")).scalar()
         aliases = conn.execute(text("SELECT count(*) FROM ingredient_alias")).scalar()
@@ -230,7 +200,7 @@ def test_a_parent_link_that_would_make_a_cycle_or_point_at_itself_is_skipped(scr
     link that would close it. Rows link in file order: 甲 -> 乙 is made first,
     so 乙 -> 甲 is the one refused; 丙 names itself. 丁 -> 甲 is the mirror:
     an ordinary link from the same file, which must still be made."""
-    _alembic("upgrade", "k1notes")
+    scratch.alembic("upgrade", previous_revision("i3import"))
     rows = migration.read_rows(
         _csv(tmp_path, "甲,,,乙,\n乙,,,甲,\n丙,,,丙,\n丁,,,甲,\n")
     )
