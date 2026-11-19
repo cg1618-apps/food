@@ -37,6 +37,10 @@ front of the page someone opens rather than behind their first save. So
   The exception is `GET /api/search`, which ranks and limits in SQL so that a
   bucket of ten never loads the whole table; its `display_order` expresses
   the same first-non-empty rule as a `coalesce`, compared by code point.
+- **A filter that hides rows runs in SQL, before `limit` and `offset`.**
+  Filtering in Python after the page is cut silently shortens pages and
+  starts the next one in the wrong place. `GET /api/images`' `unused` is the
+  one paged filter today.
 - **`PATCH` applies only what was sent.** Absent and explicitly null are
   different: `{}` changes nothing, `{"description": null}` clears the note.
 - **Unknown fields are refused, not ignored.** `extra="forbid"`, so a payload
@@ -72,7 +76,12 @@ malformed body produces.
 names no row is 422**, everywhere — a parent, a label, a cooking method, a
 course, a recipe's dish, a line's ingredient or dish, a gallery's
 `image_id`. The URL resolved; it is the payload that is wrong. The detail
-names the id.
+names the id. 404 would read as "the thing you addressed is gone" when the
+thing addressed is fine.
+
+The rule is one function, `services/lookup.fetch_all`, which every service
+resolving body ids calls, so no two owners word or order the refusal
+differently.
 
 **A label of another library is 422 too.** Every label belongs to one
 library (`scope`, see "Labels"): an ingredient takes only `ingredient`

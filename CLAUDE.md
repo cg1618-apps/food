@@ -121,8 +121,8 @@ already in the library.
 
 `docs/frontend.md` describes the pages, `docs/data-model.md` the schema,
 `docs/api.md` the routes and the error shape, `docs/testing.md` how the suite
-is arranged and which tests are load-bearing, and `docs/notes/decisions.md`
-why.
+is arranged and which tests are load-bearing, and `docs/notes/decisions/` -
+one file per decision - why.
 
 ## The contract this app owes the platform
 

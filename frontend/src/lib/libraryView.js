@@ -8,7 +8,8 @@
 // Media's library view is NOT remembered (it resets to the grid on every
 // visit); food's is, because the spec asks for it - the ingredient library is
 // read as a table at the desk and as covers on a phone, and each device should
-// keep its own. Recorded in docs/notes/decisions.md.
+// keep its own. Recorded in
+// docs/notes/decisions/2026-10-02-library-view-remembered-per-library.md.
 //
 // Both functions always return one of VIEWS. The library picks a layout from
 // the result and has no third branch to fall into, so a stored value that is

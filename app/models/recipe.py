@@ -369,7 +369,7 @@ class RecipeLineAlternative(Base):
     A child of the line rather than a line of its own: an alternative is not a
     separate requirement, so it has no group, no 可省略 and no place in the
     recipe's positions, and "what does this recipe need" never has to filter
-    it out (docs/notes/decisions.md).
+    it out (docs/notes/decisions/2026-10-13-line-alternatives.md).
 
     Its target follows a line's rules exactly: an ingredient or a dish, never
     both, RESTRICT on each, and the write path's own-dish rule and cycle

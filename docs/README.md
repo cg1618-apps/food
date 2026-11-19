@@ -12,7 +12,8 @@ in `notes/`.
 | `testing.md` | How the suite is arranged, and which tests are load-bearing while looking like decoration. |
 | `frontend.md` | The pages, the layering, and why there is no route guard. |
 | `logging.md` | What a log line looks like, why uvicorn's loggers are taken over, and why an inbound `X-Request-ID` is validated. food's half of a platform contract. |
-| `notes/decisions.md` | Why things are the way they are, including rejected alternatives and the divergences from `media`. The one page allowed to talk about the past. |
+| `to-do-next.md` | Decided work nobody has started - the modules still to build - in build order. |
+| `notes/decisions/` | Why things are the way they are, one file per decision, including rejected alternatives and the divergences from `media`. Its `README.md` explains the convention. |
 | `superpowers/specs/` | Working scaffolding for a task in progress. **Deleted when that task ends**, with anything durable moved into a real page first. |
 
 Pages appear as the application does.

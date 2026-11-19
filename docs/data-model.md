@@ -33,7 +33,7 @@ column.
 handling.** Any number of rows may leave a name slot empty; no two may share a
 non-null value in one slot. This is the opposite of what a *multi-column* name
 constraint needs, and the distinction is the easy one to get wrong — see
-`docs/notes/decisions.md`.
+`docs/notes/decisions/2026-09-19-single-column-name-indexes-allow-many-nulls.md`.
 
 **Timestamps are naive Taipei wall clock** via `get_taipei_now`, Python-side
 defaults only, no `server_default`.
@@ -178,9 +178,9 @@ minimum may not exceed the maximum (`ck_ingredient_preservation_duration_order`)
 A row with only a maximum is "up to 3 days"; a row with neither is a note such as
 "see the date".
 
-Module 1 stored one typical number and put a range in `notes`. That was
-reversed because the reference sheets state a range in almost every row, so a
-single number would have been invented. See `docs/notes/decisions.md`.
+A range rather than one typical number, because the reference sheets state a
+range in almost every row; see
+`docs/notes/decisions/2026-10-02-a-storage-time-is-a-range.md`.
 
 **Unique on `(ingredient_id, state, method)`**
 (`uq_ingredient_preservation_state_method`). The same method may appear once per

@@ -8,8 +8,9 @@ It is registered in that repository's `apps.yml`, which assigns it
 
 **The skeleton is built; there is no schema yet.** FastAPI serves a health
 route and the React bundle, Alembic's chain holds one empty baseline, and the
-deploy hook the platform's rollback calls is in place. The eight modules and
-the entities they own are described in `docs/notes/decisions.md`.
+deploy hook the platform's rollback calls is in place. The modules still to
+be built, in order, are in `docs/to-do-next.md`, and why things are the way
+they are is in `docs/notes/decisions/`.
 
 ## Running it
 
