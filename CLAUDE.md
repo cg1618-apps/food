@@ -1,7 +1,7 @@
 # CLAUDE.md — food
 
 **The generic rules are not in this file.** Git workflow, branch and pull
-request discipline, concurrent sessions, the machine-wide test lock, the
+request discipline, concurrent sessions, how test runs share the server, the
 credentials rule, worktrees and documentation discipline live in
 `cg1618-apps/platform`'s `CLAUDE.md`, one directory up. Claude Code loads it
 first and this file second, so everything there applies here unless this says
@@ -193,8 +193,11 @@ cd frontend && npm test                   # vitest, colocated with the source
 cd frontend && npm run build              # writes frontend_dist/ for uvicorn
 ```
 
-**Take the machine-wide pytest lock around every backend run** — all four apps
-share one PostgreSQL. The lock is in the platform's `CLAUDE.md`.
+**Backend runs need no coordination.** Every run creates and drops its own
+`food_test_<epoch>_<hex>` database on the shared PostgreSQL, so any number may
+go at once. A test that names a fixed database brings the collisions back,
+and is a defect. See the platform's `CLAUDE.md`, "Test runs are isolated by
+database".
 
 **Ports are box-wide.** uvicorn is 8001 (food's `apps.yml` entry) and Vite is
 5174 (`5173 + (port - 8000)`). Both are `strictPort`/abort-on-taken, because
