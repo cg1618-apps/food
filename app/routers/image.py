@@ -46,8 +46,7 @@ def list_images(
     """Newest first. `unused` filters in SQL, before the page is cut.
 
     The filter must not run in Python after limit/offset - that silently
-    shortens pages (docs/notes/decisions.md, "a row-hiding filter belongs in
-    SQL").
+    shortens pages (docs/api.md, "Conventions").
     """
     counts = images.attachment_counts(db)
     query = db.query(Image)

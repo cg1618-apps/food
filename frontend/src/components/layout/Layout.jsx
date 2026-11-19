@@ -23,7 +23,8 @@
 // is kept, but slim, not sticky, and with only 食 and the toggle in it: the
 // bottom bar already gives each section a column at 360px and has no room for
 // a control that is not a destination, and a choice made once per device does
-// not earn a place under the thumb. See docs/notes/decisions.md.
+// not earn a place under the thumb. See
+// docs/notes/decisions/2026-10-08-theme-toggle-in-a-top-bar.md.
 //
 // The search box (NavSearch.jsx) sits in the top bar too, for the same
 // reason: it is not a destination, so it has no column in the bottom bar. On

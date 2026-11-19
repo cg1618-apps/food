@@ -8,7 +8,8 @@
 //
 // Every row links to its page and carries an 編輯 link to its edit page.
 // That is how an entry is edited quickly from anywhere: food has no media-
-// style "modify" hubs, and finding the thing is the hub (docs/notes/decisions.md).
+// style "modify" hubs, and finding the thing is the hub
+// (docs/notes/decisions/2026-10-28-search-instead-of-modify-hubs.md).
 // 加熱 and TBD have no page per entry, so their rows open the list at the
 // entry, and 編輯 opens the list's edit page.
 import { Link } from 'react-router-dom'

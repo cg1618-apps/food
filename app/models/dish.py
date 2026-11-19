@@ -3,7 +3,8 @@ the recipes are specific ways of making.
 
 One table for both kinds. A dish and a sauce carry the same fields at the same
 level, and `kind` keeps them apart so the libraries can be filtered now and
-split later without a migration (docs/notes/decisions.md).
+split later without a migration
+(docs/notes/decisions/2026-10-03-a-dish-and-its-recipes.md).
 
 What a dish OWNS - aliases, serves-as and label links, gallery rows -
 cascades with it. What it NAMES - a course, a region - is RESTRICT. What names

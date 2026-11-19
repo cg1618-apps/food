@@ -4,7 +4,8 @@
 // because the spec needs two things state cannot give: a filtered view that
 // can be bookmarked, and links INTO a filtered view - the ingredient page's
 // category link is `/ingredients?category=3`, and a library that ignored the
-// query was a known defect. See docs/notes/decisions.md.
+// query was a known defect. See
+// docs/notes/decisions/2026-10-02-library-filters-live-in-the-url.md.
 //
 // A library declares a SPEC: one entry per URL key,
 //

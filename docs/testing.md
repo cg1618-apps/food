@@ -142,6 +142,12 @@ is load-bearing and says so. Some examples worth knowing about:
   generated instead" — which a validator that refused *everything* would also
   satisfy. It sits on the boundary rather than safely inside it, so an
   off-by-one in the pattern is caught too.
+- `test_a_traversal_path_cannot_escape_the_bundle`
+  (`tests/unit/test_spa_routing.py`) writes a real `.env` beside the bundle
+  before asking for `/..%2F.env`. That file is load-bearing: `is_file()` is
+  false for a path that does not exist, so without a real secret to leak the
+  test would pass against a catch-all with no confinement at all. Its mirror,
+  that a real file inside the bundle is served as itself, sits beside it.
 
 - `air_fryer` (`tests/api/test_ingredient_storage.py`) is a cooking method that
   a heating row then points at. It is what makes

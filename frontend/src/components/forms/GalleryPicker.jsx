@@ -1,7 +1,8 @@
 // Frontend: an owner's picture gallery, edited inside its form.
 //
 // Modelled on media's ImagePicker + FocusPicker, and diverging from it on
-// purpose (docs/notes/decisions.md): media's picker holds ONE image per role,
+// purpose (docs/notes/decisions/2026-10-02-a-gallery-not-one-image-per-role.md):
+// media's picker holds ONE image per role,
 // and food's recipes, ingredients and notes each hold an ordered gallery whose
 // first picture is the cover. So this is a list: upload (several files at
 // once), choose from the library, reorder by dragging a tile's handle

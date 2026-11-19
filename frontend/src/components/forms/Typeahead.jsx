@@ -1,6 +1,7 @@
 // Frontend: search the library as you type, and pick one.
 //
-// Diverges from media's ComboBox on purpose (docs/notes/decisions.md): that
+// Diverges from media's ComboBox on purpose
+// (docs/notes/decisions/2026-10-02-the-typeahead-searches-the-server.md): that
 // one filters a list it was handed, which here would mean downloading every
 // ingredient and dish for every line of a recipe. This one asks the server
 // - the list endpoints' `q`, which matches every name slot and alias - after

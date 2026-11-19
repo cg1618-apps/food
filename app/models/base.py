@@ -3,8 +3,9 @@
 `name_cn` leads. That is food's rule and it is NOT media's - media's catalogue
 entities lead with English and carry a per-row `display_name_field` column
 naming the winner. Both differences are deliberate and recorded in
-`docs/notes/decisions.md`: one user reading Chinese first, and a rule you can
-state in a sentence beats a column every row has to fill in.
+`docs/notes/decisions/2026-09-19-name-cn-leads-display.md`: one user reading
+Chinese first, and a rule you can state in a sentence beats a column every row
+has to fill in.
 
 There is no override column, so display order cannot be varied per row. If that
 is ever wanted, it is a column plus a fallback - not a special case here.

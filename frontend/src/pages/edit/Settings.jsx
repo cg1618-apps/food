@@ -4,7 +4,8 @@
 //
 // The page's shape is components/settings/SettingsPage.jsx's and the tabs are
 // components/settings/settingsTabs.jsx's; why the vocabularies are split
-// across two pages is in docs/notes/decisions.md.
+// across two pages is in
+// docs/notes/decisions/2026-10-28-settings-and-fixed-settings.md.
 import SettingsPage from '../../components/settings/SettingsPage'
 import {
   FIXED_SETTINGS_PATH,

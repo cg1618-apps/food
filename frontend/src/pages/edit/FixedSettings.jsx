@@ -5,7 +5,7 @@
 //
 // The page's shape is components/settings/SettingsPage.jsx's and the tabs are
 // components/settings/settingsTabs.jsx's; the reason for the page is in
-// docs/notes/decisions.md.
+// docs/notes/decisions/2026-10-28-settings-and-fixed-settings.md.
 import SettingsPage from '../../components/settings/SettingsPage'
 import {
   FIXED_SETTINGS_TABS,

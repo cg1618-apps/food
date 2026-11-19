@@ -8,7 +8,7 @@ is the key, so nothing can be listed twice, in one group or across them.
 
 The groups are 常用食材's own, not 設定's 材料分組: they arrange shortcuts,
 not a recipe's lines, and the owner keeps the two apart
-(docs/notes/decisions.md).
+(docs/notes/decisions/2026-10-03-common-ingredients.md).
 """
 
 from sqlalchemy import CheckConstraint, Column, ForeignKey, Index, Integer, String, func

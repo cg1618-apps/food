@@ -240,7 +240,8 @@ one - under 只看主項 the varieties are gone and 雞肉 is still a group.
 notes, authors, 加熱 notes and TBD entries, through `GET /api/search`
 (`docs/api.md`, "Search"). It is also how an entry is edited from anywhere -
 food has no media-style "modify" hubs, and every row on `/search` carries an
-編輯 link (`docs/notes/decisions.md`, "Search instead of modify hubs").
+編輯 link
+(`docs/notes/decisions/2026-10-28-search-instead-of-modify-hubs.md`).
 
 **The box (`components/layout/NavSearch.jsx`)** sits in the top bar: a field
 between the sections and the theme toggle from `lg` up; below `lg` a search

@@ -15,7 +15,7 @@
 //
 // An author's links,
 // 備註 and pictures are read on the author's own page, not above this list:
-// one place for them (docs/notes/decisions.md).
+// one place for them (docs/notes/decisions/2026-10-28-the-author-library.md).
 import { keepPreviousData } from '@tanstack/react-query'
 
 import { endpoints } from '../../api/endpoints'

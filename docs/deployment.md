@@ -77,6 +77,14 @@ in them; the pictures a recipe gallery attached stay in `image` and on disk.
 `k1notes`'s downgrade drops `kitchen_note`, its label links and its gallery,
 and every note with them; the pictures stay, as for recipes.
 
+`i2storage` loses rows rather than refusing to downgrade, because a refusal
+would make the rollback tooling's contract false.
+
+`v1ocabulary`'s downgrade is best-effort. It deletes only the seeded rows
+nothing references, identifying them by name, so an unreferenced row the
+owner created with a seeded name goes too. A marker column on every row, for
+a downgrade nobody expects to run, was not worth it.
+
 **`i3import`'s downgrade is a deliberate no-op.** It loaded the starting
 ingredient list, and downgrading past it leaves every imported ingredient in
 place: the owner may have filled them in since, and deleting them is worse

@@ -3,8 +3,9 @@
 // Media's AutoGrowTextarea fits the height the same way - collapse to `auto`,
 // read scrollHeight, add the border back - and this is that, as a hook the
 // shared TextArea uses, so every multi-line field in the app grows. Two
-// differences, both deliberate (docs/notes/decisions.md, "Text boxes grow with
-// their text"): there is no height cap, because a recipe step read through a
+// differences, both deliberate
+// (docs/notes/decisions/2026-10-12-text-boxes-grow-with-their-text.md): there
+// is no height cap, because a recipe step read through a
 // scrolling slot is the thing the owner asked to be rid of; and a
 // ResizeObserver re-fits on a width change, because a narrower box wraps the
 // same text onto more lines.

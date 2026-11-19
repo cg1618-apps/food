@@ -15,7 +15,7 @@ const SATURDAY = 6 // Date#getUTCDay(): Sunday 0 ... Saturday 6
 // 水果, the four marks, 備註. A mark is true or false and is shown only when
 // true - a ✓ in the table, a chip on the phone card, `chip` its word there.
 // The order is the owner's, and differs from the sheet's on purpose
-// (docs/notes/decisions.md, "The weekly schedule").
+// (docs/notes/decisions/2026-10-03-the-weekly-schedule.md).
 export const DAY_FIELDS = [
   { key: 'fruit', label: '水果', kind: 'text' },
   { key: 'to_buy', label: '要買?', kind: 'mark', chip: '要買' },

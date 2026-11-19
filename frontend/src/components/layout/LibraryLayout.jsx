@@ -3,7 +3,10 @@
 //
 // media's LibraryLayout is the reference for the shape (title bar, search,
 // filters, a grid/table toggle, a result count, then the list). Three
-// differences, each the spec's and each recorded in docs/notes/decisions.md:
+// differences, each the spec's and each recorded in docs/notes/decisions/
+// (2026-10-02-library-filters-live-in-the-url.md,
+// 2026-10-02-filters-in-a-sidebar-and-a-drawer.md and
+// 2026-10-02-library-view-remembered-per-library.md):
 //
 //   - the filters and the search term live in the URL (hooks/useUrlFilters),
 //     not in component state, so a filtered view is a link;
